@@ -1,0 +1,2 @@
+# Installed and verified for this wiki build.
+mkdocs-material==9.7.6

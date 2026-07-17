@@ -1,0 +1,67 @@
+site_name: Server Manage 운영 위키
+site_description: DECS 서버 관리 코드의 핵심 기능, 모듈 경계, 설계 의도와 운영 절차
+docs_dir: wiki-docs
+site_dir: site
+use_directory_urls: true
+
+theme:
+  name: material
+  language: ko
+  font: false
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: light blue
+      toggle:
+        icon: material/brightness-7
+        name: 어두운 화면으로 전환
+    - scheme: slate
+      primary: blue grey
+      accent: light blue
+      toggle:
+        icon: material/brightness-4
+        name: 밝은 화면으로 전환
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.tracking
+    - navigation.path
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search:
+      lang:
+        - ko
+        - en
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - 전체 구조: index.md
+  - 기능 모듈:
+      - container-images: container-images.md
+      - user-lifecycle: user-lifecycle.md
+      - server-state: server-state.md
+      - remote-operations: remote-operations.md
+      - monitoring: monitoring.md
+      - kerberos-nfs: kerberos-nfs.md
+  - PDF 다운로드: downloads.md

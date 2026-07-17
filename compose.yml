@@ -1,0 +1,48 @@
+name: server-manage-wiki
+
+services:
+  sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      WIKI_REPOSITORY_URL: ${WIKI_REPOSITORY_URL:-https://github.com/CSID-DGU/admin_infra_server.git}
+      WIKI_BRANCH: ${WIKI_BRANCH:-main}
+      WIKI_SYNC_INTERVAL_SECONDS: ${WIKI_SYNC_INTERVAL_SECONDS:-60}
+    volumes:
+      - repository:/repo
+      - site:/site
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /site/.source-revision && test -s /site/index.html"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 90s
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    init: true
+    depends_on:
+      sync:
+        condition: service_healthy
+    ports:
+      - "${WIKI_BIND_ADDRESS:-0.0.0.0}:${WIKI_PORT:-30097}:80"
+    volumes:
+      - site:/usr/share/nginx/html:ro
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  repository:
+  site:

@@ -1,0 +1,39 @@
+:root {
+  --md-text-font: "Noto Sans CJK KR", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --md-code-font: "Noto Sans Mono CJK KR", "D2Coding", monospace;
+}
+
+.md-grid {
+  max-width: 1440px;
+}
+
+.md-typeset {
+  line-height: 1.72;
+}
+
+.md-typeset h1 {
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+
+.md-typeset h2,
+.md-typeset h3 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset table:not([class]) {
+  display: table;
+  width: 100%;
+}
+
+.md-typeset code {
+  overflow-wrap: anywhere;
+}
+
+@media screen and (max-width: 760px) {
+  .md-typeset table:not([class]) {
+    display: block;
+    overflow-x: auto;
+  }
+}

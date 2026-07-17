@@ -1,0 +1,23 @@
+[Unit]
+Description=Server Manage MkDocs operations wiki
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO_ROOT@
+EnvironmentFile=-@REPO_ROOT@/wiki/wiki.local.env
+ExecStartPre=/usr/bin/python3 @REPO_ROOT@/wiki/sync_wiki_docs.py
+ExecStartPre=@REPO_ROOT@/wiki/.venv/bin/mkdocs build --clean --config-file @REPO_ROOT@/wiki/mkdocs.yml
+ExecStart=/usr/bin/python3 @REPO_ROOT@/wiki/serve_wiki.py --host 0.0.0.0 --port 30097 --no-auth
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+RestrictSUIDSGID=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

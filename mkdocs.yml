@@ -57,11 +57,11 @@ extra_css:
 
 nav:
   - 전체 구조: index.md
-  - 기능 모듈:
-      - container-images: container-images.md
-      - user-lifecycle: user-lifecycle.md
-      - server-state: server-state.md
-      - remote-operations: remote-operations.md
-      - monitoring: monitoring.md
-      - kerberos-nfs: kerberos-nfs.md
+  - system:
+      - container-images: system/container-images.md
+      - user-lifecycle: system/user-lifecycle.md
+      - server-state: system/server-state.md
+      - remote-operations: system/remote-operations.md
+      - monitoring: system/monitoring.md
+      - kerberos-nfs: system/kerberos-nfs.md
   - PDF 다운로드: downloads.md

@@ -19,7 +19,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = REPO_ROOT / "wiki" / "pdf"
+WIKI_DIR = REPO_ROOT / "wiki"
+MD_DIR = WIKI_DIR / "md"
+DEFAULT_OUTPUT = WIKI_DIR / "pdf"
 
 
 @dataclass(frozen=True)
@@ -31,42 +33,47 @@ class Manual:
 
 
 MANUALS = (
-    Manual("server-manage", "전체 구조", REPO_ROOT / "MANUAL.md", "server-manage-index.pdf"),
+    Manual(
+        "server-manage",
+        "전체 구조",
+        MD_DIR / "system" / "index.md",
+        "system/server-manage-index.pdf",
+    ),
     Manual(
         "container-images",
         "container-images",
-        REPO_ROOT / "container-images" / "MANUAL.md",
-        "container-images-manual.pdf",
+        MD_DIR / "system" / "container-images.md",
+        "system/container-images-manual.pdf",
     ),
     Manual(
         "kerberos-nfs",
         "kerberos-nfs",
-        REPO_ROOT / "kerberos-nfs" / "MANUAL.md",
-        "kerberos-nfs-manual.pdf",
+        MD_DIR / "system" / "kerberos-nfs.md",
+        "system/kerberos-nfs-manual.pdf",
     ),
     Manual(
         "monitoring",
         "monitoring",
-        REPO_ROOT / "monitoring" / "MANUAL.md",
-        "monitoring-manual.pdf",
+        MD_DIR / "system" / "monitoring.md",
+        "system/monitoring-manual.pdf",
     ),
     Manual(
         "remote-operations",
         "remote-operations",
-        REPO_ROOT / "remote-operations" / "MANUAL.md",
-        "remote-operations-manual.pdf",
+        MD_DIR / "system" / "remote-operations.md",
+        "system/remote-operations-manual.pdf",
     ),
     Manual(
         "server-state",
         "server-state",
-        REPO_ROOT / "server-state" / "MANUAL.md",
-        "server-state-manual.pdf",
+        MD_DIR / "system" / "server-state.md",
+        "system/server-state-manual.pdf",
     ),
     Manual(
         "user-lifecycle",
         "user-lifecycle",
-        REPO_ROOT / "user-lifecycle" / "MANUAL.md",
-        "user-lifecycle-manual.pdf",
+        MD_DIR / "system" / "user-lifecycle.md",
+        "system/user-lifecycle-manual.pdf",
     ),
 )
 
@@ -456,8 +463,11 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
             html_path = temp_dir / f"{manual.slug}.html"
             html_path.write_text(document, encoding="utf-8")
             if keep_html:
-                (output_dir / f"{manual.slug}.html").write_text(document, encoding="utf-8")
+                html_output = output_dir / "system" / f"{manual.slug}.html"
+                html_output.parent.mkdir(parents=True, exist_ok=True)
+                html_output.write_text(document, encoding="utf-8")
             output_path = output_dir / manual.output
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             print_pdf(browser, html_path, output_path)
             outputs.append(output_path)
 
@@ -465,8 +475,10 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
         combined_html = temp_dir / "server-manage-manual.html"
         combined_html.write_text(combined, encoding="utf-8")
         if keep_html:
-            (output_dir / combined_html.name).write_text(combined, encoding="utf-8")
-        combined_pdf = output_dir / "server-manage-manual.pdf"
+            combined_html_output = output_dir / "system" / combined_html.name
+            combined_html_output.parent.mkdir(parents=True, exist_ok=True)
+            combined_html_output.write_text(combined, encoding="utf-8")
+        combined_pdf = output_dir / "system" / "server-manage-manual.pdf"
         print_pdf(browser, combined_html, combined_pdf)
         outputs.append(combined_pdf)
 

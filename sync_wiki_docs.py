@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync repository MANUAL.md sources into the generated MkDocs docs tree."""
+"""Sync categorized wiki Markdown and PDFs into the generated MkDocs tree."""
 
 from __future__ import annotations
 
@@ -13,36 +13,37 @@ from export_manuals import MANUALS, REPO_ROOT
 WIKI_DIR = REPO_ROOT / "wiki"
 DEFAULT_OUTPUT = WIKI_DIR / "wiki-docs"
 PDF_DIR = WIKI_DIR / "pdf"
+MD_DIR = WIKI_DIR / "md"
 ASSET_DIR = WIKI_DIR / "wiki-assets"
 
 
-def rewrite_links(markdown: str) -> str:
-    replacements = {
-        "container-images/MANUAL.md": "container-images.md",
-        "kerberos-nfs/MANUAL.md": "kerberos-nfs.md",
-        "monitoring/MANUAL.md": "monitoring.md",
-        "remote-operations/MANUAL.md": "remote-operations.md",
-        "server-state/MANUAL.md": "server-state.md",
-        "user-lifecycle/MANUAL.md": "user-lifecycle.md",
-        "wiki/README.md": "downloads.md",
-    }
-    for source, target in replacements.items():
-        markdown = markdown.replace(f"]({source})", f"]({target})")
+def rewrite_links(markdown: str, slug: str) -> str:
+    if slug != "server-manage":
+        return markdown
+    for module in (
+        "container-images",
+        "kerberos-nfs",
+        "monitoring",
+        "remote-operations",
+        "server-state",
+        "user-lifecycle",
+    ):
+        markdown = markdown.replace(f"]({module}.md)", f"](system/{module}.md)")
     return markdown
 
 
 def page_name(slug: str) -> str:
-    return "index.md" if slug == "server-manage" else f"{slug}.md"
+    return "index.md" if slug == "server-manage" else f"system/{slug}.md"
 
 
 def build_downloads() -> str:
     lines = [
         "# PDF 다운로드",
         "",
-        "PDF는 각 디렉터리의 `MANUAL.md`에서 생성한 읽기 전용 산출물입니다.",
+        "PDF는 `wiki/md/`의 Markdown에서 생성한 읽기 전용 산출물입니다.",
         "내용을 수정할 때는 PDF가 아니라 원본 Markdown을 변경한 뒤 다시 export합니다.",
         "",
-        "[전체 통합 매뉴얼](pdf/server-manage-manual.pdf){ .md-button .md-button--primary }",
+        "[전체 통합 매뉴얼](pdf/system/server-manage-manual.pdf){ .md-button .md-button--primary }",
         "",
         "## 모듈별 PDF",
         "",
@@ -56,9 +57,8 @@ def build_downloads() -> str:
             "",
             "```bash",
             "cd /path/to/admin_infra_server",
-            "python3 wiki/export_manuals.py",
-            "python3 wiki/sync_wiki_docs.py",
-            "wiki/.venv/bin/mkdocs build --clean -f wiki/mkdocs.yml",
+            "python3 wiki/manage.py export",
+            "python3 wiki/manage.py sync-now",
             "```",
             "",
         ]
@@ -75,13 +75,24 @@ def sync(output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, mode=0o755)
 
     for manual in MANUALS:
-        source = rewrite_links(manual.source.read_text(encoding="utf-8"))
+        source = rewrite_links(manual.source.read_text(encoding="utf-8"), manual.slug)
         if manual.slug != "server-manage":
-            pdf_button = f"\n[이 문서의 PDF 열기](pdf/{manual.output}){{ .md-button }}\n\n"
+            pdf_button = f"\n[이 문서의 PDF 열기](../pdf/{manual.output}){{ .md-button }}\n\n"
             first_break = source.find("\n")
             if first_break >= 0:
                 source = source[: first_break + 1] + pdf_button + source[first_break + 1 :]
-        (output_dir / page_name(manual.slug)).write_text(source, encoding="utf-8")
+        page_target = output_dir / page_name(manual.slug)
+        page_target.parent.mkdir(parents=True, exist_ok=True)
+        page_target.write_text(source, encoding="utf-8")
+
+    known_sources = {manual.source.resolve() for manual in MANUALS}
+    for source_md in sorted(MD_DIR.rglob("*.md")):
+        if source_md.resolve() in known_sources:
+            continue
+        relative = source_md.relative_to(MD_DIR)
+        target = output_dir / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_md, target)
 
     (output_dir / "downloads.md").write_text(build_downloads(), encoding="utf-8")
 
@@ -92,8 +103,11 @@ def sync(output_dir: Path) -> Path:
     pdf_target = output_dir / "pdf"
     pdf_target.mkdir(mode=0o755)
     if PDF_DIR.is_dir():
-        for pdf in sorted(PDF_DIR.glob("*.pdf")):
-            shutil.copy2(pdf, pdf_target / pdf.name)
+        for pdf in sorted(PDF_DIR.rglob("*.pdf")):
+            relative = pdf.relative_to(PDF_DIR)
+            target = pdf_target / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(pdf, target)
     return output_dir
 
 

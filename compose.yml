@@ -11,6 +11,8 @@ services:
       WIKI_REPOSITORY_URL: ${WIKI_REPOSITORY_URL:-https://github.com/CSID-DGU/admin_infra_server.git}
       WIKI_BRANCH: ${WIKI_BRANCH:-main}
       WIKI_SYNC_INTERVAL_SECONDS: ${WIKI_SYNC_INTERVAL_SECONDS:-60}
+      WIKI_GIT_USERNAME: ${WIKI_GIT_USERNAME:-x-access-token}
+      WIKI_GITHUB_TOKEN: ${WIKI_GITHUB_TOKEN:-}
     volumes:
       - repository:/repo
       - site:/site

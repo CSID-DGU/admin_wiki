@@ -20,6 +20,9 @@ case "$interval" in
 esac
 
 export GIT_TERMINAL_PROMPT=0
+if [ -n "${WIKI_GITHUB_TOKEN:-}" ]; then
+  export GIT_ASKPASS=/usr/local/bin/wiki-git-askpass
+fi
 
 update_repository() {
   if [ ! -d "$repo_dir/.git" ]; then

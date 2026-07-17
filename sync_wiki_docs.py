@@ -20,20 +20,11 @@ ASSET_DIR = WIKI_DIR / "wiki-assets"
 def rewrite_links(markdown: str, slug: str) -> str:
     if slug != "server-manage":
         return markdown
-    for module in (
-        "container-images",
-        "kerberos-nfs",
-        "monitoring",
-        "remote-operations",
-        "server-state",
-        "user-lifecycle",
-    ):
-        markdown = markdown.replace(f"]({module}.md)", f"](system/{module}.md)")
-    return markdown
+    return markdown.replace("](../../pdf/system/", "](../pdf/system/")
 
 
 def page_name(slug: str) -> str:
-    return "index.md" if slug == "server-manage" else f"system/{slug}.md"
+    return f"system/{'index' if slug == 'server-manage' else slug}.md"
 
 
 def build_downloads() -> str:

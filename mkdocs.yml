@@ -56,8 +56,12 @@ extra_css:
   - stylesheets/extra.css
 
 nav:
-  - 전체 구조: index.md
+  - 목차: index.md
+  - backend: backend/index.md
+  - frontend: frontend/index.md
+  - infra: infra/index.md
   - system:
+      - 목차: system/index.md
       - container-images: system/container-images.md
       - user-lifecycle: system/user-lifecycle.md
       - server-state: system/server-state.md

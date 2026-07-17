@@ -1,12 +1,14 @@
-# Server Manage 운영 위키
+# System
 
 ## 목차
 
-| 디렉터리 | 핵심 기능 | 상세 매뉴얼 |
+| 구성요소 | 상세 문서 | PDF |
 | --- | --- | --- |
-| `container-images/` | CUDA/TensorFlow 이미지와 컨테이너 런타임 | [열기](container-images.md) |
-| `user-lifecycle/` | 사용자·그룹·컨테이너·UID/GID·Kerberos 생명주기 | [열기](user-lifecycle.md) |
-| `server-state/` | 서버 desired state와 점검·복구 계획 | [열기](server-state.md) |
-| `remote-operations/` | WOL, 부팅 점검과 컨테이너 재시작 | [열기](remote-operations.md) |
-| `monitoring/` | Prometheus/Grafana, exporter, 경보와 포렌식 | [열기](monitoring.md) |
-| `kerberos-nfs/` | Kerberos/NFS 정책, 키탭과 복구 도구 | [열기](kerberos-nfs.md) |
+| 전체 통합 매뉴얼 | - | [PDF 열기](../../pdf/system/server-manage-manual.pdf) |
+| 전체 구조 | 현재 페이지 | [PDF 열기](../../pdf/system/server-manage-index.pdf) |
+| `container-images/` | [문서 열기](container-images.md) | [PDF 열기](../../pdf/system/container-images-manual.pdf) |
+| `user-lifecycle/` | [문서 열기](user-lifecycle.md) | [PDF 열기](../../pdf/system/user-lifecycle-manual.pdf) |
+| `server-state/` | [문서 열기](server-state.md) | [PDF 열기](../../pdf/system/server-state-manual.pdf) |
+| `remote-operations/` | [문서 열기](remote-operations.md) | [PDF 열기](../../pdf/system/remote-operations-manual.pdf) |
+| `monitoring/` | [문서 열기](monitoring.md) | [PDF 열기](../../pdf/system/monitoring-manual.pdf) |
+| `kerberos-nfs/` | [문서 열기](kerberos-nfs.md) | [PDF 열기](../../pdf/system/kerberos-nfs-manual.pdf) |

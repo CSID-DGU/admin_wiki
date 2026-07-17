@@ -57,7 +57,20 @@ extra_css:
 
 nav:
   - 목차: index.md
-  - backend: backend/index.md
+  - backend:
+      - 목차: backend/index.md
+      - 개요: backend/개요.md
+      - 시스템 아키텍처: backend/시스템-아키텍처.md
+      - 코드 컨벤션: backend/코드-컨벤션.md
+      - 운영 가이드: backend/운영-가이드.md
+      - 시작 가이드: backend/시작.md
+      - 도메인 설명: backend/도메인-설명.md
+      - 핵심 설계 패턴: backend/핵심-설계-패턴.md
+      - 인증·보안: backend/인증-보안.md
+      - 외부 연동: backend/외부-연동.md
+      - Redis 키 카탈로그: backend/Redis-키-카탈로그.md
+      - Redis 메시지 큐 작동 원리: backend/Redis-메시지-큐-작동-원리.md
+      - 우분투 계정 삭제 스케줄러: backend/우분투-계정-삭제-스케줄러.md
   - frontend: frontend/index.md
   - infra: infra/index.md
   - system:

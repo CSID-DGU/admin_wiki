@@ -1,6 +1,6 @@
 # Backend
 
-DGU AI LAB Admin Backend (Spring Boot / Kotlin) 기술 문서입니다.
+DGU AI LAB Admin Backend (Spring Boot) 기술 문서입니다.
 
 신규 관리자분들은 **Onboarding** 섹션부터 읽어주세요.
 

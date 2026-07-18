@@ -83,7 +83,13 @@ nav:
       - user-lifecycle: system/user-lifecycle.md
       - server-state: system/server-state.md
       - remote-operations: system/remote-operations.md
-      - monitoring: system/monitoring.md
-      - kerberos-nfs: system/kerberos-nfs.md
+      - monitoring:
+          - 개요: system/monitoring/index.md
+          - 설계: system/monitoring/design.md
+          - 운영: system/monitoring/operations.md
+      - kerberos-nfs:
+          - 개요: system/kerberos-nfs/index.md
+          - 설계: system/kerberos-nfs/design.md
+          - 운영: system/kerberos-nfs/operations.md
   - user: user/index.md
   - PDF 다운로드: downloads.md

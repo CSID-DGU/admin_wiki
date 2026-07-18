@@ -145,7 +145,7 @@ cd /home/jy/server_manage
 - Kerberos NFS mount: 실행 중 container와 사용자 session에 영향을 줄 수 있다.
 
 Kerberos/NFS의 상세 점검과 복구 순서는
-[Kerberos/NFS 매뉴얼](kerberos-nfs.md)에서 관리한다.
+[Kerberos/NFS 매뉴얼](kerberos-nfs/index.md)에서 관리한다.
 
 ## 5. 현재 구현 수준
 

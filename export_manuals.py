@@ -29,6 +29,11 @@ class Manual:
     label: str
     source: Path
     output: str
+    sections: tuple[Path, ...] = ()
+
+    @property
+    def sources(self) -> tuple[Path, ...]:
+        return (self.source, *self.sections)
 
 
 MANUALS = (
@@ -47,14 +52,22 @@ MANUALS = (
     Manual(
         "kerberos-nfs",
         "kerberos-nfs",
-        MD_DIR / "system" / "kerberos-nfs.md",
+        MD_DIR / "system" / "kerberos-nfs" / "index.md",
         "system/kerberos-nfs-manual.pdf",
+        (
+            MD_DIR / "system" / "kerberos-nfs" / "design.md",
+            MD_DIR / "system" / "kerberos-nfs" / "operations.md",
+        ),
     ),
     Manual(
         "monitoring",
         "monitoring",
-        MD_DIR / "system" / "monitoring.md",
+        MD_DIR / "system" / "monitoring" / "index.md",
         "system/monitoring-manual.pdf",
+        (
+            MD_DIR / "system" / "monitoring" / "design.md",
+            MD_DIR / "system" / "monitoring" / "operations.md",
+        ),
     ),
     Manual(
         "remote-operations",
@@ -420,9 +433,19 @@ def print_pdf(browser: str, html_path: Path, output_path: Path) -> None:
 
 
 def validate_sources() -> None:
-    missing = [str(manual.source) for manual in MANUALS if not manual.source.is_file()]
+    missing = [
+        str(source)
+        for manual in MANUALS
+        for source in manual.sources
+        if not source.is_file()
+    ]
     if missing:
         raise FileNotFoundError("missing manual source(s): " + ", ".join(missing))
+
+
+def render_manual(manual: Manual) -> str:
+    markdown = "\n\n".join(source.read_text(encoding="utf-8") for source in manual.sources)
+    return markdown_to_html(markdown)
 
 
 def combined_body(rendered: list[tuple[Manual, str]]) -> str:
@@ -439,8 +462,8 @@ def combined_body(rendered: list[tuple[Manual, str]]) -> str:
     toc.append("</ol></section>")
     sections: list[str] = []
     for manual, content in rendered:
-        source = manual.source.relative_to(REPO_ROOT)
-        source_note = f'<p class="source-note">원본: {html.escape(str(source))}</p>'
+        sources = ", ".join(str(source.relative_to(REPO_ROOT)) for source in manual.sources)
+        source_note = f'<p class="source-note">원본: {html.escape(sources)}</p>'
         annotated_content = content.replace("</h1>", f"</h1>{source_note}", 1)
         sections.append(
             f'<section class="manual-section" id="{manual.slug}">'
@@ -452,7 +475,7 @@ def combined_body(rendered: list[tuple[Manual, str]]) -> str:
 def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
     validate_sources()
     output_dir.mkdir(parents=True, exist_ok=True)
-    rendered = [(manual, markdown_to_html(manual.source.read_text(encoding="utf-8"))) for manual in MANUALS]
+    rendered = [(manual, render_manual(manual)) for manual in MANUALS]
     outputs: list[Path] = []
 
     with tempfile.TemporaryDirectory(prefix="server-manual-") as temp_name:

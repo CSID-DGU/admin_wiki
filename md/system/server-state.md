@@ -1,150 +1,128 @@
-# server-state 설계·운영 매뉴얼
+# server-state 매뉴얼
 
-> 역할: 서버별 원하는 상태를 정의하고, 실제 소유 모듈의 점검·복구 경로를 dry-run 계획으로 연결한다.
+## 1. 이 모듈이 하는 일
 
-## 1. 왜 별도 조정 계층이 필요한가
+`server-state`는 FARM/LAB의 GPU 서버가 모두 같은 공통 설정을 유지하도록
+기준을 정의하는 모듈이다. 목적은 크게 두 가지다.
 
-GPU 서버 한 대에는 Docker, NVIDIA driver/toolkit, Kubernetes node, Kerberos
-NFS, exporter와 사용자 container 전제조건이 함께 필요하다. 그러나 이 기능을
-하나의 거대한 playbook에 넣으면 소유권, 위험도와 변경 주기가 사라진다.
+1. **기존 서버 점검**: 각 서버에 Docker, NVIDIA driver/toolkit, Kubernetes,
+   network tuning, Kerberos/NFS, monitoring 설정이 빠짐없이 적용되어 있는지
+   확인하고 차이가 있으면 복구할 방법을 제시한다.
+2. **신규 서버 구축**: 새 서버에 공통 설정을 같은 순서로 적용하여 기존
+   서버와 동일한 표준 상태로 만든다.
 
-`server-state`는 다음 두 질문만 담당하는 얇은 desired-state 계층이다.
+즉, 서버마다 설치 방법을 다시 기억해서 수동으로 설정하는 대신 하나의 공통
+기준을 사용하려고 만든 코드다.
 
-1. 이 서버에 무엇이 있어야 하는가?
-2. 점검 또는 복구는 어느 모듈의 어떤 명령이 소유하는가?
+```text
+                  공통 서버 기준
+                 profiles.yml
+                       │
+          ┌────────────┴────────────┐
+          │                         │
+     기존 서버 점검              신규 서버 구축
+   빠진 설정과 상태 확인       같은 순서로 설정 적용
+          │                         │
+          └────────────┬────────────┘
+                       │
+              동일한 GPU 서버 상태
+```
 
-현재 구현은 의도적으로 dry-run 중심이다. 로컬 inventory와 profile을 읽고
-remote check와 remediation command를 출력하지만 production host에 접속하거나
-변경하지 않는다. `apply --execute`는 구현되지 않았고 명시적으로 거부된다.
+`server-state`가 모든 기능을 직접 구현하는 것은 아니다. 공통 OS, Docker,
+NVIDIA와 network 설정은 직접 관리하고, Kerberos/NFS와 monitoring처럼 별도
+모듈이 소유한 기능은 해당 모듈의 점검·복구 명령을 한 순서로 연결한다.
 
-## 2. 디렉터리 지도
+## 2. 무엇을 확인하고 설정하는가
 
-| 경로 | 핵심 기능 |
-| --- | --- |
-| `bin/server-state` | Python CLI wrapper |
-| `server_state/cli.py` | `list-hosts`, `check`, `plan`, `apply` 출력 |
-| `server_state/inventory.py` | 공용 JSONL inventory 로드와 host 선택 |
-| `server_state/profiles.py` | YAML profile/catalog 파싱, set 확장과 template render |
-| `config/profiles.yml` | desired-state check/remediation의 권위 있는 정의 |
-| `ansible_playbook/bootstrap_gpu_server.yml` | 공통 GPU host baseline의 tag 기반 playbook |
-| `ansible_playbook/kerberos_nfs_client_recovery.yml` | 기존 host GSS readiness/recovery 순서 |
-| `docs/module-boundaries.md` | 모듈별 소유권 경계 |
-| `docs/standard-gpu-server-pipeline.md` | 신규/기존 서버 표준 단계 |
-| `tests/` | inventory와 profile expansion unit test |
+`new-host-bootstrap`과 `existing-host-drift`는 다음 항목을 같은 순서로
+사용한다. 따라서 새로운 공통 설정을 추가할 때 두 흐름에 함께 넣을 수 있다.
 
-## 3. 데이터 모델
-
-### 3.1 서버 inventory
-
-기본 inventory는
-`user-lifecycle/server_info/servers.jsonl`이다. `server-state`가 별도 서버
-목록을 만들지 않는 이유는 주소, SSH port와 논리 server ID의 중복 권위를
-피하기 위해서다.
-
-loader는 FARM/LAB host 이름과 JSONL 필드를 정규화하고 다음 선택 방식을
-제공한다.
-
-- `all`
-- `farm`, `lab` domain
-- `farm8`, `FARM8` 같은 개별 host/server ID
-- comma 또는 공백으로 구분한 여러 selector
-
-### 3.2 profile catalog
-
-`config/profiles.yml`은 profile과 profile set을 정의한다. 각 profile은 소유
-모듈, read-only check와 remediation을 가진다.
-
-check kind:
-
-| kind | 동작 |
-| --- | --- |
-| `local-inventory` | inventory 존재를 로컬에서 확인 |
-| `local-path` | 저장소 또는 controller 경로 존재 확인 |
-| `template-value` | 서버별 render 값 존재 확인 |
-| `remote-read` | 실행하지 않고 읽기 전용 원격 명령을 표시 |
-
-remediation mode:
-
-| mode | 출력 |
-| --- | --- |
-| `command` | `DRY-RUN` 명령과 safety level |
-| `manual` | `MANUAL` 상태와 소유 runbook/reference |
-
-profile set은 여러 profile을 정해진 순서로 확장한다. 신규 서버와 기존 서버가
-같은 작은 profile을 재사용하므로 전역 설정이 한쪽 pipeline에서 빠지는 것을
-줄인다.
-
-## 4. 표준 GPU 서버 pipeline
-
-| 순서 | profile | 소유자 | 목적 |
+| 순서 | 영역 | 기존 서버에서 확인하는 것 | 신규 서버에 설정하는 것 |
 | --- | --- | --- | --- |
-| 1 | `baseline-host` | server-state | inventory, SSH, sudo, hostname preflight |
-| 2 | `os-common` | server-state | apt, NFS, Kerberos, network 도구 |
-| 3 | `docker-engine` | server-state | Docker와 systemd cgroup driver |
-| 4 | `nvidia-driver` | server-state | host driver와 package hold |
-| 5 | `nvidia-container-runtime` | server-state | Docker/containerd NVIDIA toolkit |
-| 6 | `kubernetes-node` | server-state | kubeadm/kubelet/kubectl와 join gate |
-| 7 | `network-tuning` | server-state | storage NIC RX queue 영속화 |
-| 8 | `kerberos-nfs-client` | kerberos-nfs | realm, keytab, GSS와 mount profile |
-| 9 | `monitoring-exporters` | monitoring | cluster/GPU user exporter |
-| 10 | `user-container-host` | user-lifecycle | lifecycle 실행 전제조건 |
+| 1 | 기본 접속 조건 | inventory 등록, Ansible 접속, 비대화형 sudo, hostname | 자동 설정 전 SSH, sudo, hostname, IP와 inventory를 확인 |
+| 2 | 공통 OS | Ubuntu 계열 여부, 공통 package 설치 여부 | apt repository, NFS, Kerberos와 network 도구 설치 |
+| 3 | Docker Engine | service 활성 상태, daemon 응답, systemd cgroup driver | Docker repository/package와 `daemon.json` 설정 |
+| 4 | NVIDIA driver | `nvidia-smi`가 GPU와 driver version을 정상 출력하는지, package hold 여부 | 설정된 driver package 설치와 apt hold |
+| 5 | NVIDIA Container Toolkit | `nvidia-ctk`, Docker NVIDIA runtime, containerd NVIDIA runtime | toolkit 설치 후 Docker/containerd runtime 설정 |
+| 6 | Kubernetes node | kubeadm/kubelet/kubectl, kubelet, cluster join 파일과 node label | Kubernetes package 설치와 kubelet 활성화 |
+| 7 | network tuning | storage NIC 정보, RX queue 4096 이상, 영속화 service | storage NIC RX queue를 4096으로 유지하는 systemd service |
+| 8 | Kerberos/NFS | realm 설정, machine keytab, service ticket, `rpc-gssd`, fstab과 mount 상태 | client package/config와 GSS 준비 상태 구성 |
+| 9 | monitoring | 두 exporter service와 metrics/health endpoint | monitoring 모듈의 exporter 배포 playbook 사용 |
+| 10 | 사용자 container 전제조건 | 사용자 DB 환경, server inventory, Docker 접근 | 사용자 생성·삭제는 `user-lifecycle`을 통해 처리 |
 
-`new-host-bootstrap`와 `existing-host-drift`가 이 profile들을 각각 신규 설치와
-기존 상태 점검 관점에서 조합한다. `managed-host`는 기존 관리 서버의 기본
-alias다.
+### 2.1 NVIDIA version 확인 범위
 
-## 5. 모듈 소유권
+현재 점검 명령은 `nvidia-smi`를 실행하여 GPU 이름과 실제 driver version이
+출력되는지 확인한다. 따라서 driver가 GPU를 인식하지 못하거나 명령 자체가
+실패하는 상태는 찾을 수 있다.
 
-### server-state가 직접 소유하는 것
+신규 설치 playbook의 기본 package는 현재 `nvidia-driver-580`이며 설치 후
+의도하지 않은 major version 변경을 막기 위해 apt hold한다. 다만 기존 서버의
+driver version을 `580`과 자동 비교하여 불일치 판정을 내리는 규칙은 아직 없다.
+현재는 출력된 version을 관리자가 확인해야 한다.
 
-- 공통 OS package와 repository
-- Docker engine의 systemd cgroup 설정
-- NVIDIA driver/toolkit 설치 형태
-- Kubernetes node package 전제조건
-- storage NIC RX queue tuning
-- profile/host 선택과 상태 vocabulary
+### 2.2 network 설정 범위
 
-### 다른 모듈에 위임하는 것
+현재 `network-tuning`이 관리하는 대상은 **스토리지 통신에 사용하는 NIC의 RX
+queue 크기**다. inventory에서 서버별 storage interface를 읽고, RX queue가
+4096 이상인지와 `decs-rx-queue.service`가 활성화되어 있는지 확인한다.
 
-| 영역 | 실제 소유자 | server-state의 행동 |
-| --- | --- | --- |
-| exporter와 dashboard | `monitoring` | 배포 playbook 명령을 계획 |
-| NAS/AD/Kerberos 정책 | `kerberos-nfs` | manual/gated runbook 참조 |
-| 사용자·컨테이너 transaction | `user-lifecycle` | inventory를 읽고 CLI/playbook을 계획 |
-| WOL·boot sequence | `remote-operations` | controller 설정과 service install 점검 |
-| DECS image | `container-images` | 필요 profile에서 image test를 참조 |
+IP 주소, gateway, DNS와 netplan 전체를 자동으로 설정하는 기능은 아직 없다.
+신규 서버의 IP, hostname, SSH와 sudo는 bootstrap을 시작하기 전에 준비해야
+하는 조건이다. 향후 모든 서버의 netplan까지 통일하려면 별도의 profile과
+검증 규칙을 추가해야 한다.
 
-조정 계층이 다른 모듈의 구현을 복제하지 않는 이유는 한쪽 수정이 다른
-복사본에 반영되지 않는 drift를 막고, 고위험 작업의 승인 gate를 유지하기
-위해서다.
+## 3. 기존 서버 점검 흐름
 
-## 6. CLI 사용법
+기존 FARM/LAB 서버에서는 `existing-host-drift` profile을 사용한다.
 
-host 목록:
+```text
+공용 inventory에서 서버 선택
+  -> 공통 기준의 점검 항목 생성
+  -> 서버별 읽기 전용 명령 확인
+  -> 차이가 있는 항목의 복구 계획 확인
+  -> 담당 관리자가 승인한 playbook 실행
+```
+
+전체 서버 또는 특정 서버의 점검 항목을 확인하는 명령은 다음과 같다.
 
 ```bash
 cd /home/jy/server_manage
-./server-state/bin/server-state list-hosts --hosts all
-./server-state/bin/server-state --format json list-hosts --hosts farm
-```
 
-점검 계획:
+./server-state/bin/server-state check \
+  --hosts all \
+  --profile existing-host-drift
 
-```bash
 ./server-state/bin/server-state check \
   --hosts farm8 \
-  --profile managed-host
+  --profile existing-host-drift
 ```
 
-복구 계획:
+여기서 주의할 점은 현재 `check`가 실제 서버에 접속하여 결과를 수집하는
+명령은 아니라는 것이다. 서버별로 실행할 읽기 전용 Ansible 명령을
+`DRY-RUN`으로 출력한다. 따라서 현재 단계에서는 관리자가 출력된 명령을
+실행하거나, 별도 자동화가 그 명령을 실행해야 실제 상태를 알 수 있다.
+
+복구에 사용할 명령도 실행하지 않고 먼저 확인할 수 있다.
 
 ```bash
 ./server-state/bin/server-state plan \
   --hosts farm8 \
-  --profile monitoring-exporters
+  --profile existing-host-drift
 ```
 
-신규 서버 전체 순서:
+## 4. 신규 서버 구축 흐름
+
+새 서버를 기존 서버와 같은 상태로 만드는 것이 `new-host-bootstrap`의
+목적이다. 다만 아무것도 설치되지 않은 장비의 전원 투입부터 전부 처리하는
+형태는 아니다. 다음 조건은 먼저 준비되어 있어야 한다.
+
+- Ubuntu가 설치되어 있다.
+- IP, hostname과 SSH 접속이 준비되어 있다.
+- 관리 계정이 비대화형 sudo를 사용할 수 있다.
+- 서버가 공용 inventory에 등록되어 있다.
+
+이후 표준 설치 순서를 확인한다.
 
 ```bash
 ./server-state/bin/server-state plan \
@@ -152,7 +130,107 @@ cd /home/jy/server_manage
   --profile new-host-bootstrap
 ```
 
-현재 `apply`도 같은 dry-run plan만 출력한다.
+`ansible_playbook/bootstrap_gpu_server.yml`에는 package 설치와 설정 파일 변경을
+실제로 수행하는 idempotent task가 들어 있다. 각 단계는 tag로 나뉘며, 먼저
+생성된 명령의 host, tag와 변수를 확인한 뒤 `--check --diff`로 예상 변경을
+검토한다. 실제 적용은 검토가 끝난 Ansible 명령에서 `--check`를 제거하여
+관리자가 실행한다.
+
+다음 항목은 공통 설정이라도 자동으로 밀어 넣지 않고 별도 승인을 요구한다.
+
+- NVIDIA driver 변경: reboot와 실행 중 GPU workload 조정이 필요하다.
+- Kubernetes join: cluster별 token과 controller 승인이 필요하다.
+- Kerberos machine keytab: FARM과 LAB의 도메인 가입 방식이 다르고 secret을
+  안전하게 전달해야 한다.
+- Kerberos NFS mount: 실행 중 container와 사용자 session에 영향을 줄 수 있다.
+
+Kerberos/NFS의 상세 점검과 복구 순서는
+[Kerberos/NFS 매뉴얼](kerberos-nfs.md)에서 관리한다.
+
+## 5. 현재 구현 수준
+
+이 모듈은 최종적으로 공통 기준과 실제 서버 상태를 자동 비교하고 필요한
+복구까지 안전하게 실행하는 것을 목표로 한다. 현재 구현 수준은 다음과 같다.
+
+| 기능 | 현재 상태 |
+| --- | --- |
+| 전체 서버가 따라야 할 공통 profile 정의 | 구현됨 |
+| 신규/기존 서버에 같은 profile 순서 사용 | 구현됨 |
+| 서버별 점검 명령 생성 | 구현됨 |
+| 신규 서버 설정용 Ansible task | 구현됨 |
+| `check`가 원격 서버를 순회하고 결과 판정 | 아직 구현되지 않음 |
+| `apply --execute`로 복구 자동 실행 | 아직 구현되지 않음. 명시적으로 거부됨 |
+| 주기적인 전체 서버 drift 검사와 알림 | 아직 구현되지 않음 |
+| IP/DNS/netplan 전체 표준화 | 아직 구현되지 않음 |
+
+따라서 “모든 서버가 같은 설정인지 확인하고 새 서버를 똑같이 설정한다”는
+이해는 맞다. 다만 현재는 **기준, 점검 명령, 복구 playbook을 한곳에 정리한
+단계**이고, 한 명령으로 전체 서버를 자동 검사·복구하는 controller까지 완성된
+상태는 아니다.
+
+## 6. 공용 서버 목록
+
+기본 inventory는 `user-lifecycle/server_info/servers.jsonl`이다.
+`server-state`가 별도 서버 목록을 만들지 않는 이유는 IP, SSH port와 논리
+server ID를 두 군데에서 관리하여 서로 달라지는 문제를 막기 위해서다.
+
+```bash
+./server-state/bin/server-state list-hosts --hosts all
+./server-state/bin/server-state list-hosts --hosts farm
+./server-state/bin/server-state list-hosts --hosts farm8,lab10
+```
+
+selector는 `all`, `farm`, `lab`, 개별 host 이름과 여러 host 조합을 지원한다.
+
+## 7. profile 구조
+
+`config/profiles.yml`에는 작은 단위의 profile과 이를 순서대로 묶은 profile
+set이 있다.
+
+| profile set | 용도 |
+| --- | --- |
+| `new-host-bootstrap` | 신규 SSH-ready 서버의 표준 구축 순서 |
+| `existing-host-drift` | 기존 서버의 공통 설정 점검·복구 순서 |
+| `managed-host` | 기존 관리 서버용 기본 별칭 |
+| `monitoring-host` | monitoring 항목만 확인할 때 사용 |
+
+새 공통 설정을 모든 서버에 적용하려면 작은 profile로 추가한 뒤
+`new-host-bootstrap`과 `existing-host-drift` 양쪽에 넣는다. 이렇게 해야 새
+서버 설치에는 들어갔지만 기존 서버 점검에서는 빠지거나, 그 반대가 되는
+문제를 줄일 수 있다.
+
+각 profile은 다음 정보를 가진다.
+
+- 이 설정을 실제로 소유하는 모듈
+- 부작용 없이 상태를 읽는 check
+- 차이가 있을 때 사용할 remediation 명령
+- 자동 실행할 수 없는 작업의 runbook과 safety level
+
+## 8. 모듈별 소유권
+
+| 영역 | 실제 소유자 | `server-state`의 역할 |
+| --- | --- | --- |
+| 공통 OS, Docker, NVIDIA, Kubernetes package, network tuning | `server-state` | 공통 기준과 bootstrap task 관리 |
+| NAS, AD, Kerberos와 NFS 정책 | `kerberos-nfs` | 점검 순서와 승인된 runbook 연결 |
+| exporter와 metrics endpoint | `monitoring` | 배포·점검 playbook 연결 |
+| 사용자와 container 생성·삭제 | `user-lifecycle` | 공용 inventory 사용과 전제조건 확인 |
+| 서버 전원과 boot sequence | `remote-operations` | 이 모듈에서 다루지 않음 |
+| 사용자 container image | `container-images` | 이 모듈에서 image 내부를 변경하지 않음 |
+
+소유권을 나눈 이유는 `server-state`에 모든 운영 코드를 복사하지 않고, 실제
+담당 모듈의 rollback과 안전 절차를 그대로 사용하기 위해서다.
+
+## 9. 상태 표시
+
+| 상태 | 의미 |
+| --- | --- |
+| `OK` | inventory나 로컬 파일처럼 즉시 확인 가능한 조건이 충족됨 |
+| `MISSING` | 필요한 로컬 파일이나 값이 없음 |
+| `DRY-RUN` | 실행할 원격 점검 또는 복구 명령만 표시함 |
+| `MANUAL` | 도메인 가입, join, mount처럼 담당자 확인이 필요한 작업 |
+| `UNKNOWN` | 아직 지원하지 않는 check 또는 remediation 형식 |
+
+현재 `apply`도 실제 변경 없이 복구 계획만 출력한다.
 
 ```bash
 ./server-state/bin/server-state apply \
@@ -160,84 +238,40 @@ cd /home/jy/server_manage
   --profile existing-host-drift
 ```
 
-자동화가 결과를 소비할 때는 `--format json`을 사용한다. text 출력 parsing에
-의존하지 않기 위해 구조화 출력을 별도로 제공한다.
+`apply --execute`는 아직 구현되지 않았으며 실행하면 오류로 중단된다.
 
-## 7. 안전 모델
+## 10. 디렉터리 구조
 
-상태 vocabulary는 다음 의미를 가진다.
-
-| 상태 | 의미 |
+| 경로 | 기능 |
 | --- | --- |
-| `OK` | 로컬에서 확인 가능한 조건 충족 |
-| `MISSING` | 로컬 파일/값 없음 |
-| `DRY-RUN` | 실행할 원격 check 또는 remediation 표시 |
-| `MANUAL` | 자동화하지 않은 고위험/도메인 소유 작업 |
-| `UNKNOWN` | 지원하지 않는 kind/mode |
+| `bin/server-state` | CLI 실행 파일 |
+| `script/cli.py` | `list-hosts`, `check`, `plan`, `apply` 출력 |
+| `script/inventory.py` | 공용 JSONL inventory 로드와 host 선택 |
+| `script/profiles.py` | profile set 확장과 서버별 변수 치환 |
+| `config/profiles.yml` | 공통 상태, 점검과 복구 명령의 기준 |
+| `ansible_playbook/bootstrap_gpu_server.yml` | 신규/기존 서버의 공통 설정 task |
+| `ansible_playbook/kerberos_nfs_client_recovery.yml` | Kerberos NFS 상태 점검과 제한된 복구 |
+| `docs/standard-gpu-server-pipeline.md` | 신규/기존 서버 표준 단계의 개발 문서 |
+| `tests/` | inventory와 profile 처리 unit test |
 
-`bootstrap_gpu_server.yml`에는 실제 task가 있지만 CLI가 자동 실행하지 않는다.
-운영자는 생성된 Ansible 명령의 host limit, tag와 extra variable을 검토하고
-우선 `--check --diff`로 실행한다.
+## 11. 공통 설정 추가 방법
 
-Kubernetes join은 token이 짧게 유효하고 잘못된 join이 scheduler와 GPU
-workload에 영향을 주므로 자동 기본값이 없다. Kerberos host keytab 준비도
-도메인마다 Samba/winbind 또는 SSSD/adcli 흐름이 달라 hook으로 남기고 secret
-출력을 `no_log`로 숨긴다.
-
-## 8. Kerberos NFS recovery 순서
-
-기존 host에서 mount부터 실행하지 않는다. 다음 순서를 지킨다.
-
-```text
-keytab 존재
-  -> machine kinit -k
-  -> NFS service kvno
-  -> rpc_pipefs
-  -> rpc-gssd active
-  -> mount 존재/응답 확인
-  -> 필요한 경우에만 gated recovery
-```
-
-읽기/계획 확인:
-
-```bash
-ansible-playbook server-state/ansible_playbook/kerberos_nfs_client_recovery.yml \
-  --limit farm8 \
-  --check --diff \
-  -e server_state_hosts=farm8
-```
-
-모든 사전조건을 확인하고 share가 실제로 missing일 때만 mount action을
-명시한다.
-
-```bash
-ansible-playbook server-state/ansible_playbook/kerberos_nfs_client_recovery.yml \
-  --limit farm8 \
-  -e server_state_hosts=farm8 \
-  -e server_state_recover_mount_now=true
-```
-
-## 9. 새 profile 추가
-
-1. 변경의 구현 소유 모듈을 먼저 정한다.
+1. 설정을 실제로 관리할 모듈을 정한다.
 2. `config/profiles.yml`에 작은 profile을 추가한다.
-3. 부작용 없는 관측만 `checks`에 둔다.
-4. remediation은 가능하면 `--check --diff` 명령으로 표현한다.
-5. 공유 서비스, key, join처럼 위험한 작업은 `manual`과 reference로 남긴다.
-6. 신규/기존 서버 모두 필요한 항목이면 두 profile set의 올바른 위치에 넣는다.
-7. host template expansion과 set ordering unit test를 추가한다.
-8. 실제 소유 모듈의 문서와 이 매뉴얼의 pipeline 표를 갱신한다.
+3. 부작용 없이 읽을 수 있는 항목만 `checks`에 둔다.
+4. 복구는 가능하면 Ansible `--check --diff` 명령부터 제공한다.
+5. driver, cluster join, keytab과 mount처럼 위험한 작업은 `manual` 또는
+   `gated`로 둔다.
+6. 모든 서버에 필요한 설정이면 `new-host-bootstrap`과
+   `existing-host-drift`에 모두 추가한다.
+7. profile 순서와 서버별 변수 치환 test를 추가한다.
 
-## 10. 테스트
+## 12. 테스트
 
 ```bash
 cd /home/jy/server_manage/server-state
 python3 -m unittest discover -s tests -v
-```
 
-변경 후 추가 확인:
-
-```bash
 ./bin/server-state --format json check \
   --hosts farm8 \
   --profile existing-host-drift
@@ -247,19 +281,4 @@ python3 -m unittest discover -s tests -v
   --profile new-host-bootstrap
 ```
 
-실제 서버 변경이 없어도 command rendering, owner, safety와 host별 경로가 맞는지
-검토할 수 있어야 한다.
-
-## 11. 향후 실행 모드 원칙
-
-실제 `apply --execute`를 추가하려면 단순히 subprocess 호출을 허용해서는 안
-된다. 최소한 다음 조건이 필요하다.
-
-- host와 profile별 명시적 승인
-- check 결과와 remediation 사이의 상태 재검증
-- owner module별 실행 adapter
-- timeout, audit log와 secret redaction
-- partial failure와 재실행의 idempotency
-- manual safety 항목의 자동 실행 금지
-
-이 조건이 설계·검토되기 전까지 dry-run 전용 상태가 안전한 기본값이다.
+테스트와 dry-run 출력에서는 실제 운영 서버를 변경하지 않는다.

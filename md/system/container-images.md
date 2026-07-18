@@ -71,20 +71,18 @@ Dockerfile에 조건을 추가한다.
 root 작업을 최소화한다. 사용자 홈의 기존 비밀번호와 VNC password 파일도
 재시작 때 보존한다.
 
-### 3.4 Kerberos와 sudo 격리
-
-Kerberos 활성화 시 keytab은 컨테이너에 전달하지 않는다. 호스트의 root-only
-service가 keytab으로 ticket을 갱신하고 `/run/user/<uid>/krb5cc`만 bind
-mount한다. 컨테이너에는 `KRB5CCNAME`과 기대 principal만 전달한다.
+### 3.4 제한적 sudo와 공유 helper
 
 기본 `DECS_USER_SUDO_MODE=restricted`는 패키지 설치에 필요한 제한된 sudo는
 허용하지만 UID 전환, mount, 권한 변경, root shell과 우회 가능한 interpreter
-실행을 막는다. 이는 컨테이너 root가 다른 UID로 가장해 호스트의 다른 ccache를
-사용하는 경로를 줄이기 위한 설계다.
+실행을 막는다.
 
 사용자 그룹 공유는 관리자 sudo 대신 `group-dir-share` helper로 제공한다.
 사용자 자신의 권한으로 디렉터리를 만들고 `2770`과 default ACL을 설정하므로
 공유 기능과 identity 격리를 함께 유지한다.
+
+Kerberos keytab과 ccache를 분리한 이유와 container credential 경계는
+[kerberos-nfs의 keytab과 ticket 모델](kerberos-nfs.md#5-keytab-ticket)을 따른다.
 
 ### 3.5 GPU 호환성 표시와 강제 모드
 

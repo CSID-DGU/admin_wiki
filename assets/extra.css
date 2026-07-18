@@ -31,9 +31,32 @@
   overflow-wrap: anywhere;
 }
 
+/* 메인 페이지의 분류 목차만 일반 문서 표보다 크게 표시한다. */
+.md-typeset .main-toc table {
+  display: table;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.md-typeset .main-toc table th {
+  font-size: 0.92rem;
+}
+
+.md-typeset .main-toc table code {
+  font-size: 0.9em;
+}
+
+.md-typeset .main-toc table a {
+  font-weight: 600;
+}
+
 @media screen and (max-width: 760px) {
   .md-typeset table:not([class]) {
     display: block;
     overflow-x: auto;
+  }
+
+  .md-typeset .main-toc table {
+    font-size: 0.82rem;
   }
 }

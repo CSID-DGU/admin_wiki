@@ -58,9 +58,16 @@ start stopped target containers
 per-container SSH/GPU post-check
 ```
 
-priority server를 먼저 깨우는 이유는 storage, DB, control plane처럼 나머지
-서버가 의존하는 기반을 먼저 검증하기 위해서다. gate를 끌 수는 있지만 기본은
-우선 대상의 health가 통과한 뒤 나머지를 깨우는 방식이다.
+각 domain에서 서버 한 대를 먼저 깨우는 구체적인 이유는 `LAB1`과 `FARM1`에
+사용자 관리 DB가 Docker container로 존재하기 때문이다. 이 DB는 사용자,
+UID/GID, 할당 port와 사용자 container record를 관리하는 기준 데이터이므로,
+나머지 compute server보다 먼저 DB host를 기동해 관리 상태가 복구될 시간을
+확보한다.
+
+따라서 `LAB1`과 `FARM1`을 priority target으로 먼저 깨우고 health gate를 통과한
+뒤 나머지 서버를 기동한다. 이렇게 하면 사용자 관리 DB가 준비되지 않은 상태에서
+전체 서버와 사용자 container 운영이 동시에 시작되는 상황을 줄일 수 있다.
+priority gate를 끌 수는 있지만 기본값은 이 의존 순서를 보존한다.
 
 ## 4. 핵심 기능
 

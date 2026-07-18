@@ -85,4 +85,5 @@ nav:
       - remote-operations: system/remote-operations.md
       - monitoring: system/monitoring.md
       - kerberos-nfs: system/kerberos-nfs.md
+  - user: user/index.md
   - PDF 다운로드: downloads.md

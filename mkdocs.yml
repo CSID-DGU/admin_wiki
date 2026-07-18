@@ -91,5 +91,8 @@ nav:
           - 개요: system/kerberos-nfs/index.md
           - 설계: system/kerberos-nfs/design.md
           - 운영: system/kerberos-nfs/operations.md
+          - 디버깅 로그:
+              - 개요: system/kerberos-nfs/debugging/index.md
+              - NFSv4.1 session slot 고착: system/kerberos-nfs/debugging/nfs-v41-session-slot-stuck.md
   - user: user/index.md
   - PDF 다운로드: downloads.md

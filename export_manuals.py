@@ -57,6 +57,12 @@ MANUALS = (
         (
             MD_DIR / "system" / "kerberos-nfs" / "design.md",
             MD_DIR / "system" / "kerberos-nfs" / "operations.md",
+            MD_DIR / "system" / "kerberos-nfs" / "debugging" / "index.md",
+            MD_DIR
+            / "system"
+            / "kerberos-nfs"
+            / "debugging"
+            / "nfs-v41-session-slot-stuck.md",
         ),
     ),
     Manual(

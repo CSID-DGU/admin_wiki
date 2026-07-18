@@ -14,7 +14,7 @@
    remount를 마지막 수단으로 사용한다.
 6. UID/GID 불일치는 AD·DB·NFS 숫자를 비교한 뒤 고친다. 먼저 `chown`하지 않는다.
 
-## 2. Kerberos container 생성
+## 2. Kerberos container 생성 (추후 자동화 시스템으로 대체될 예정)
 
 대표 CLI 형태는 다음과 같다. 실제 image/version, 사용자 정보와 대상 server는
 요청에 맞게 지정한다.

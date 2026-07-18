@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 
-repository_url=${WIKI_REPOSITORY_URL:-https://github.com/CSID-DGU/admin_infra_server.git}
+repository_url=${WIKI_REPOSITORY_URL:-https://github.com/CSID-DGU/admin_wiki.git}
 branch=${WIKI_BRANCH:-main}
 interval=${WIKI_SYNC_INTERVAL_SECONDS:-60}
 repo_dir=/repo
 site_dir=/site
-next_site=/tmp/server-manage-wiki-next
+next_site=/tmp/admin-wiki-next
 
 case "$interval" in
   ''|*[!0-9]*)
@@ -44,14 +44,14 @@ build_site() {
   fi
 
   echo "building wiki from ${revision}"
-  python3 "$repo_dir/wiki/export_manuals.py"
-  python3 "$repo_dir/wiki/sync_wiki_docs.py"
+  python3 "$repo_dir/export_manuals.py"
+  python3 "$repo_dir/sync_wiki_docs.py"
 
   rm -rf "$next_site"
   mkdocs build \
     --clean \
     --strict \
-    --config-file "$repo_dir/wiki/mkdocs.yml" \
+    --config-file "$repo_dir/mkdocs.yml" \
     --site-dir "$next_site"
   printf '%s\n' "$revision" > "$next_site/.source-revision"
 

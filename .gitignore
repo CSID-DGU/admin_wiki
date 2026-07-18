@@ -1,0 +1,5 @@
+# Generated documentation site
+.env
+wiki-docs/
+site/
+__pycache__/

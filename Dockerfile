@@ -7,9 +7,9 @@ RUN apk add --no-cache \
     && addgroup -S wiki \
     && adduser -S -G wiki wiki
 
-COPY wiki-requirements.txt /tmp/wiki-requirements.txt
+COPY requirements.txt /tmp/requirements.txt
 RUN python3 -m pip install --no-cache-dir --disable-pip-version-check \
-      -r /tmp/wiki-requirements.txt
+      -r /tmp/requirements.txt
 
 COPY docker/sync-loop.sh /usr/local/bin/wiki-sync
 COPY docker/git-askpass.sh /usr/local/bin/wiki-git-askpass

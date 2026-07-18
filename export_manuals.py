@@ -18,10 +18,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-WIKI_DIR = REPO_ROOT / "wiki"
-MD_DIR = WIKI_DIR / "md"
-DEFAULT_OUTPUT = WIKI_DIR / "pdf"
+REPO_ROOT = Path(__file__).resolve().parent
+MD_DIR = REPO_ROOT / "md"
+DEFAULT_OUTPUT = REPO_ROOT / "pdf"
 
 
 @dataclass(frozen=True)

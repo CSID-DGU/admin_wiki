@@ -9,14 +9,13 @@ import sys
 from pathlib import Path
 
 
-WIKI_DIR = Path(__file__).resolve().parent
-REPO_ROOT = WIKI_DIR.parent
-COMPOSE_FILE = WIKI_DIR / "compose.yml"
-EXPORTER = WIKI_DIR / "export_manuals.py"
+REPO_ROOT = Path(__file__).resolve().parent
+COMPOSE_FILE = REPO_ROOT / "compose.yml"
+EXPORTER = REPO_ROOT / "export_manuals.py"
 
 
 def run(command: list[str]) -> None:
-    subprocess.run(command, cwd=WIKI_DIR, check=True)
+    subprocess.run(command, cwd=REPO_ROOT, check=True)
 
 
 def compose(*arguments: str) -> None:

@@ -10,11 +10,10 @@ from pathlib import Path
 from export_manuals import MANUALS, REPO_ROOT
 
 
-WIKI_DIR = REPO_ROOT / "wiki"
-DEFAULT_OUTPUT = WIKI_DIR / "wiki-docs"
-PDF_DIR = WIKI_DIR / "pdf"
-MD_DIR = WIKI_DIR / "md"
-ASSET_DIR = WIKI_DIR / "wiki-assets"
+DEFAULT_OUTPUT = REPO_ROOT / "wiki-docs"
+PDF_DIR = REPO_ROOT / "pdf"
+MD_DIR = REPO_ROOT / "md"
+ASSET_DIR = REPO_ROOT / "assets"
 
 
 def rewrite_links(markdown: str, slug: str) -> str:
@@ -31,7 +30,7 @@ def build_downloads() -> str:
     lines = [
         "# PDF 다운로드",
         "",
-        "PDF는 `wiki/md/`의 Markdown에서 생성한 읽기 전용 산출물입니다.",
+        "PDF는 `md/`의 Markdown에서 생성한 읽기 전용 산출물입니다.",
         "내용을 수정할 때는 PDF가 아니라 원본 Markdown을 변경한 뒤 다시 export합니다.",
         "",
         "[전체 통합 매뉴얼](pdf/system/server-manage-manual.pdf){ .md-button .md-button--primary }",
@@ -47,9 +46,9 @@ def build_downloads() -> str:
             "## 다시 생성",
             "",
             "```bash",
-            "cd /path/to/admin_infra_server",
-            "python3 wiki/manage.py export",
-            "python3 wiki/manage.py sync-now",
+            "cd /path/to/admin_wiki",
+            "python3 manage.py export",
+            "python3 manage.py sync-now",
             "```",
             "",
         ]
@@ -59,8 +58,8 @@ def build_downloads() -> str:
 
 def sync(output_dir: Path) -> Path:
     output_dir = output_dir.resolve()
-    if output_dir.parent != WIKI_DIR.resolve():
-        raise ValueError(f"output directory must be directly under {WIKI_DIR.resolve()}")
+    if output_dir.parent != REPO_ROOT.resolve():
+        raise ValueError(f"output directory must be directly under {REPO_ROOT.resolve()}")
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, mode=0o755)

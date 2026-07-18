@@ -1,4 +1,4 @@
-name: server-manage-wiki
+name: admin-wiki
 
 services:
   sync:
@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
     init: true
     environment:
-      WIKI_REPOSITORY_URL: ${WIKI_REPOSITORY_URL:-https://github.com/CSID-DGU/admin_infra_server.git}
+      WIKI_REPOSITORY_URL: ${WIKI_REPOSITORY_URL:-https://github.com/CSID-DGU/admin_wiki.git}
       WIKI_BRANCH: ${WIKI_BRANCH:-main}
       WIKI_SYNC_INTERVAL_SECONDS: ${WIKI_SYNC_INTERVAL_SECONDS:-60}
       WIKI_GIT_USERNAME: ${WIKI_GIT_USERNAME:-x-access-token}

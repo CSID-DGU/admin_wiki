@@ -82,7 +82,10 @@ nav:
       - container-images: system/container-images.md
       - user-lifecycle: system/user-lifecycle.md
       - server-state: system/server-state.md
-      - remote-operations: system/remote-operations.md
+      - remote-operations:
+          - 설계: system/remote-operations-design.md
+          - 운영: system/remote-operations-operations.md
+          - 설정: system/remote-operations-config.md
       - monitoring: system/monitoring.md
       - kerberos-nfs: system/kerberos-nfs.md
   - user: user/index.md

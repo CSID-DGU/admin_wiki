@@ -57,10 +57,22 @@ MANUALS = (
         "system/monitoring-manual.pdf",
     ),
     Manual(
-        "remote-operations",
-        "remote-operations",
-        MD_DIR / "system" / "remote-operations.md",
-        "system/remote-operations-manual.pdf",
+        "remote-operations-design",
+        "remote-operations 설계",
+        MD_DIR / "system" / "remote-operations-설계.md",
+        "system/remote-operations-design-manual.pdf",
+    ),
+    Manual(
+        "remote-operations-operations",
+        "remote-operations 운영",
+        MD_DIR / "system" / "remote-operations-운영.md",
+        "system/remote-operations-operations-manual.pdf",
+    ),
+    Manual(
+        "remote-operations-config",
+        "remote-operations 설정",
+        MD_DIR / "system" / "remote-operations-설정.md",
+        "system/remote-operations-config-manual.pdf",
     ),
     Manual(
         "server-state",

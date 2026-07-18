@@ -17,51 +17,53 @@
 ## 2. 전체 구성
 
 다이어그램의 **굵은 바깥 제목은 실행 영역**이고, 영역 안 각 카드의 **굵은 첫
-줄은 모듈 이름**이다. 구분선 아래에는 그 모듈의 내부 파일·프로세스·객체를
-표시한다. AD/KDC는 모든 계산 host에 있는 것이 아니라 FARM/LAB 중 **AD DC
-역할을 맡은 host에만** 있다.
+줄은 모듈 이름**이다. 카드 안의 `보관·참조 값 / 구성요소`는 명사형으로,
+`수행 동작`은 **주체와 동사가 있는 문장**으로 구분했다. 화살표 문장은 출발점의
+모듈이 도착점의 모듈에 수행하는 동작을 뜻하며, 점선은 credential 참조나 읽기
+전용 조회·관측을 뜻한다. AD/KDC는 모든 계산 host에 있는 것이 아니라 FARM/LAB
+중 **AD DC 역할을 맡은 host에만** 있다.
 
 ```mermaid
 flowchart TB
     subgraph CONTROL_ZONE["<b>외부 관리 · 관측</b>"]
         direction LR
-        M["<b>관리 서버</b><br/>uidctl · Ansible runner"]
-        MON["<b>Monitoring</b><br/>readiness · KVNO · mount<br/>canary · forensics"]
+        M["<b>관리 서버</b><br/>────────────<br/><b>구성요소</b><br/>uidctl · Ansible runner<br/><b>수행 동작</b><br/>uidctl이 계정 생성을 조정함<br/>Ansible이 설정과 keytab을 배포함"]
+        MON["<b>Monitoring</b><br/>────────────<br/><b>보관 값</b><br/>상태 metric · log · forensics evidence<br/><b>수행 동작</b><br/>readiness와 KVNO를 검사함<br/>mount와 canary I/O를 시험함<br/>이상을 감지하면 경보함"]
     end
 
     subgraph CONTAINER_ZONE["<b>사용자 컨테이너</b>"]
-        USER_RUNTIME["<b>사용자 Runtime 모듈</b><br/>────────────<br/>사용자 process<br/>bind-mounted ccache<br/>KRB5CCNAME"]
+        USER_RUNTIME["<b>사용자 Runtime 모듈</b><br/>────────────<br/><b>참조 값</b><br/>KRB5CCNAME · bind-mounted ccache<br/><b>수행 동작</b><br/>사용자 process가 open/read/write를 호출함<br/>process가 KRB5CCNAME으로 ticket을 찾음"]
     end
 
     subgraph HOST_ZONE["<b>FARM / LAB 호스트</b>"]
         direction LR
-        DIRECTORY_MODULE["<b>AD / Kerberos Directory 모듈</b><br/>────────────<br/>Samba AD DC / KDC<br/>사용자 · 그룹 · SPN<br/>RFC2307 · KVNO<br/><i>AD DC 역할 host에만 배치</i>"]
-        REFRESH_MODULE["<b>사용자 Credential 갱신 모듈</b><br/>────────────<br/>user keytab (root:root 0400)<br/>decs-krb-refresh service + timer<br/>host ccache (/run/user/&lt;uid&gt;/krb5cc)"]
-        NFS_CLIENT_MODULE["<b>NFS Client 모듈</b><br/>────────────<br/>kernel NFS client<br/>rpc.gssd<br/>credential upcall · GSS context"]
+        DIRECTORY_MODULE["<b>AD / Kerberos Directory 모듈</b><br/>────────────<br/><b>보관 값</b><br/>사용자 · 그룹 · SPN 객체<br/>RFC2307 UID/GID · KVNO<br/><b>수행 동작</b><br/>KDC가 TGT와 service ticket을 발급함<br/><i>AD DC 역할 host에만 배치</i>"]
+        REFRESH_MODULE["<b>사용자 Credential 갱신 모듈</b><br/>────────────<br/><b>보관 값</b><br/>user keytab (root:root 0400)<br/>host ccache (/run/user/&lt;uid&gt;/krb5cc)<br/><b>수행 동작</b><br/>timer가 갱신 service를 주기적으로 실행함<br/>service가 keytab으로 kinit하고 ccache를 원자 교체함"]
+        NFS_CLIENT_MODULE["<b>NFS Client 모듈</b><br/>────────────<br/><b>구성요소</b><br/>kernel NFS client · rpc.gssd<br/><b>수행 동작</b><br/>kernel NFS가 credential upcall을 요청함<br/>rpc.gssd가 호출 UID의 ccache를 찾음<br/>rpc.gssd가 GSS context를 만들어 RPC에 적용함"]
     end
 
     subgraph STORAGE_ZONE["<b>NAS / Storage</b>"]
         direction LR
-        NFS_SERVER_MODULE["<b>NFS Service 모듈</b><br/>────────────<br/>NFS service keytab<br/>svcgssd<br/>NFS server"]
-        STORAGE_ID_MODULE["<b>Identity / 권한 모듈</b><br/>────────────<br/>Samba · winbind · idmap<br/>NFS export · user home<br/>numeric UID / GID"]
+        NFS_SERVER_MODULE["<b>NFS Service 모듈</b><br/>────────────<br/><b>보관 값 / 구성요소</b><br/>NFS service keytab · svcgssd · NFS server<br/><b>수행 동작</b><br/>svcgssd가 service keytab으로 ticket을 검증함<br/>NFS server가 요청 principal을 권한 모듈에 전달함<br/>NFS server가 권한 판정에 따라 I/O를 처리함"]
+        STORAGE_ID_MODULE["<b>Identity / 권한 모듈</b><br/>────────────<br/><b>보관 값 / 구성요소</b><br/>Samba · winbind · idmap<br/>NFS export · user home · numeric UID/GID<br/><b>수행 동작</b><br/>winbind/idmap이 principal을 UID/GID로 변환함<br/>filesystem이 export 권한과 owner를 검사함<br/>filesystem이 user home 접근을 허용하거나 거부함"]
     end
 
-    M -->|"계정 · RFC2307 설정<br/>keytab export"| DIRECTORY_MODULE
-    M -->|"root-only keytab 설치"| REFRESH_MODULE
-    M -->|"home · numeric owner 준비"| STORAGE_ID_MODULE
+    M -->|"사용자 객체와 RFC2307 속성을 만들고<br/>keytab을 export함"| DIRECTORY_MODULE
+    M -->|"export한 keytab을<br/>root-only 권한으로 설치함"| REFRESH_MODULE
+    M -->|"home을 만들고<br/>numeric owner를 설정함"| STORAGE_ID_MODULE
 
-    REFRESH_MODULE -->|"kinit / AS"| DIRECTORY_MODULE
-    USER_RUNTIME -.->|"host ccache bind mount"| REFRESH_MODULE
-    USER_RUNTIME -->|"파일 I/O"| NFS_CLIENT_MODULE
-    NFS_CLIENT_MODULE -->|"NFS service ticket / TGS"| DIRECTORY_MODULE
-    NFS_CLIENT_MODULE -->|"NFSv4 + RPCSEC_GSS"| NFS_SERVER_MODULE
-    NFS_SERVER_MODULE -->|"principal 권한 조회"| STORAGE_ID_MODULE
-    DIRECTORY_MODULE -.->|"RFC2307 UID/GID 응답"| STORAGE_ID_MODULE
+    REFRESH_MODULE -->|"keytab으로 AS 요청을 보내<br/>사용자 TGT를 발급받음"| DIRECTORY_MODULE
+    USER_RUNTIME -.->|"host가 갱신한 ccache를<br/>bind mount해 사용함"| REFRESH_MODULE
+    USER_RUNTIME -->|"open/read/write를 호출하고<br/>호출 UID를 전달함"| NFS_CLIENT_MODULE
+    NFS_CLIENT_MODULE -->|"rpc.gssd가 TGT로<br/>NFS service ticket을 요청함"| DIRECTORY_MODULE
+    NFS_CLIENT_MODULE -->|"kernel NFS가 GSS context를 붙여<br/>NFSv4 RPC를 전송함"| NFS_SERVER_MODULE
+    NFS_SERVER_MODULE -->|"요청 principal을 전달해<br/>UID/GID와 접근 권한을 확인함"| STORAGE_ID_MODULE
+    DIRECTORY_MODULE -.->|"Identity 모듈의 조회에<br/>RFC2307 UID/GID를 반환함"| STORAGE_ID_MODULE
 
-    MON -.->|"읽기 전용 관측"| DIRECTORY_MODULE
-    MON -.-> REFRESH_MODULE
-    MON -.-> NFS_CLIENT_MODULE
-    MON -.-> NFS_SERVER_MODULE
+    MON -.->|"ticket 발급과 KVNO 상태를<br/>읽고 이상을 경보함"| DIRECTORY_MODULE
+    MON -.->|"timer 실행과 ccache 만료를<br/>확인하고 이상을 경보함"| REFRESH_MODULE
+    MON -.->|"mount와 rpc.gssd 상태를<br/>확인하고 이상을 경보함"| NFS_CLIENT_MODULE
+    MON -.->|"canary I/O와 service keytab을<br/>검사하고 이상을 경보함"| NFS_SERVER_MODULE
 
     classDef component fill:#ffffff,stroke:#64748b,stroke-width:1px,color:#0f172a
     classDef external fill:#fff7ed,stroke:#d97706,stroke-width:2px,color:#431407

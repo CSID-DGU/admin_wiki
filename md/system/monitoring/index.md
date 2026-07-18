@@ -15,37 +15,42 @@ component를 거쳐 metric과 alert가 되는지 설명하고, **운영**은 배
 | [설계](design.md) | exporter, Prometheus, Grafana, Alertmanager, GSS health와 forensics의 데이터 흐름 |
 | [운영](operations.md) | 배포, endpoint 점검, metric/alert 코드 링크, 장애별 진단 순서 |
 
+처음 보는 사람은 **설계 2절의 전체 구성**에서 실행 영역과 데이터 흐름을 먼저
+확인하고, 실제 점검이나 배포가 필요할 때 **운영 문서**로 이동한다. 장애 대응 중
+설계 문서의 component 설명과 운영 문서의 명령을 번갈아 읽지 않도록, 반복해서
+사용하는 endpoint·metric·진단 순서는 운영 문서에 모았다.
+
 ## 한눈에 보는 구조
 
 ```text
 FARM/LAB host
+  ├─ node-exporter :30070
   ├─ gpu-user-exporter :30072
   ├─ cluster-monitor-exporter :30074 + public :N89/healthz
-  ├─ node-exporter :30070
   ├─ NFS GSS readiness/canary/recovery systemd worker
   └─ NFS forensics ring/watch/snapshot
-             │ scrape/status
-             ▼
-FARM Prometheus ─┐
-                 ├─ FARM Grafana ─ dashboard
-LAB Prometheus ──┘
-       │ rules
-       ▼
-Alertmanager -> localhost relay -> internal Slack notify API
+
+FARM/LAB cluster-monitor-exporter -> FARM Prometheus
+                                      └─ rule -> Alertmanager
+                                                  └─ relay -> internal notify API
+FARM node/GPU metric              -> FARM Prometheus ─┐
+LAB node/GPU metric               -> LAB Prometheus ──┴─> FARM Grafana
 ```
 
 ## 핵심 component
 
 | component | endpoint/산출물 | 역할 |
 | --- | --- | --- |
+| `node-exporter` | `:30070/metrics` | CPU, memory, filesystem, disk와 network 같은 일반 host 자원 노출 |
 | `gpu-user-exporter` | `:30072/metrics`, `:30072/-/healthy` | GPU process를 DB의 실제 사용자/container에 귀속 |
 | `cluster-monitor-exporter` | `:30074/metrics`, `:30074/healthz` | mount, GSS, GPU, Docker, container, 연결성, D-state 수집 |
 | public health listener | 서버별 `N89/healthz` | 외부에서 NAT와 host 도달 가능성 확인 |
 | NFS GSS worker | `/run`·`/var/lib` state | readiness, canary와 guarded missing-mount recovery |
 | NFS forensics | status JSON, local incident snapshot | 제한된 packet/kernel trace를 보존 |
 | keytab health check | profile status JSON | AD KVNO, storage keytab과 GSS service drift를 읽기 전용 확인 |
-| Prometheus/Alertmanager | cluster별 Kubernetes release | scrape, rule 평가, alert routing |
-| Grafana | FARM NodePort `30080` | FARM/LAB datasource와 dashboard를 한 UI에서 제공 |
+| FARM Prometheus/Alertmanager | FARM Kubernetes release | 모든 `cluster-monitor-exporter`를 중앙 수집하고 rule 평가와 alert routing 수행 |
+| LAB Prometheus | LAB Kubernetes release, NodePort `30073` | LAB node/GPU metric을 별도 저장; Alertmanager와 Grafana는 비활성화 |
+| Grafana | FARM NodePort `30080` | FARM/LAB Prometheus datasource를 한 UI에서 조회 |
 
 ## 운영 경계
 

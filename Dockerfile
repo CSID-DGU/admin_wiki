@@ -1,9 +1,15 @@
 FROM python:3.12-alpine
 
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 RUN apk add --no-cache \
       chromium \
       font-noto-cjk \
       git \
+      nodejs \
+      npm \
+    && npm install --global --omit=dev @mermaid-js/mermaid-cli@11.16.0 \
+    && npm cache clean --force \
     && addgroup -S wiki \
     && adduser -S -G wiki wiki
 

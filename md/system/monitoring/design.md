@@ -14,35 +14,82 @@
 
 ## 2. 전체 데이터와 알림 흐름
 
+다이어그램의 **굵은 바깥 제목은 실행 영역**이고, 각 카드의 **굵은 첫 줄은
+모듈 이름**이다. 카드 안의 `보관·참조 값 / 구성요소`는 명사형으로, `수행 동작`은
+주체와 동사가 있는 문장으로 구분했다. 화살표는 출발 모듈이 도착 모듈에 수행하는
+동작을 뜻하고, 점선은 외부 값을 읽기 전용으로 조회하는 흐름이다.
+
 ```mermaid
 flowchart TB
-    subgraph H["FARM/LAB host"]
-        SRC["/proc · mountinfo · systemd<br/>nvidia-smi · Docker · journal"]
-        GPU["gpu-user-exporter<br/>:30072"]
-        CM["cluster-monitor-exporter<br/>:30074 / public :N89"]
-        GSS["GSS readiness · canary<br/>mount recovery worker"]
-        FOR["NFS trace ring · watcher<br/>snapshot worker"]
-        KEY["keytab profile checker<br/>user systemd timer"]
-        SRC --> GPU
-        SRC --> CM
-        GSS -->|"state file"| CM
-        FOR -->|"status JSON"| CM
+    subgraph EXTERNAL_ZONE["<b>외부 관리 · 연동</b>"]
+        direction LR
+        KEY["<b>Keytab 점검 모듈</b><br/><b>보관 값</b> profile status JSON<br/><b>수행</b> KVNO drift를 검사함"]
+        DB["<b>UID DB</b><br/><b>보관 값</b> container owner · 사용자 이름"]
+        AD["<b>AD / Storage</b><br/><b>보관 값</b> SPN · KVNO · service keytab"]
+        EXT["<b>외부 Health Probe</b><br/><b>구성요소</b> Google Apps Script"]
     end
 
-    DB["UID DB"] -->|"container owner cache"| GPU
-    AD["AD / storage"] -.->|"read-only KVNO/keytab check"| KEY
-    GPU -->|"Prometheus metrics"| PF["FARM Prometheus"]
-    CM -->|"Prometheus metrics"| PF
-    GPU -->|"Prometheus metrics"| PL["LAB Prometheus"]
-    CM -->|"Prometheus metrics"| PL
-    PF --> GRAF["FARM Grafana"]
-    PL -->|"prometheus-lab datasource"| GRAF
-    PF --> AM["Alertmanager"]
-    PL --> AM
-    AM --> RELAY["localhost notify relay"]
-    RELAY --> API["internal Slack notify API"]
-    EXT["Google Apps Script"] <-->|"public health / heartbeat"| CM
+    subgraph HOST_ZONE["<b>FARM / LAB 관측 대상 호스트</b>"]
+        direction LR
+        NODE["<b>기본 자원 Metric 모듈</b><br/><b>구성요소</b> node-exporter · :30070<br/><b>수행</b> CPU·memory·disk·network를 노출함"]
+        GPU["<b>GPU 사용자 Metric 모듈</b><br/><b>구성요소</b> gpu-user-exporter · :30072<br/><b>수행</b> GPU PID를 사용자·container에 연결함"]
+        CM["<b>서비스 상태 Metric 모듈</b><br/><b>구성요소</b> cluster-monitor-exporter · :30074<br/><b>수행</b> mount·GSS·container 상태를 수집함"]
+        GSS["<b>NFS GSS Health 모듈</b><br/><b>보관 값</b> readiness · canary · recovery state<br/><b>수행</b> 인증을 검증하고 missing mount만 복구함"]
+        FOR["<b>NFS Forensics 모듈</b><br/><b>보관 값</b> trace ring · incident snapshot<br/><b>수행</b> 장애 전후 증거를 local disk에 보존함"]
+    end
+
+    subgraph MONITORING_ZONE["<b>Monitoring control plane</b>"]
+        direction LR
+        PF["<b>FARM Prometheus 모듈</b><br/><b>보관 값</b> FARM 자원 + FARM/LAB 서비스 metric<br/><b>수행</b> metric을 수집하고 alert rule을 평가함"]
+        PL["<b>LAB Prometheus 모듈</b><br/><b>보관 값</b> LAB node · GPU metric<br/><b>수행</b> LAB metric을 독립 저장함"]
+        GRAF["<b>Grafana 모듈</b><br/><b>구성요소</b> FARM · prometheus-lab datasource<br/><b>수행</b> 두 환경의 dashboard를 표시함"]
+        ALERT["<b>Alert 전달 모듈</b><br/><b>구성요소</b> Alertmanager · localhost relay<br/><b>수행</b> 경보를 notify API payload로 변환함"]
+    end
+
+    API["<b>내부 알림 API</b><br/>Slack notify endpoint"]
+
+    DB -.->|"container owner를 반환함"| GPU
+    AD -.->|"ticket·KVNO 조회에 응답함"| GSS
+    AD -.->|"keytab 비교 값에 응답함"| KEY
+    EXT <-->|"public health를 요청하고 heartbeat를 확인함"| CM
+    GSS -->|"readiness·recovery state를 기록함"| CM
+    FOR -->|"forensics status를 기록함"| CM
+
+    NODE -->|"FARM node metric을 scrape함"| PF
+    NODE -->|"LAB node metric을 scrape함"| PL
+    GPU -->|"FARM GPU metric을 scrape함"| PF
+    GPU -->|"LAB GPU metric을 scrape함"| PL
+    CM -->|"FARM/LAB 서비스 metric을 중앙 scrape함"| PF
+    PF -->|"FARM datasource로 조회함"| GRAF
+    PL -->|"prometheus-lab datasource로 조회함"| GRAF
+    PF -->|"firing·resolved 경보를 전달함"| ALERT
+    ALERT -->|"변환한 알림을 전송함"| API
+
+    classDef host fill:#ffffff,stroke:#16a34a,stroke-width:2px,color:#0f172a
+    classDef monitoring fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    classDef external fill:#ffffff,stroke:#d97706,stroke-width:2px,color:#0f172a
+    class NODE,GPU,CM,GSS,FOR host
+    class PF,PL,GRAF,ALERT monitoring
+    class KEY,DB,AD,EXT,API external
+
+    style HOST_ZONE fill:#f0fdf4,stroke:#16a34a,stroke-width:3px
+    style MONITORING_ZONE fill:#eff6ff,stroke:#2563eb,stroke-width:3px
+    style EXTERNAL_ZONE fill:#fff7ed,stroke:#d97706,stroke-width:3px
 ```
+
+### 구성요소별 책임
+
+| 실행 영역 | 모듈 | 내부 구성요소·값 | 하는 일 |
+| --- | --- | --- | --- |
+| FARM/LAB host | **기본 자원 Metric** | `node-exporter`, `:30070` | CPU, memory, filesystem, disk와 network metric 노출 |
+| FARM/LAB host | **GPU 사용자 Metric** | `gpu-user-exporter`, `nvidia-smi`, Docker, UID DB cache | GPU process를 실제 사용자·container·GPU에 귀속 |
+| FARM/LAB host | **서비스 상태 Metric** | `cluster-monitor-exporter`, `:30074`, public `:N89` | mount, GSS, GPU, Docker, container, 연결성과 D-state 수집 |
+| FARM/LAB host | **NFS GSS Health** | readiness, canary, guarded recovery worker와 state | 인증 stage를 검증하고 안전 조건을 통과한 missing mount만 복구 |
+| FARM/LAB host | **NFS Forensics** | packet/ftrace ring, watcher, snapshot | user share를 읽거나 복구하지 않고 장애 전후 증거 보존 |
+| 관리 host | **Keytab 점검** | profile checker, user systemd timer, status JSON | AD KVNO, storage keytab과 service ticket drift를 읽기 전용 검사 |
+| FARM control plane | **FARM Prometheus/Alert** | Prometheus, rule, Alertmanager, relay | FARM 자원과 FARM/LAB 서비스 metric을 수집하고 중앙 경보 전달 |
+| LAB control plane | **LAB Prometheus** | Prometheus, local PV, `:30073` | LAB node/GPU metric을 별도 저장; Grafana와 Alertmanager는 실행하지 않음 |
+| FARM control plane | **Grafana** | FARM/LAB datasource와 dashboard | 두 Prometheus의 시계열을 공통 UI에서 조회 |
 
 ### 데이터 plane과 control plane
 
@@ -54,9 +101,23 @@ flowchart TB
 | visualization plane | FARM/LAB datasource → Grafana | datasource UID와 cluster label로 환경 구분 |
 | 제한된 control plane | container start, SSH start, NVML repair, missing mount worker | 명시적 enable, 사전조건, retry/inhibit 필요 |
 
-## 3. cluster-monitor-exporter
+## 3. Host metric exporter 구성
 
-### Background collection과 freshness
+### 3.1 node-exporter: 일반 host 자원
+
+`node-exporter`는 CPU, memory, filesystem, disk I/O와 network 같은 일반 host
+자원을 `:30070/metrics`로 노출한다. FARM과 LAB Prometheus가 각 환경의
+node metric을 저장하며, 서비스별 진단은 `cluster-monitor-exporter`가 담당한다.
+따라서 CPU 사용량이 보인다는 사실만으로 NFS readiness나 container SSH가
+정상이라고 판단하지 않는다.
+
+`node-exporter`는 host systemd 서비스로 배포하는 두 custom exporter와 달리
+`kube-prometheus-stack`의 DaemonSet/service 설정으로 배포된다. 포트와 scrape
+설정은 FARM/LAB Prometheus values의 `prometheus-node-exporter`에서 확인한다.
+
+### 3.2 cluster-monitor-exporter: 서비스 상태
+
+#### Background collection과 freshness
 
 exporter는 HTTP 요청 때마다 무거운 host 명령을 실행하지 않고 background loop의
 마지막 결과를 text format으로 제공한다. `/healthz`는 process 응답뿐 아니라
@@ -70,7 +131,7 @@ goroutine이 멈춘 상태를 `up=1`만으로는 찾을 수 없기 때문이다.
 수집/렌더링 구현은 [main.go](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/exporters/cluster-monitor-exporter/cmd/cluster-monitor-exporter/main.go)에서
 확인한다.
 
-### 관측 범위
+#### 관측 범위
 
 - required mount의 source/target/filesystem/security option과 응답 시간
 - storage host 및 peer 연결성, mount failure diagnosis
@@ -82,7 +143,7 @@ goroutine이 멈춘 상태를 `up=1`만으로는 찾을 수 없기 때문이다.
 - 외부 connectivity heartbeat와 public inbound health
 - NFS GSS readiness/canary/recovery state와 `rpc-gssd` journal
 
-### D-state와 명령 timeout
+#### D-state와 명령 timeout
 
 NFS `hard` mount에서 child process가 D-state에 들어가면 `SIGKILL`에도 즉시
 끝나지 않고 `cmd.Wait()`가 무기한 block될 수 있다. exporter는 외부 명령마다
@@ -94,7 +155,7 @@ D-state는 발생 즉시 total과 command별 metric으로 기록하되 alert는 
 동적으로 노출한다. hung-task alert는 과거 누적 line이 아니라 최근 5분
 증가분을 사용한다.
 
-### 제한된 container 복구
+#### 제한된 container 복구
 
 설정으로 허용된 경우에만 다음을 수행한다.
 

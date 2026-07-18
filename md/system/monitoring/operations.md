@@ -3,6 +3,21 @@
 이 문서는 monitoring component를 배포하고 endpoint, metric, alert와 incident를
 점검하는 방법을 설명한다.
 
+## 운영 원칙
+
+- `up=1`과 실제 collection freshness를 구분한다. HTTP process가 응답해도 마지막
+  성공 collection이 오래됐으면 정상으로 판단하지 않는다.
+- metric 수집, 증거 보존과 상태 변경을 분리한다. exporter는 mount하지 않고,
+  forensics는 service restart나 reboot를 수행하지 않는다.
+- NFS caller가 D-state이면 `find`, `du`, `stat`, canary나 recovery를 반복 실행하지
+  않고 local state와 이미 수집된 snapshot을 먼저 보존한다.
+- 자동 복구 결과는 원래 정상 상태와 구분해 metric과 state에 남긴다. inhibit 또는
+  backoff가 설정된 worker를 endpoint 호출로 우회하지 않는다.
+- 배포는 `monitoring/ansible_playbook/`을 기준으로 하고 target host의 개별 install
+  script를 운영 entry point로 사용하지 않는다.
+- DB password, Grafana password, webhook과 Kerberos credential은 metric, alert
+  label, Git values와 일반 journal에 기록하지 않는다.
+
 ## 1. 배포 순서
 
 새 host 또는 NFS GSS monitoring을 처음 적용할 때는 다음 순서를 권장한다.
@@ -157,6 +172,16 @@ FARM에서 필요한 Secret:
 값은 Git values에 넣지 않는다. Alertmanager는 Slack webhook으로 직접 보내지
 않고 localhost relay를 거쳐 internal notify API로 보낸다.
 
+현재 control plane의 역할은 다음처럼 구분한다.
+
+- FARM Prometheus는 FARM 자원 metric과 FARM/LAB의
+  `cluster-monitor-exporter`를 수집하고 중앙 alert rule을 평가한다.
+- FARM Alertmanager와 relay가 FARM/LAB 서비스 경보를 내부 notify API로 전달한다.
+- LAB Prometheus는 LAB node/GPU metric을 독립 저장한다. LAB release의 Grafana와
+  Alertmanager는 비활성화되어 있다.
+- FARM Grafana는 기본 FARM datasource와 `prometheus-lab` datasource를 함께
+  사용한다.
+
 ## 6. 배포 후 endpoint 확인
 
 target host에서:
@@ -170,7 +195,12 @@ curl -fsS http://127.0.0.1:30074/healthz
 curl -fsS http://127.0.0.1:30074/metrics | head
 curl -fsS http://127.0.0.1:30072/-/healthy
 curl -fsS http://127.0.0.1:30072/metrics | head
+curl -fsS http://127.0.0.1:30070/metrics | head
 ```
+
+`:30070`의 `node-exporter`는 `kube-prometheus-stack`에서 배포하므로 앞의 두 custom
+exporter처럼 host systemd unit을 확인하지 않는다. endpoint가 없으면 해당 cluster의
+DaemonSet, Service와 node scheduling 상태를 확인한다.
 
 public health port는 서버 번호 `N`에 대해 `9000 + N*100 - 11`이다. 예를 들어
 FARM8은 `9789/healthz`다. 이 endpoint는 exporter process/collection freshness와
@@ -194,6 +224,7 @@ curl -fsS -X POST http://127.0.0.1:30074/nfs-gss/recover
 
 | 관측 대상 | 대표 metric/alert | 구현/설정 링크 |
 | --- | --- | --- |
+| CPU, memory, filesystem, disk, network | `node_cpu_*`, `node_memory_*`, `node_filesystem_*`, `node_disk_*`, `node_network_*` | [FARM values](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/config/prometheus-farm-values.yaml), [LAB values](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/config/prometheus-lab-values.yaml) |
 | exporter process와 freshness | `up`, `cluster_monitor_exporter_last_collection_timestamp_seconds`, `ClusterMonitorExporter*` | [collector](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/exporters/cluster-monitor-exporter/cmd/cluster-monitor-exporter/main.go), [rules](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/config/prometheus-farm-values.yaml) |
 | required mount와 latency | `cluster_monitor_host_mount_up`, `..._responsive`, `..._probe_seconds` | [mount collector](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/exporters/cluster-monitor-exporter/cmd/cluster-monitor-exporter/main.go), [storage dashboards](https://github.com/CSID-DGU/admin_infra_server/tree/main/monitoring/grafana/dashboards) |
 | Kerberos NFS readiness | `cluster_monitor_nfs_gss_ready`, `ClusterMonitorNFSGSSReadinessFailed` | [readiness](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/exporters/cluster-monitor-exporter/script/decs_nfs_gss_ready.sh), [GSS collector](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/exporters/cluster-monitor-exporter/cmd/cluster-monitor-exporter/nfs_gss_health.go) |

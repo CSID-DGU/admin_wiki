@@ -89,7 +89,7 @@ Refresh Token을 저장하는 핵심 세션 키입니다. **이 키가 없으면
 | TTL | 7일 (`jwt.refresh-token-expire-time`) |
 | `{userId}` | User 테이블의 PK (`BIGINT`) |
 
-**설계 포인트**: Access Token은 Redis에 저장하지 않습니다(Stateless). Refresh Token만 Redis에 저장해서, 필요시 `DEL RT:{userId}`로 즉시 세션을 무효화(강제 로그아웃)할 수 있습니다. 자세한 내용은 [[인증·보안|인증·보안]]을 참고합니다.
+**설계 포인트**: Access Token은 Redis에 저장하지 않습니다(Stateless). Refresh Token만 Redis에 저장해서, 필요시 `DEL RT:{userId}`로 즉시 세션을 무효화(강제 로그아웃)할 수 있습니다. 자세한 내용은 [인증·보안](인증-보안.md)을 참고합니다.
 
 **확인 방법**
 
@@ -128,7 +128,7 @@ KEYS RT:*
 | `{dayLabel}` | `7일`, `3일`, `1일` (만료까지 남은 날 수) |
 | `{date}` | 만료 목표 날짜 `yyyy-MM-dd` (today+7/3/1 중 해당일, 발송 당일이 아님) |
 
-**Fail-open 설계**: Redis 장애 시 `setIfAbsent()`가 예외를 던집니다. 이 경우 `false`를 반환해 이메일 발송을 허용합니다(fail-open). 중복 발송보다 누락이 더 나쁘다는 판단입니다. 자세한 패턴은 [[핵심 설계 패턴|핵심-설계-패턴]] 3번을 참고합니다.
+**Fail-open 설계**: Redis 장애 시 `setIfAbsent()`가 예외를 던집니다. 이 경우 `false`를 반환해 이메일 발송을 허용합니다(fail-open). 중복 발송보다 누락이 더 나쁘다는 판단입니다. 자세한 패턴은 [핵심 설계 패턴](핵심-설계-패턴.md) 3번을 참고합니다.
 
 **확인 방법**
 
@@ -183,7 +183,7 @@ LRANGE slack:notification:queue 0 -1
 LRANGE slack:infra:notification:queue 0 -1
 ```
 
-큐 길이가 계속 늘어난다면 `SlackNotificationWorker`가 멈췄거나 Slack API 장애를 의심합니다. 자세한 대응은 [[운영 가이드|운영-가이드]] 11절을 참고합니다.
+큐 길이가 계속 늘어난다면 `SlackNotificationWorker`가 멈췄거나 Slack API 장애를 의심합니다. 자세한 대응은 [운영 가이드](운영-가이드.md) 11절을 참고합니다.
 
 ---
 

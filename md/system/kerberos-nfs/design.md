@@ -16,40 +16,82 @@
 
 ## 2. 전체 구성
 
-```mermaid
-flowchart LR
-    M["관리 서버<br/>uidctl + Ansible"]
-    AD["Samba AD DC / KDC<br/>사용자·그룹·SPN<br/>RFC2307·KVNO"]
-    H["FARM/LAB 계산 호스트<br/>user keytab<br/>refresh timer<br/>rpc.gssd + kernel NFS"]
-    C["사용자 container<br/>process + ccache<br/>KRB5CCNAME"]
-    NAS["NAS / storage<br/>svcgssd + NFS server<br/>service keytab<br/>winbind/idmap"]
-    MON["monitoring<br/>readiness·KVNO·mount<br/>canary·forensics"]
+다이어그램의 **굵은 바깥 제목은 실행 영역**이고, 영역 안 각 카드의 **굵은 첫
+줄은 모듈 이름**이다. 구분선 아래에는 그 모듈의 내부 파일·프로세스·객체를
+표시한다. AD/KDC는 모든 계산 host에 있는 것이 아니라 FARM/LAB 중 **AD DC
+역할을 맡은 host에만** 있다.
 
-    M -->|"samba-tool / exportkeytab"| AD
-    M -->|"root-only keytab 설치"| H
-    M -->|"home과 numeric owner 준비"| NAS
-    AD <-->|"AS/TGS, directory lookup"| H
-    H -->|"ccache bind mount"| C
-    C -->|"파일 I/O"| H
-    H <-->|"NFSv4 + RPCSEC_GSS"| NAS
-    NAS -->|"RFC2307 UID/GID 조회"| AD
-    MON -.->|"읽기 전용 상태 수집"| AD
-    MON -.-> H
-    MON -.-> NAS
+```mermaid
+flowchart TB
+    subgraph CONTROL_ZONE["<b>외부 관리 · 관측</b>"]
+        direction LR
+        M["<b>관리 서버</b><br/>uidctl · Ansible runner"]
+        MON["<b>Monitoring</b><br/>readiness · KVNO · mount<br/>canary · forensics"]
+    end
+
+    subgraph CONTAINER_ZONE["<b>사용자 컨테이너</b>"]
+        USER_RUNTIME["<b>사용자 Runtime 모듈</b><br/>────────────<br/>사용자 process<br/>bind-mounted ccache<br/>KRB5CCNAME"]
+    end
+
+    subgraph HOST_ZONE["<b>FARM / LAB 호스트</b>"]
+        direction LR
+        DIRECTORY_MODULE["<b>AD / Kerberos Directory 모듈</b><br/>────────────<br/>Samba AD DC / KDC<br/>사용자 · 그룹 · SPN<br/>RFC2307 · KVNO<br/><i>AD DC 역할 host에만 배치</i>"]
+        REFRESH_MODULE["<b>사용자 Credential 갱신 모듈</b><br/>────────────<br/>user keytab (root:root 0400)<br/>decs-krb-refresh service + timer<br/>host ccache (/run/user/&lt;uid&gt;/krb5cc)"]
+        NFS_CLIENT_MODULE["<b>NFS Client 모듈</b><br/>────────────<br/>kernel NFS client<br/>rpc.gssd<br/>credential upcall · GSS context"]
+    end
+
+    subgraph STORAGE_ZONE["<b>NAS / Storage</b>"]
+        direction LR
+        NFS_SERVER_MODULE["<b>NFS Service 모듈</b><br/>────────────<br/>NFS service keytab<br/>svcgssd<br/>NFS server"]
+        STORAGE_ID_MODULE["<b>Identity / 권한 모듈</b><br/>────────────<br/>Samba · winbind · idmap<br/>NFS export · user home<br/>numeric UID / GID"]
+    end
+
+    M -->|"계정 · RFC2307 설정<br/>keytab export"| DIRECTORY_MODULE
+    M -->|"root-only keytab 설치"| REFRESH_MODULE
+    M -->|"home · numeric owner 준비"| STORAGE_ID_MODULE
+
+    REFRESH_MODULE -->|"kinit / AS"| DIRECTORY_MODULE
+    USER_RUNTIME -.->|"host ccache bind mount"| REFRESH_MODULE
+    USER_RUNTIME -->|"파일 I/O"| NFS_CLIENT_MODULE
+    NFS_CLIENT_MODULE -->|"NFS service ticket / TGS"| DIRECTORY_MODULE
+    NFS_CLIENT_MODULE -->|"NFSv4 + RPCSEC_GSS"| NFS_SERVER_MODULE
+    NFS_SERVER_MODULE -->|"principal 권한 조회"| STORAGE_ID_MODULE
+    DIRECTORY_MODULE -.->|"RFC2307 UID/GID 응답"| STORAGE_ID_MODULE
+
+    MON -.->|"읽기 전용 관측"| DIRECTORY_MODULE
+    MON -.-> REFRESH_MODULE
+    MON -.-> NFS_CLIENT_MODULE
+    MON -.-> NFS_SERVER_MODULE
+
+    classDef component fill:#ffffff,stroke:#64748b,stroke-width:1px,color:#0f172a
+    classDef external fill:#fff7ed,stroke:#d97706,stroke-width:2px,color:#431407
+    class M,MON external
+    class USER_RUNTIME,DIRECTORY_MODULE,REFRESH_MODULE,NFS_CLIENT_MODULE,NFS_SERVER_MODULE,STORAGE_ID_MODULE component
+
+    style CONTAINER_ZONE fill:#eff6ff,stroke:#2563eb,stroke-width:3px
+    style HOST_ZONE fill:#f0fdf4,stroke:#16a34a,stroke-width:3px
+    style STORAGE_ZONE fill:#f5f3ff,stroke:#7c3aed,stroke-width:3px
+    style CONTROL_ZONE fill:#fff7ed,stroke:#d97706,stroke-width:2px
+    style USER_RUNTIME stroke:#60a5fa,stroke-width:2px
+    style DIRECTORY_MODULE stroke:#4ade80,stroke-width:2px
+    style REFRESH_MODULE stroke:#4ade80,stroke-width:2px
+    style NFS_CLIENT_MODULE stroke:#4ade80,stroke-width:2px
+    style NFS_SERVER_MODULE stroke:#a78bfa,stroke-width:2px
+    style STORAGE_ID_MODULE stroke:#a78bfa,stroke-width:2px
 ```
 
 ### 구성요소별 책임
 
-| 위치 | 객체/프로세스 | 하는 일 |
-| --- | --- | --- |
-| 관리 서버 | `uidctl`, Ansible runner | 계정 생성 transaction을 조정하고 keytab을 필요한 host로 전달 |
-| AD DC | 사용자·그룹 객체, `krbtgt`, KDC, `samba-tool` | principal과 RFC2307 속성 저장, keytab export, TGT/service ticket 발급 |
-| 계산 호스트 | 사용자 keytab | ticket을 새로 발급할 수 있는 장기 자격증명; root만 읽음 |
-| 계산 호스트 | `decs-krb-refresh@.service/.timer` | keytab으로 ccache를 만들고 갱신하여 원자적으로 교체 |
-| 계산 호스트 | kernel NFS client, `rpc.gssd` | 호출 UID의 credential로 NFS RPCSEC_GSS context 생성 |
-| 컨테이너 | 사용자 process, bind-mounted ccache | `KRB5CCNAME`이 가리키는 ticket을 사용하고 NFS 파일 I/O 수행 |
-| NAS/storage | `svcgssd`, NFS server, service keytab | `nfs/<fqdn>@<realm>` service ticket을 수락하고 NFS 요청 처리 |
-| NAS/storage | Samba/winbind/idmap | Kerberos 이름을 AD RFC2307 UID/GID로 해석하여 파일 권한 판정 |
+| 영역 | 모듈 | 내부 구성요소 | 하는 일 |
+| --- | --- | --- | --- |
+| 외부 관리 | **계정 생성 orchestration** | `uidctl`, Ansible runner | 계정 생성 transaction을 조정하고 AD, host, storage에 필요한 상태를 준비 |
+| FARM/LAB 호스트 | **AD/Kerberos Directory** | Samba AD DC, KDC, 사용자·그룹·SPN·RFC2307 객체 | principal과 Unix identity 저장, keytab export, TGT/service ticket 발급; AD DC 역할 host에만 배치 |
+| FARM/LAB 호스트 | **사용자 Credential 갱신** | user keytab, `decs-krb-refresh@.service/.timer`, host ccache | root-only keytab으로 ccache를 만들고 검증 후 원자 교체 |
+| FARM/LAB 호스트 | **NFS Client** | kernel NFS client, `rpc.gssd` | 호출 UID의 ccache로 RPCSEC_GSS context를 만들고 NFS RPC 전송 |
+| 사용자 컨테이너 | **사용자 Runtime** | 사용자 process, bind-mounted ccache, `KRB5CCNAME` | keytab 없이 host가 갱신한 ticket을 사용하여 NFS 파일 I/O 수행 |
+| NAS/Storage | **NFS Service** | service keytab, `svcgssd`, NFS server | `nfs/<fqdn>@<realm>` service ticket을 수락하고 NFS 요청 처리 |
+| NAS/Storage | **Identity/권한** | Samba, winbind, idmap, NFS export와 filesystem | Kerberos principal을 RFC2307 UID/GID로 해석하여 최종 파일 권한 판정 |
+| 외부 관측 | **Monitoring** | readiness, KVNO checker, mount probe, canary, forensics | AD/host/storage 상태를 읽기 전용으로 수집하고 drift와 장애를 경보 |
 
 ## 3. 사용자 keytab 발급 흐름
 

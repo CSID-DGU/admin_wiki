@@ -73,7 +73,74 @@ storage trace에서는 첫 처리와 재방문이 다음처럼 달랐다.
 실험 목적은 많은 client를 동시에 멈추게 하는 것이 아니라, **idmap miss 하나가
 slot 하나를 반환 불가능하게 만들 수 있는지**를 확인하는 것이었다.
 
-## 4. 실제 재현 조건
+## 4. 실험 결과
+
+### 4.1 실제 LAB 환경의 최소 재현
+
+첫 pass에서 `RQ_DROPME`가 설정된 뒤 slot이 `INUSE`로 바뀌었지만 encode와
+`nfsd4_sequence_done()`이 호출되지 않았다. 8초 뒤 `rpc.idmapd`가 재개된 후에도
+같은 sequence는 이미 사용 중인 slot으로 판단됐다. client retry도 동일 상태를
+반복했고 worker는 D-state에서 끝나지 않았다.
+
+따라서 다음 좁은 결론은 확정할 수 있다.
+
+- 당시 storage kernel에서는 idmap decode deferral이 NFSv4.1 session slot 하나를
+  leak할 수 있다.
+- keytab 발급, `rpc-gssd` 시작 순서나 client mount 순서만 고쳐서는 이 server-side
+  kernel 경로를 제거할 수 없다.
+- 한 slot leak은 재현했지만 LAB5에서 나중에 관측한 전체 session recovery/drain
+  stall까지 이 최소 실험 하나로 재현한 것은 아니다.
+- LAB5 장애 시작 시점의 trace가 없으므로 어떤 실제 operation이 최초 idmap miss를
+  만들었는지는 알 수 없다.
+
+### 4.2 A–G: 8초 idmap 지연 kernel matrix
+
+최소 재현과 같은 `idmap-setattr`, NFSv4.1, `sec=krb5p` 조건에서 server와 client
+kernel 조합을 바꿔 각 5회 실행했다. client OS는 모두 Ubuntu 22.04.5 LTS이며,
+F/G만 client kernel을 `6.18.38`로 올렸다.
+
+| Case | NFS server OS | Server kernel | Client kernel | 결과 |
+| --- | --- | --- | --- | --- |
+| A | CentOS Linux 7.9.2009 | `3.10.0-862.el7.x86_64` | `6.8.0-134-generic` | slot 고착 5/5 |
+| B | CentOS Linux 7.9.2009 | `3.10.0-1160.el7.x86_64` | `6.8.0-134-generic` | slot 고착 5/5 |
+| C | CentOS Stream 10 | `6.12.74` | `6.8.0-134-generic` | slot 고착 5/5 |
+| D | CentOS Stream 10 | `6.12.75` | `6.8.0-134-generic` | 자동 복구 5/5 |
+| E | CentOS Stream 10 | `6.12.0-248.el10.x86_64` | `6.8.0-134-generic` | 자동 복구 5/5 |
+| F | CentOS Linux 7.9.2009 | `3.10.0-862.el7.x86_64` | `6.18.38` | slot 고착 5/5 |
+| G | CentOS Linux 7.9.2009 | `3.10.0-1160.el7.x86_64` | `6.18.38` | slot 고착 5/5 |
+
+구형 server kernel에서는 client kernel을 `6.18.38`로 올린 F/G도 모두 고착됐다.
+반대로 idmap/slot fix가 포함된 D와 signed Stream kernel E는 모두 자동 복구했다.
+이 결과는 문제와 복구 여부를 가르는 주된 변수가 client가 아니라 **NFS server
+kernel의 idmap deferral 처리**임을 지지한다.
+
+### 4.3 D/E: 120·300·600초 장시간 idmap 지연 추가 실험
+
+8초 지연만으로는 수정된 kernel이 짧은 지연에서만 우연히 복구한 것인지 판단하기
+어려웠다. 그래서 자동 복구한 D/E만 대상으로 idmap cache miss 응답을 120초,
+300초, 600초까지 지연하고 각 조건을 3회씩 다시 실행했다.
+
+| Case | Server kernel | idmap 지연 | 원래 `chgrp` | 신규 RPC | 최종 snapshot D / FC / lease |
+| --- | --- | ---: | --- | --- | --- |
+| D-120s | `6.12.75-nfs-slot` | 120초 | 성공 3/3 | 성공 3/3 | 모두 0 / 0 / 0* |
+| D-300s | `6.12.75-nfs-slot` | 300초 | 성공 3/3 | 성공 3/3 | 모두 0 / 0 / 0 |
+| D-600s | `6.12.75-nfs-slot` | 600초 | `EINVAL` 3/3 | 성공 3/3 | 모두 0 / 0 / 0 |
+| E-120s | `6.12.0-248.el10.x86_64` | 120초 | 성공 3/3 | 성공 3/3 | 모두 0 / 0 / 0 |
+| E-300s | `6.12.0-248.el10.x86_64` | 300초 | 성공 3/3 | 성공 3/3 | 모두 0 / 0 / 0 |
+| E-600s | `6.12.0-248.el10.x86_64` | 600초 | `EINVAL` 3/3 | 성공 3/3 | 모두 0 / 0 / 0 |
+
+여기서 `FC`는 NFSv4.1 ForeChannel waiter 수다. 600초 조건의 `EINVAL`은 원래
+`chgrp` 요청의 application 결과이며, slot 고착 판정과 분리해야 한다. 같은 run에서
+idmap 지연을 해제한 뒤 실행한 신규 RPC는 모두 성공했고, 최종 snapshot의 D-state,
+ForeChannel waiter와 `lease_expired`도 모두 0이었다. 따라서 600초에서 원래 작업이
+실패했더라도 **session slot은 반환됐고 후속 요청을 막지 않았다**.
+
+> * D-120s 2회차의 2초 sampler는 종료 직전 D-state `1`을 한 번 기록했다.
+> 그러나 직후 final snapshot은 D-state `0`이었고, 신규 RPC 성공, ForeChannel
+> `0`, `lease_expired=0`, analyzer `verdict=pass`였다. 지속된 NFS slot 고착으로
+> 판정하지 않았다.
+
+## 5. 실제 재현 조건
 
 | 항목 | 2026-07-16 조건 |
 | --- | --- |
@@ -93,14 +160,14 @@ boot 순서도 별도로 확인했다. LAB8은 `rpc-gssd` active → Kerberos/NF
 완료 → mount 순서였고, 기존 `/etc/krb5.keytab`의 KVNO는 2였다. 따라서 이번
 결과를 keytab 생성 누락이나 잘못된 mount 시작 순서로 설명할 수 없다.
 
-## 5. 당시 실행한 명령
+## 6. 당시 실행한 명령
 
 > **경고:** 아래 명령은 2026-07-16의 승인된 실제 실행 기록이다. storage의
 > `rpc.idmapd`를 멈추므로 일반 점검이나 운영 재현 절차로 다시 실행하면 안 된다.
 > 재실험은 8절의 격리 VM harness를 사용한다. 특히 kprobe 인자 register는 당시
 > x86_64 kernel symbol에만 맞춘 값이라 다른 kernel에서 그대로 사용하지 않는다.
 
-### 5.1 client 사전 확인과 test 값 준비
+### 6.1 client 사전 확인과 test 값 준비
 
 LAB8에서 D-state와 RPC task가 없는지 확인한 뒤, storage에 없던 group 이름을
 client가 encode하도록 local group과 test file을 준비했다.
@@ -128,7 +195,7 @@ fault 전에 GID `424241`을 사용한 정상 `chown`을 실행해 같은 경로
 sudo python3 -c 'import os; p="/home/tako8/share/.decs-idmap-slot-repro-20260716"; print("before", os.stat(p).st_gid); os.chown(p, -1, 424241); print("after", os.stat(p).st_gid)'
 ```
 
-### 5.2 storage trace 설정
+### 6.2 storage trace 설정
 
 당시 storage에서 idmap decode, slot 검사, dispatcher return, response encode와
 slot 반환 여부를 한 trace instance에 기록했다.
@@ -175,7 +242,7 @@ done
 echo 1 | sudo tee "$I/tracing_on" >/dev/null
 ```
 
-### 5.3 fault와 단일 workload 실행
+### 6.3 fault와 단일 workload 실행
 
 storage에서 반드시 자동 재개 timer 두 개가 active인지 확인한 뒤
 `rpc.idmapd`를 멈췄다.
@@ -203,7 +270,7 @@ sudo systemd-run --unit=decs-idmap-slot-repro-worker --no-block \
   "import os; os.chown('/home/tako8/share/.decs-idmap-slot-repro-20260716', -1, 424242)"
 ```
 
-### 5.4 결과 확인과 trace 보존
+### 6.4 결과 확인과 trace 보존
 
 새로운 NFS I/O를 만들지 않고 worker, local kernel state와 이미 동작 중이던
 forensics state를 확인했다.
@@ -231,24 +298,6 @@ sudo grep -E \
   'decs_idmap_gid|svc_defer|svc_revisit_deferred|svc_drop:|check_slot|sequence_done|dispatch_ret' \
   /var/tmp/decs-idmap-slot-repro-20260716.trace
 ```
-
-## 6. 실험 결과와 판정
-
-첫 pass에서 `RQ_DROPME`가 설정된 뒤 slot이 `INUSE`로 바뀌었지만 encode와
-`nfsd4_sequence_done()`이 호출되지 않았다. 8초 뒤 `rpc.idmapd`가 재개된 후에도
-같은 sequence는 이미 사용 중인 slot으로 판단됐다. client retry도 동일 상태를
-반복했고 worker는 D-state에서 끝나지 않았다.
-
-따라서 다음 좁은 결론은 확정할 수 있다.
-
-- 당시 storage kernel에서는 idmap decode deferral이 NFSv4.1 session slot 하나를
-  leak할 수 있다.
-- keytab 발급, `rpc-gssd` 시작 순서나 client mount 순서만 고쳐서는 이 server-side
-  kernel 경로를 제거할 수 없다.
-- 한 slot leak은 재현했지만 LAB5에서 나중에 관측한 전체 session recovery/drain
-  stall까지 이 최소 실험 하나로 재현한 것은 아니다.
-- LAB5 장애 시작 시점의 trace가 없으므로 어떤 실제 operation이 최초 idmap miss를
-  만들었는지는 알 수 없다.
 
 ## 7. Monitoring과 운영 대응
 
@@ -283,12 +332,15 @@ local filesystem에 둔다.
 
 kernel 비교 기준은 다음과 같다.
 
-| case | server kernel | 목적 |
-| --- | --- | --- |
-| A | CentOS 7 `3.10.0-862` | 운영 취약 baseline |
-| C | upstream `6.12.74` | fix 이전 positive control |
-| D | upstream `6.12.75` | idmap/slot fix 비교 control |
-| E | 최신 signed CentOS Stream kernel | 운영 후보 |
+| Case | Server kernel | Client kernel | 목적 |
+| --- | --- | --- | --- |
+| A | CentOS 7 `3.10.0-862` | Ubuntu `6.8.0-134` | 운영 취약 baseline |
+| B | CentOS 7 `3.10.0-1160` | Ubuntu `6.8.0-134` | CentOS 7 최종 kernel 비교 |
+| C | upstream `6.12.74` | Ubuntu `6.8.0-134` | fix 이전 positive control |
+| D | upstream `6.12.75` | Ubuntu `6.8.0-134` | idmap/slot fix 비교 control |
+| E | signed Stream `6.12.0-248.el10` | Ubuntu `6.8.0-134` | 운영 후보 |
+| F | CentOS 7 `3.10.0-862` | kernel.org `6.18.38` | 새 client kernel 비교 |
+| G | CentOS 7 `3.10.0-1160` | kernel.org `6.18.38` | 새 client kernel 비교 |
 
 준비와 격리는 VM lab README의 절차를 따른다.
 

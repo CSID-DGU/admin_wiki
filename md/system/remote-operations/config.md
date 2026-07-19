@@ -4,10 +4,10 @@
 
 ## 설정 모델
 
-설정은 `remote_boot.example.env`를 복사하여 local 파일에서 관리한다.
+설정은 `remote_boot.example.env`를 복사하여 local 파일에서 관리한다
+(`admin_infra_server/remote-operations`에서 실행).
 
 ```bash
-cd /home/jy/server_manage/remote-operations
 cp config/remote_boot.example.env config/remote_boot.local.env
 ```
 
@@ -15,12 +15,12 @@ cp config/remote_boot.example.env config/remote_boot.local.env
 
 | 그룹 | 예 |
 | --- | --- |
-| target | FARM/LAB 목록, 기본/priority target |
-| 순서/gate | pre-delay, gate timeout/poll, secondary delay |
+| target | FARM/LAB 목록, 기본 target |
+| 순서/gate | pre-delay, gate timeout/poll |
 | container | restart enable, timeout, post-check poll |
 | network | Ansible inventory, broadcast IP, MAC address |
 | health | 필수 mount와 host share template |
-| test container | image, UID/GID, mount, memory, runtime |
+| test container (독립 도구용) | `create_test_container.sh`/`delete_test_container.sh`가 쓰는 image, UID/GID, mount, memory, runtime — 부팅 흐름에서는 더 이상 쓰이지 않음 |
 | logging/alert | log path, rotate count, notify API와 webhook |
 
 실제 MAC, password와 webhook은 `remote_boot.local.env`에만 둔다. example에는
@@ -70,6 +70,27 @@ REMOTE_BOOT_ANSIBLE_INVENTORY="/home/<본인계정>/ansible/inventory.ini"
 `REMOTE_BOOT_MAC_*`는 물리 서버 하드웨어의 실제 MAC 주소로 장비통합관리문서에서 값을
 가져온다.
 
+## Slack 알림 설정
+
+부팅 실패 알림을 실제로 받아보려면 `remote_boot.local.env`에서 두 값을 채운다.
+
+```bash
+REMOTE_BOOT_SLACK_ENABLED=true
+REMOTE_BOOT_SLACK_WEBHOOK_URL_FARM="https://hooks.slack.com/services/..."
+```
+
+- `REMOTE_BOOT_SLACK_WEBHOOK_URL_FARM`도 MAC 주소와 마찬가지로 실제 운영 값이라
+  임의로 만들 수 없다. 기존 운영 담당자에게 확인하거나, 이미 배포된 운영 설정에서
+  값을 가져온다.
+- LAB/FARM 구분 없이 모든 원격 부팅 알림은 이 FARM webhook 하나로 전송된다.
+- `REMOTE_BOOT_SLACK_NOTIFY_API_URL`은 webhook을 직접 호출하지 않고 백엔드 내부
+  notify API를 거친다.
+- 설정 후 아래 명령으로 실제 Slack 채널에 메시지가 오는지 확인한다.
+
+```bash
+./test/test_slack_notification.sh --server-id FARM1
+```
+
 ## 첫 설정 체크리스트
 
 신규 관리자가 이 저장소를 처음 pull한 뒤 dry-run 검증까지 마치는 순서:
@@ -79,4 +100,5 @@ REMOTE_BOOT_ANSIBLE_INVENTORY="/home/<본인계정>/ansible/inventory.ini"
 3. `remote_boot.example.env` → `remote_boot.local.env` 복사
 4. `REMOTE_BOOT_ANSIBLE_INVENTORY`를 자신의 inventory 경로로 설정
 5. `REMOTE_BOOT_MAC_*` 값을 실제 MAC으로 채움
-6. [운영 문서](operations.md)의 dry-run 명령으로 검증
+6. `REMOTE_BOOT_SLACK_ENABLED=true`와 `REMOTE_BOOT_SLACK_WEBHOOK_URL_FARM` 설정
+7. [운영 문서](operations.md)의 dry-run 명령으로 검증

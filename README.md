@@ -114,8 +114,8 @@ git push
 ## PDF export
 
 공용 서비스에서는 `sync_wiki_docs.py`와 `export_manuals.py`가 컨테이너 내부에서
-실행된다. Chromium과 한글 글꼴도 image에 포함되어 있어 Markdown 변경 시 웹용
-PDF가 자동으로 갱신된다.
+실행된다. Chromium, 한글 글꼴과 Mermaid CLI도 image에 포함되어 있어 Markdown
+변경 시 diagram을 SVG로 렌더링한 PDF가 자동으로 갱신된다.
 
 저장소의 `pdf/`에도 새 PDF를 남기고 싶을 때만 호스트 명령을 실행한다.
 
@@ -126,8 +126,8 @@ git commit
 git push
 ```
 
-호스트 export에는 로컬 Chrome/Chromium과 Noto CJK 계열 글꼴이 필요하지만
-MkDocs나 `.venv`는 필요 없다.
+호스트 export에는 로컬 Chrome/Chromium, Noto CJK 계열 글꼴과 Mermaid CLI
+(`mmdc`)가 필요하지만 MkDocs나 `.venv`는 필요 없다.
 
 ## 컨테이너 내부 스크립트
 

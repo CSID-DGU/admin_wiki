@@ -1,6 +1,6 @@
 # remote-operations 설정
 
-> [설계](remote-operations-설계.md) · [운영](remote-operations-운영.md)
+> [개요](index.md) · [설계](design.md) · [운영](operations.md)
 
 ## 설정 모델
 

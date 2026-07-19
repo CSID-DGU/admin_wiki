@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Export repository MANUAL.md files to individual and combined PDFs.
+"""Export repository manuals to individual and combined PDFs.
 
-The renderer intentionally uses only the Python standard library. It supports
-the Markdown constructs used by the manuals and delegates pagination/PDF
-generation to a locally installed Chromium-family browser.
+The Markdown renderer uses the Python standard library, Mermaid CLI renders
+diagram blocks to inline SVG, and a local Chromium-family browser handles
+pagination and PDF generation.
 """
 
 from __future__ import annotations
 
 import argparse
 import html
+import json
+import os
 import re
 import shutil
 import subprocess
@@ -29,6 +31,11 @@ class Manual:
     label: str
     source: Path
     output: str
+    sections: tuple[Path, ...] = ()
+
+    @property
+    def sources(self) -> tuple[Path, ...]:
+        return (self.source, *self.sections)
 
 
 MANUALS = (
@@ -47,32 +54,39 @@ MANUALS = (
     Manual(
         "kerberos-nfs",
         "kerberos-nfs",
-        MD_DIR / "system" / "kerberos-nfs.md",
+        MD_DIR / "system" / "kerberos-nfs" / "index.md",
         "system/kerberos-nfs-manual.pdf",
+        (
+            MD_DIR / "system" / "kerberos-nfs" / "design.md",
+            MD_DIR / "system" / "kerberos-nfs" / "operations.md",
+            MD_DIR / "system" / "kerberos-nfs" / "debugging" / "index.md",
+            MD_DIR
+            / "system"
+            / "kerberos-nfs"
+            / "debugging"
+            / "nfs-v41-session-slot-stuck.md",
+        ),
     ),
     Manual(
         "monitoring",
         "monitoring",
-        MD_DIR / "system" / "monitoring.md",
+        MD_DIR / "system" / "monitoring" / "index.md",
         "system/monitoring-manual.pdf",
+        (
+            MD_DIR / "system" / "monitoring" / "design.md",
+            MD_DIR / "system" / "monitoring" / "operations.md",
+        ),
     ),
     Manual(
-        "remote-operations-design",
-        "remote-operations 설계",
-        MD_DIR / "system" / "remote-operations-설계.md",
-        "system/remote-operations-design-manual.pdf",
-    ),
-    Manual(
-        "remote-operations-operations",
-        "remote-operations 운영",
-        MD_DIR / "system" / "remote-operations-운영.md",
-        "system/remote-operations-operations-manual.pdf",
-    ),
-    Manual(
-        "remote-operations-config",
-        "remote-operations 설정",
-        MD_DIR / "system" / "remote-operations-설정.md",
-        "system/remote-operations-config-manual.pdf",
+        "remote-operations",
+        "remote-operations",
+        MD_DIR / "system" / "remote-operations" / "index.md",
+        "system/remote-operations-manual.pdf",
+        (
+            MD_DIR / "system" / "remote-operations" / "design.md",
+            MD_DIR / "system" / "remote-operations" / "operations.md",
+            MD_DIR / "system" / "remote-operations" / "config.md",
+        ),
     ),
     Manual(
         "server-state",
@@ -160,6 +174,20 @@ pre code {
   background: transparent;
   padding: 0;
   font-size: 8.6pt;
+}
+.mermaid-diagram {
+  width: 100%;
+  margin: 3mm 0 5mm;
+  page-break-inside: avoid;
+  break-inside: avoid-page;
+}
+.mermaid-diagram svg {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto;
+  max-height: 230mm;
+  margin: 0 auto;
 }
 ul, ol { margin: 1.5mm 0 4mm; padding-left: 6.5mm; }
 li { margin: 0 0 1.2mm; }
@@ -260,7 +288,62 @@ def is_special(lines: list[str], index: int) -> bool:
     return False
 
 
-def markdown_to_html(markdown: str) -> str:
+def render_mermaid_svg(source: str, browser: str) -> str:
+    """Render one Mermaid block to an inline SVG suitable for print."""
+    mermaid_cli = shutil.which("mmdc")
+    if not mermaid_cli:
+        raise FileNotFoundError(
+            "Mermaid CLI (mmdc) is required to export diagram blocks to PDF"
+        )
+
+    with tempfile.TemporaryDirectory(prefix="server-manual-mermaid-") as temp_name:
+        temp_dir = Path(temp_name)
+        input_path = temp_dir / "diagram.mmd"
+        output_path = temp_dir / "diagram.svg"
+        puppeteer_config = temp_dir / "puppeteer-config.json"
+        input_path.write_text(source, encoding="utf-8")
+        puppeteer_config.write_text(
+            json.dumps(
+                {
+                    "executablePath": browser,
+                    "args": ["--no-sandbox", "--disable-dev-shm-usage"],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        environment = os.environ.copy()
+        environment["PUPPETEER_EXECUTABLE_PATH"] = browser
+        completed = subprocess.run(
+            [
+                mermaid_cli,
+                "--input",
+                str(input_path),
+                "--output",
+                str(output_path),
+                "--backgroundColor",
+                "transparent",
+                "--puppeteerConfigFile",
+                str(puppeteer_config),
+                "--quiet",
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            env=environment,
+        )
+        if completed.returncode != 0 or not output_path.is_file():
+            detail = (completed.stderr or completed.stdout).strip()
+            raise RuntimeError(f"Mermaid rendering failed: {detail}")
+
+        svg = output_path.read_text(encoding="utf-8")
+        svg = re.sub(r"^\s*<\?xml.*?\?>", "", svg, count=1, flags=re.DOTALL)
+        svg = re.sub(r"^\s*<!DOCTYPE.*?>", "", svg, count=1, flags=re.DOTALL)
+        return f'<figure class="mermaid-diagram">{svg.strip()}</figure>'
+
+
+def markdown_to_html(markdown: str, browser: str) -> str:
     lines = markdown.replace("\r\n", "\n").split("\n")
     out: list[str] = []
     index = 0
@@ -281,8 +364,16 @@ def markdown_to_html(markdown: str) -> str:
                 index += 1
             if index < len(lines):
                 index += 1
-            class_name = f' class="language-{html.escape(language, quote=True)}"' if language else ""
-            out.append(f"<pre><code{class_name}>{html.escape(chr(10).join(code))}</code></pre>")
+            source = chr(10).join(code)
+            if language.lower() == "mermaid":
+                out.append(render_mermaid_svg(source, browser))
+            else:
+                class_name = (
+                    f' class="language-{html.escape(language, quote=True)}"'
+                    if language
+                    else ""
+                )
+                out.append(f"<pre><code{class_name}>{html.escape(source)}</code></pre>")
             continue
 
         heading = HEADING.match(line)
@@ -432,9 +523,19 @@ def print_pdf(browser: str, html_path: Path, output_path: Path) -> None:
 
 
 def validate_sources() -> None:
-    missing = [str(manual.source) for manual in MANUALS if not manual.source.is_file()]
+    missing = [
+        str(source)
+        for manual in MANUALS
+        for source in manual.sources
+        if not source.is_file()
+    ]
     if missing:
         raise FileNotFoundError("missing manual source(s): " + ", ".join(missing))
+
+
+def render_manual(manual: Manual, browser: str) -> str:
+    markdown = "\n\n".join(source.read_text(encoding="utf-8") for source in manual.sources)
+    return markdown_to_html(markdown, browser)
 
 
 def combined_body(rendered: list[tuple[Manual, str]]) -> str:
@@ -451,8 +552,8 @@ def combined_body(rendered: list[tuple[Manual, str]]) -> str:
     toc.append("</ol></section>")
     sections: list[str] = []
     for manual, content in rendered:
-        source = manual.source.relative_to(REPO_ROOT)
-        source_note = f'<p class="source-note">원본: {html.escape(str(source))}</p>'
+        sources = ", ".join(str(source.relative_to(REPO_ROOT)) for source in manual.sources)
+        source_note = f'<p class="source-note">원본: {html.escape(sources)}</p>'
         annotated_content = content.replace("</h1>", f"</h1>{source_note}", 1)
         sections.append(
             f'<section class="manual-section" id="{manual.slug}">'
@@ -464,7 +565,7 @@ def combined_body(rendered: list[tuple[Manual, str]]) -> str:
 def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
     validate_sources()
     output_dir.mkdir(parents=True, exist_ok=True)
-    rendered = [(manual, markdown_to_html(manual.source.read_text(encoding="utf-8"))) for manual in MANUALS]
+    rendered = [(manual, render_manual(manual, browser)) for manual in MANUALS]
     outputs: list[Path] = []
 
     with tempfile.TemporaryDirectory(prefix="server-manual-") as temp_name:

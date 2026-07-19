@@ -1,6 +1,6 @@
 # remote-operations 설계
 
-> [운영](remote-operations-운영.md) · [설정](remote-operations-설정.md)
+> [개요](index.md) · [운영](operations.md) · [설정](config.md)
 
 > 역할: FARM/LAB 서버를 깨우고, 부팅 시 한 번 상태를 확인한 뒤 기존 컨테이너를 시작한다.
 

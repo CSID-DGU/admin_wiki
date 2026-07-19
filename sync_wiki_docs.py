@@ -7,7 +7,7 @@ import argparse
 import shutil
 from pathlib import Path
 
-from export_manuals import MANUALS, REPO_ROOT
+from export_manuals import MANUALS, REPO_ROOT, Manual
 
 
 DEFAULT_OUTPUT = REPO_ROOT / "wiki-docs"
@@ -22,8 +22,8 @@ def rewrite_links(markdown: str, slug: str) -> str:
     return markdown.replace("](../../pdf/system/", "](../pdf/system/")
 
 
-def page_name(slug: str) -> str:
-    return f"system/{'index' if slug == 'server-manage' else slug}.md"
+def page_name(manual: Manual) -> Path:
+    return manual.source.relative_to(MD_DIR)
 
 
 def build_downloads() -> str:
@@ -66,12 +66,14 @@ def sync(output_dir: Path) -> Path:
 
     for manual in MANUALS:
         source = rewrite_links(manual.source.read_text(encoding="utf-8"), manual.slug)
+        page_relative = page_name(manual)
         if manual.slug != "server-manage":
-            pdf_button = f"\n[이 문서의 PDF 열기](../pdf/{manual.output}){{ .md-button }}\n\n"
+            prefix = "../" * len(page_relative.parent.parts)
+            pdf_button = f"\n[이 문서의 PDF 열기]({prefix}pdf/{manual.output}){{ .md-button }}\n\n"
             first_break = source.find("\n")
             if first_break >= 0:
                 source = source[: first_break + 1] + pdf_button + source[first_break + 1 :]
-        page_target = output_dir / page_name(manual.slug)
+        page_target = output_dir / page_relative
         page_target.parent.mkdir(parents=True, exist_ok=True)
         page_target.write_text(source, encoding="utf-8")
 

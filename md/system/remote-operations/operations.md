@@ -1,6 +1,6 @@
 # remote-operations 운영
 
-> [설계](remote-operations-설계.md) · [설정](remote-operations-설정.md)
+> [개요](index.md) · [설계](design.md) · [설정](config.md)
 
 ## 1. 사용법
 

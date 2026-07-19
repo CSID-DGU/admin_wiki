@@ -46,5 +46,5 @@ keytab, NAS KVNO, 다른 컨테이너 런타임의 운영 기준은
 ## 관련 문서
 
 - [System Kerberos/NFS](../../system/kerberos-nfs/index.md): 공통 Kerberos NFS와 NAS service 경계
-- [System container-images](../../system/container-images.md): 이미지의 ccache 소비 경계
+- [System container-images](../../system/container-images/index.md): 이미지의 ccache 소비 경계
 - [설정](config.md): config-server 배포 설정의 주입·검증 기준

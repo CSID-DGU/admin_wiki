@@ -68,6 +68,11 @@ MANUALS = (
             / "system"
             / "kerberos-nfs"
             / "debugging"
+            / "lab9-why-sec-krb5.md",
+            MD_DIR
+            / "system"
+            / "kerberos-nfs"
+            / "debugging"
             / "nfs-v41-session-slot-stuck.md",
         ),
     ),

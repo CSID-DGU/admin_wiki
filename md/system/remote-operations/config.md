@@ -26,6 +26,20 @@ cp config/remote_boot.example.env config/remote_boot.local.env
 실제 MAC, password와 webhook은 `remote_boot.local.env`에만 둔다. example에는
 변수 이름과 안전한 placeholder만 유지한다.
 
+
+## 첫 설정 체크리스트
+
+이 저장소를 처음 pull한 뒤 dry-run 검증까지 마치는 순서:
+
+1. 개인 SSH 공개키를 각 FARM/LAB 서버의 `~/.ssh/authorized_keys`에 등록
+2. `~/ansible/inventory.ini` 준비 (`ansible_user`를 자신의 계정으로)
+3. `remote_boot.example.env` → `remote_boot.local.env` 복사
+4. `REMOTE_BOOT_ANSIBLE_INVENTORY`를 자신의 inventory 경로로 설정
+5. `REMOTE_BOOT_MAC_*` 값을 실제 MAC으로 채움
+6. `REMOTE_BOOT_SLACK_ENABLED=true`와 `REMOTE_BOOT_SLACK_WEBHOOK_URL_FARM` 설정
+7. [운영 문서](operations.md)의 dry-run 명령으로 검증
+
+
 ## 개인 Ansible inventory 준비
 
 관리 데스크탑은 여러 관리자가 공유한다. Ansible inventory는 host 그룹당
@@ -34,7 +48,7 @@ cp config/remote_boot.example.env config/remote_boot.local.env
 접속을 시도하다가 SSH 인증에 실패한다.
 그래서 관리자마다 자신의 계정으로 접속하는 개인 inventory가 필요하다.
 ([UID_GID_Management_System](https://app.notion.com/p/UID-GID-Management-System-32bc7692a2638085a14ff1f9690601b7) 5.2.4 내용을 보고 inventory.ini 파일을 ~/uid_gid/inventory.ini에
-위치시킨 경우 지금 설명하는 단계를 진행해야 한다.)
+위치시킨 경우 지금 설명하는 단계를 진행해야 한다. inventory.ini의 위치가 변경되기 때문이다.)
 
 - 위치: `~/ansible/inventory.ini`. 특정 프로젝트에 속하지 않는 개인 경로다.
   remote-operations와 `uid_gid` 등 이 데스크탑의 여러 도구가 각자의 설정에서
@@ -90,15 +104,3 @@ REMOTE_BOOT_SLACK_WEBHOOK_URL_FARM="https://hooks.slack.com/services/..."
 ```bash
 ./test/test_slack_notification.sh --server-id FARM1
 ```
-
-## 첫 설정 체크리스트
-
-신규 관리자가 이 저장소를 처음 pull한 뒤 dry-run 검증까지 마치는 순서:
-
-1. 개인 SSH 공개키를 각 FARM/LAB 서버의 `~/.ssh/authorized_keys`에 등록
-2. `~/ansible/inventory.ini` 준비 (`ansible_user`를 자신의 계정으로)
-3. `remote_boot.example.env` → `remote_boot.local.env` 복사
-4. `REMOTE_BOOT_ANSIBLE_INVENTORY`를 자신의 inventory 경로로 설정
-5. `REMOTE_BOOT_MAC_*` 값을 실제 MAC으로 채움
-6. `REMOTE_BOOT_SLACK_ENABLED=true`와 `REMOTE_BOOT_SLACK_WEBHOOK_URL_FARM` 설정
-7. [운영 문서](operations.md)의 dry-run 명령으로 검증

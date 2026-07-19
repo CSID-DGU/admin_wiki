@@ -2,7 +2,7 @@
 
 admin_infra 레포의 Helm 차트와 쿠버네티스 매니페스트 카탈로그입니다. 이 문서는 두 부분으로 되어 있습니다 — **0절**에서 Helm 자체를 처음 보는 사람을 위해 개념을 잡고, **1~4절**에서 레포의 배포물 네 개(config-server 차트, image-store 차트, 폐기된 pvc-chart, infra-sql 매니페스트)를 하나씩 훑습니다.
 
-현행/레거시 구분은 [배포본과 레거시 경계](배포본과-레거시-경계.md)를 먼저 확인합니다. 쿠버네티스 기본 용어(Pod, Service, PVC, namespace 등)는 [기초 개념](기초-개념.md)을 참고합니다.
+현행/레거시 구분은 [배포본과 레거시 경계](../design/배포본과-레거시-경계.md)를 먼저 확인합니다. 쿠버네티스 기본 용어(Pod, Service, PVC, namespace 등)는 [기초 개념](../design/기초-개념.md)을 참고합니다.
 
 ---
 
@@ -128,7 +128,7 @@ config-server가 조작하는 대상들의 주소입니다. 사용자 홈이 어
 | `nas.ssh.host` / `port` / `user` / `keyPath` | NAS 홈 생성용 SSH 접속 정보 (키 실체는 Secret, 1.4절) | `""` |
 | `farm.ssh.user` / `keyPath` / `nodes` | farm 노드 keytab 배포용 SSH 정보와 대상 노드 목록 | `""` / `[]` |
 | `farm.adSsh.user` / `keyPath` / `nodes` | AD/DC(krb5 principal 발급) 노드용 SSH 정보 | `""` / `[]` |
-| `farm.homeMountRoot` | 노드 호스트에 마운트된 홈 루트 — 사용자 Pod `/home`의 hostPath 원천입니다 ([시스템 아키텍처](시스템-아키텍처.md) 7.5절) | `""` |
+| `farm.homeMountRoot` | 노드 호스트에 마운트된 홈 루트 — 사용자 Pod `/home`의 hostPath 원천입니다 ([시스템 아키텍처](../design/시스템-아키텍처.md) 7.5절) | `""` |
 
 #### security / krb5 — 권한과 인증
 
@@ -142,7 +142,7 @@ config-server가 조작하는 대상들의 주소입니다. 사용자 홈이 어
 
 #### db / redis — 상태 저장소
 
-NodePort 배정 장부는 MySQL에, 이미지 저장/로드 상태는 Redis에 둡니다([시스템 아키텍처](시스템-아키텍처.md) 5절).
+NodePort 배정 장부는 MySQL에, 이미지 저장/로드 상태는 Redis에 둡니다([시스템 아키텍처](../design/시스템-아키텍처.md) 5절).
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
@@ -194,13 +194,13 @@ kubectl rollout status deploy/containerssh-config-server -n ailab-infra
 helm rollback containerssh-config-server -n ailab-infra
 ```
 
-반영 후에는 [운영 가이드](운영-가이드.md) 2절의 배포 확인 절차로 마무리합니다. 일회성 실험이라면 `--set`도 가능하지만 기록이 남지 않는 함정이 있습니다(0.3절).
+반영 후에는 [운영 가이드](운영-매뉴얼.md) 2절의 배포 확인 절차로 마무리합니다. 일회성 실험이라면 `--set`도 가능하지만 기록이 남지 않는 함정이 있습니다(0.3절).
 
 ---
 
 ## 2. pvc-image-chart/ — 이미지 저장소 (현행)
 
-사용자 컨테이너 이미지를 tar로 보관하는 공용 PVC `pvc-image-store`를 배포하는 작은 차트입니다. **현행 구조에서 이 PVC를 마운트하는 것은 config-server뿐입니다**(`/image-store` — 사용자별 이미지 저장/로드 경로는 `/image-store/images/user-<username>.tar`). 과거에는 게스트 Pod에도 붙였지만 마운트 실패 문제로 사용자 Pod 스펙에서는 제거됐습니다. 사용자별 홈 PVC가 폐기된 뒤에도 **image-store만 PVC로 남았습니다**([시스템 아키텍처](시스템-아키텍처.md) 6절).
+사용자 컨테이너 이미지를 tar로 보관하는 공용 PVC `pvc-image-store`를 배포하는 작은 차트입니다. **현행 구조에서 이 PVC를 마운트하는 것은 config-server뿐입니다**(`/image-store` — 사용자별 이미지 저장/로드 경로는 `/image-store/images/user-<username>.tar`). 과거에는 게스트 Pod에도 붙였지만 마운트 실패 문제로 사용자 Pod 스펙에서는 제거됐습니다. 사용자별 홈 PVC가 폐기된 뒤에도 **image-store만 PVC로 남았습니다**([시스템 아키텍처](../design/시스템-아키텍처.md) 6절).
 
 | 키/장치 | 값 | 의미 |
 |---------|-----|------|
@@ -213,7 +213,7 @@ helm rollback containerssh-config-server -n ailab-infra
 
 ## 3. pvc-chart/ (폐기)
 
-사용자/그룹별 홈 PVC를 동적 생성하던 Helm 차트(`containerssh-pvc-chart`)의 잔재입니다. 개별 사용자 PVC 방식은 26-07-02에 폐기되어 현행 흐름에서는 사용하지 않습니다(현행은 NFS 직접 마운트 — [시스템 아키텍처](시스템-아키텍처.md) 6절 참조).
+사용자/그룹별 홈 PVC를 동적 생성하던 Helm 차트(`containerssh-pvc-chart`)의 잔재입니다. 개별 사용자 PVC 방식은 26-07-02에 폐기되어 현행 흐름에서는 사용하지 않습니다(현행은 NFS 직접 마운트 — [시스템 아키텍처](../design/시스템-아키텍처.md) 6절 참조).
 
 이 디렉터리는 develop 브랜치 기준으로 남아 있고(`Chart.yaml`, `values.yaml`, `README.md`, StorageClass manifest 두 장 — `sc-nfs-nas-v3-resizable.yaml`, `old-sc.yaml`), 레거시 정리 브랜치(`chore/remove-legacy-containerssh`)에서는 이미 삭제됐습니다. 과거 클러스터 상태를 이해할 때 참고용으로만 읽습니다. 이 중 `sc-nfs-nas-v3-resizable.yaml`은 image-store가 여전히 쓰는 StorageClass 정의라서 정리 브랜치에서 `pvc-image-chart/`로 옮겨졌습니다 — 정리가 develop에 합쳐지면 이 절의 디렉터리 자체가 사라집니다.
 
@@ -230,4 +230,4 @@ config-server의 NodePort 배정 장부 등 인프라 상태를 저장하는 MyS
 
 StatefulSet을 쓰는 이유는 DB이기 때문입니다 — Deployment와 달리 Pod가 재생성되어도 같은 이름과 같은 저장소(PVC)를 다시 물려받으므로 데이터가 이어집니다. Service가 ClusterIP(내부 전용)인 것도 의도입니다 — 포트 장부 DB를 클러스터 밖에 노출할 이유가 없습니다.
 
-⚠️ `nodeport_allocations` 테이블은 infra-mysql이 자동 생성하지 않습니다. DB를 재구축하면 별도 DDL(테이블 생성 SQL)을 직접 실행해야 합니다. 스키마는 [데이터베이스](데이터베이스.md)를 참고합니다.
+⚠️ `nodeport_allocations` 테이블은 infra-mysql이 자동 생성하지 않습니다. DB를 재구축하면 별도 DDL(테이블 생성 SQL)을 직접 실행해야 합니다. 스키마는 [데이터베이스](../design/데이터베이스.md)를 참고합니다.

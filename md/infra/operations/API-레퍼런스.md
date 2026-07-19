@@ -505,4 +505,4 @@ sequenceDiagram
 - **create-pod는 멱등하지 않습니다.** 같은 사용자로 반복 호출하면 Pod와 Service가 여러 벌 생깁니다. username 단위 중복 방지는 호출자(admin_be)의 책임입니다.
 - **삭제는 두 API가 한 쌍입니다.** `POST /delete-pod`(Pod·Service·포트) + `DELETE /accounts/users`(계정·홈·principal)를 모두 호출해야 완전 삭제입니다.
 - **jupyter NodePort 보안.** 8888 포트도 다른 포트와 동일하게 NodePort Service로 열립니다. 게스트 이미지의 Jupyter가 무인증 설정이면 외부 개방 시 우회 접근 경로가 되므로 내부망 제한이 필요합니다.
-- 만료 스케줄러가 이 API들을 어떤 순서로 부르는지는 [운영 가이드](운영-가이드.md)의 만료 흐름 절을 참고합니다.
+- 만료 스케줄러가 이 API들을 어떤 순서로 부르는지는 [운영 가이드](운영-매뉴얼.md)의 만료 흐름 절을 참고합니다.

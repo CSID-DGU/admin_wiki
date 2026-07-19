@@ -78,6 +78,16 @@ nav:
   - frontend: frontend/index.md
   - infra:
       - 목차: infra/index.md
+      - 개요: infra/개요.md
+      - 시작 가이드: infra/시작.md
+      - 시스템 아키텍처: infra/시스템-아키텍처.md
+      - 기초 개념: infra/기초-개념.md
+      - API 레퍼런스: infra/API-레퍼런스.md
+      - Helm 차트 레퍼런스: infra/Helm-차트-레퍼런스.md
+      - 배포본과 레거시 경계: infra/배포본과-레거시-경계.md
+      - 데이터베이스: infra/데이터베이스.md
+      - 운영 가이드: infra/운영-가이드.md
+      - 관리자 매뉴얼: infra/관리자-매뉴얼.md
       - kdc-setup:
           - 개요: infra/kdc-setup/index.md
           - 설계: infra/kdc-setup/design.md

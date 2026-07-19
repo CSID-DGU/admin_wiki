@@ -95,8 +95,12 @@ MANUALS = (
     Manual(
         "server-state",
         "server-state",
-        MD_DIR / "system" / "server-state.md",
+        MD_DIR / "system" / "server-state" / "index.md",
         "system/server-state-manual.pdf",
+        (
+            MD_DIR / "system" / "server-state" / "design.md",
+            MD_DIR / "system" / "server-state" / "operations.md",
+        ),
     ),
     Manual(
         "user-lifecycle",

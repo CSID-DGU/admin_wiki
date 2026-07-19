@@ -84,7 +84,10 @@ nav:
           - 설계: system/container-images/design.md
           - 운영: system/container-images/operations.md
       - user-lifecycle: system/user-lifecycle.md
-      - server-state: system/server-state.md
+      - server-state:
+          - 개요: system/server-state/index.md
+          - 설계: system/server-state/design.md
+          - 운영: system/server-state/operations.md
       - remote-operations:
           - 개요: system/remote-operations/index.md
           - 설계: system/remote-operations/design.md

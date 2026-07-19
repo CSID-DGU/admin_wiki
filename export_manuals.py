@@ -48,8 +48,12 @@ MANUALS = (
     Manual(
         "container-images",
         "container-images",
-        MD_DIR / "system" / "container-images.md",
+        MD_DIR / "system" / "container-images" / "index.md",
         "system/container-images-manual.pdf",
+        (
+            MD_DIR / "system" / "container-images" / "design.md",
+            MD_DIR / "system" / "container-images" / "operations.md",
+        ),
     ),
     Manual(
         "kerberos-nfs",

@@ -76,7 +76,13 @@ nav:
       - Redis 메시지 큐 작동 원리: backend/Redis-메시지-큐-작동-원리.md
       - 우분투 계정 삭제 스케줄러: backend/우분투-계정-삭제-스케줄러.md
   - frontend: frontend/index.md
-  - infra: infra/index.md
+  - infra:
+      - 목차: infra/index.md
+      - kdc-setup:
+          - 개요: infra/kdc-setup/index.md
+          - 설계: infra/kdc-setup/design.md
+          - 운영: infra/kdc-setup/operations.md
+          - 설정: infra/kdc-setup/config.md
   - system:
       - 목차: system/index.md
       - container-images:

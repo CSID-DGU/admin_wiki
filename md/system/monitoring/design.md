@@ -143,6 +143,33 @@ goroutine이 멈춘 상태를 `up=1`만으로는 찾을 수 없기 때문이다.
 - 외부 connectivity heartbeat와 public inbound health
 - NFS GSS readiness/canary/recovery state와 `rpc-gssd` journal
 
+#### Container 실행 상태와 GPU alert gating
+
+container 내부 GPU readiness는 container가 실행 중일 때만 의미가 있다. collector는
+정지한 대상 container에 대해 `cluster_monitor_container_running=0`과
+`cluster_monitor_container_gpu_up=0`을 함께 노출하지만, 이때 `gpu_up=0`은 GPU
+장애가 아니라 검사를 실행할 수 없다는 뜻이다.
+
+따라서 GPU alert는 다음처럼 running metric을 선행조건으로 결합한다. `instance`,
+`server`, `container`, `image` label로 vector를 매칭하여 다른 host의 동명
+container가 결합되지 않게 한다.
+
+```promql
+cluster_monitor_container_gpu_up{job="cluster-monitor-exporter"} == 0
+and on (instance, server, container, image)
+cluster_monitor_container_running{job="cluster-monitor-exporter"} == 1
+```
+
+| Container 상태 | `running` | `gpu_up` | 발생해야 하는 alert |
+| --- | ---: | ---: | --- |
+| 정지 | 0 | 0 | container stopped alert만 발생 |
+| 실행 중, GPU 정상 | 1 | 1 | 없음 |
+| 실행 중, GPU 실패가 5분 지속 | 1 | 0 | container GPU alert 발생 |
+
+이 gating은 하나의 원인인 container 정지가 stopped와 GPU failure로 중복 통지되는
+것을 막고, container가 실제로 실행 중인데 `nvidia-smi`가 실패하는 경우만 GPU
+경보로 분류한다.
+
 #### D-state와 명령 timeout
 
 NFS `hard` mount에서 child process가 D-state에 들어가면 `SIGKILL`에도 즉시

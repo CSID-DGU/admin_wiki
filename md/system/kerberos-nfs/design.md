@@ -16,11 +16,11 @@
 
 ## 2. 전체 구성
 
-다이어그램의 **굵은 바깥 제목은 실행 영역**이고, 영역 안 각 카드의 **굵은 첫
-줄은 모듈 이름**이다. 카드 안의 `보관·참조 값 / 구성요소`는 명사형으로,
-`수행 동작`은 **주체와 동사가 있는 문장**으로 구분했다. 화살표 문장은 출발점의
-모듈이 도착점의 모듈에 수행하는 동작을 뜻하며, 점선은 credential 참조나 읽기
-전용 조회·관측을 뜻한다. AD/KDC는 모든 계산 host에 있는 것이 아니라 FARM/LAB
+다이어그램의 **굵은 바깥 제목은 배치 영역**이고, 영역 안 각 카드의 **굵은 첫
+줄은 모듈 이름**이다. 카드 안의 `저장 정보 / 구성 요소`에는 명사만 적고,
+`역할`에는 **주체가 무엇을 하는지 동사로** 적었다. 화살표에는 출발 모듈이
+요청하거나 제공하는 동작을 표시했으며, 점선은 credential 참조나 읽기 전용 조회·관측을
+나타낸다. AD/KDC는 모든 계산 host에 있는 것이 아니라 FARM/LAB
 중 **AD DC 역할을 맡은 host에만** 있다. 다이어그램에는 핵심 값과 동작만
 표시하고 상세 책임은 아래 표에서 설명한다.
 
@@ -28,25 +28,25 @@
 flowchart TB
     subgraph CONTROL_ZONE["<b>외부 관리 · 관측</b>"]
         direction LR
-        M["<b>관리 서버</b><br/>────────────<br/><b>구성요소</b><br/>uidctl · Ansible<br/><b>수행 동작</b><br/>계정 작업을 조정하고<br/>설정과 keytab을 배포함"]
-        MON["<b>Monitoring</b><br/>────────────<br/><b>보관 값</b><br/>metric · log · evidence<br/><b>수행 동작</b><br/>인증과 mount 상태를 검사하고<br/>이상을 감지하면 경보함"]
+        M["<b>관리 서버</b><br/>────────────<br/><b>구성 요소</b><br/>uidctl · Ansible<br/><b>역할</b><br/>계정 작업을 조정하고<br/>설정과 keytab을 배포함"]
+        MON["<b>Monitoring</b><br/>────────────<br/><b>저장 정보</b><br/>metric · log · evidence<br/><b>역할</b><br/>인증과 mount 상태를 검사하고<br/>이상을 감지하면 경보함"]
     end
 
     subgraph CONTAINER_ZONE["<b>사용자 컨테이너</b>"]
-        USER_RUNTIME["<b>사용자 Runtime 모듈</b><br/>────────────<br/><b>참조 값</b><br/>KRB5CCNAME<br/>bind-mounted ccache<br/><b>수행 동작</b><br/>ticket으로 NFS I/O를 요청함"]
+        USER_RUNTIME["<b>사용자 Runtime 모듈</b><br/>────────────<br/><b>사용 정보</b><br/>KRB5CCNAME<br/>bind-mounted ccache<br/><b>역할</b><br/>ticket으로 NFS I/O를 요청함"]
     end
 
     subgraph HOST_ZONE["<b>FARM / LAB 호스트</b>"]
         direction LR
-        DIRECTORY_MODULE["<b>AD / Kerberos Directory 모듈</b><br/>────────────<br/><b>보관 값</b><br/>user · group · SPN<br/>RFC2307 UID/GID · KVNO<br/><b>수행 동작</b><br/>TGT와 service ticket을 발급함<br/><i>AD DC 역할 host에만 배치</i>"]
-        REFRESH_MODULE["<b>사용자 Credential 갱신 모듈</b><br/>────────────<br/><b>보관 값</b><br/>user keytab (root:root 0400)<br/>host ccache<br/><b>수행 동작</b><br/>timer가 ccache를 갱신하고<br/>검증 후 원자 교체함"]
-        NFS_CLIENT_MODULE["<b>NFS Client 모듈</b><br/>────────────<br/><b>구성요소</b><br/>kernel NFS client · rpc.gssd<br/><b>수행 동작</b><br/>호출 UID의 ccache로<br/>GSS 인증을 적용해 RPC를 전송함"]
+        DIRECTORY_MODULE["<b>AD / Kerberos Directory 모듈</b><br/>────────────<br/><b>저장 정보</b><br/>user · group · SPN<br/>RFC2307 UID/GID · KVNO<br/><b>역할</b><br/>TGT와 service ticket을 발급함<br/><i>AD DC 역할 host에만 배치</i>"]
+        REFRESH_MODULE["<b>사용자 Credential 갱신 모듈</b><br/>────────────<br/><b>저장 정보</b><br/>user keytab (root:root 0400)<br/>host ccache<br/><b>역할</b><br/>timer가 ccache를 갱신하고<br/>검증 후 원자 교체함"]
+        NFS_CLIENT_MODULE["<b>NFS Client 모듈</b><br/>────────────<br/><b>구성 요소</b><br/>kernel NFS client · rpc.gssd<br/><b>역할</b><br/>호출 UID의 ccache로<br/>GSS 인증을 적용해 RPC를 전송함"]
     end
 
     subgraph STORAGE_ZONE["<b>NAS / Storage</b>"]
         direction LR
-        NFS_SERVER_MODULE["<b>NFS Service 모듈</b><br/>────────────<br/><b>보관 값 / 구성요소</b><br/>NFS service keytab<br/>svcgssd · NFS server<br/><b>수행 동작</b><br/>ticket과 권한을 검증해<br/>NFS I/O를 처리함"]
-        STORAGE_ID_MODULE["<b>Identity / 권한 모듈</b><br/>────────────<br/><b>보관 값 / 구성요소</b><br/>winbind · idmap · NFS export<br/>user home · numeric UID/GID<br/><b>수행 동작</b><br/>principal을 UID/GID로 변환해<br/>파일 권한을 판정함"]
+        NFS_SERVER_MODULE["<b>NFS Service 모듈</b><br/>────────────<br/><b>저장 정보 · 구성 요소</b><br/>NFS service keytab<br/>svcgssd · NFS server<br/><b>역할</b><br/>ticket과 권한을 검증해<br/>NFS I/O를 처리함"]
+        STORAGE_ID_MODULE["<b>Identity / 권한 모듈</b><br/>────────────<br/><b>저장 정보 · 구성 요소</b><br/>winbind · idmap · NFS export<br/>user home · numeric UID/GID<br/><b>역할</b><br/>principal을 UID/GID로 변환해<br/>파일 권한을 판정함"]
     end
 
     M -->|"계정 · RFC2307을 만들고<br/>keytab을 export함"| DIRECTORY_MODULE
@@ -85,9 +85,9 @@ flowchart TB
 
 ### 구성요소별 책임
 
-| 영역 | 모듈 | 내부 구성요소 | 하는 일 |
+| 영역 | 모듈 | 내부 구성 요소 | 역할 |
 | --- | --- | --- | --- |
-| 외부 관리 | **계정 생성 orchestration** | `uidctl`, Ansible runner | 계정 생성 transaction을 조정하고 AD, host, storage에 필요한 상태를 준비 |
+| 외부 관리 | **계정 생성 조정** | `uidctl`, Ansible runner | 계정 생성 절차를 조정하고 AD, host, storage에 필요한 상태를 준비 |
 | FARM/LAB 호스트 | **AD/Kerberos Directory** | Samba AD DC, KDC, 사용자·그룹·SPN·RFC2307 객체 | principal과 Unix identity 저장, keytab export, TGT/service ticket 발급; AD DC 역할 host에만 배치 |
 | FARM/LAB 호스트 | **사용자 Credential 갱신** | user keytab, `decs-krb-refresh@.service/.timer`, host ccache | root-only keytab으로 ccache를 만들고 검증 후 원자 교체 |
 | FARM/LAB 호스트 | **NFS Client** | kernel NFS client, `rpc.gssd` | 호출 UID의 ccache로 RPCSEC_GSS context를 만들고 NFS RPC 전송 |
@@ -121,7 +121,7 @@ ticket을 복호화하지 못한다.
 관리 주소는 SSH와 장비 관리에만 사용한다. NFS source에는 반드시 service
 principal의 hostname을 사용한다. LAB의 `/294t/dcloud/share/test_krb`와
 `/294t/health/nfs-gss-canary`는 각각 격리 PoC와 canary용 export이며 운영 사용자
-mount source인 `/294t/dcloud/share`를 대신하지 않는다.
+mount source인 `/294t/dcloud/share`와는 용도가 다르다.
 
 ### 3.2 NFS와 Kerberos service identity
 
@@ -131,8 +131,8 @@ mount source인 `/294t/dcloud/share`를 대신하지 않는다.
 | 기본 security flavor | `sec=krb5` | `sec=krb5` |
 | server export flavor | production storage IP에는 `sec=krb5:krb5i:krb5p`; client가 `krb5`를 선택 | 현재 LAB baseline은 `sec=krb5` |
 | NFS service principal | `nfs/nas.farm.decs.internal@FARM.DECS.INTERNAL` | `nfs/lab-storage.lab.decs.internal@LAB.DECS.INTERNAL` |
-| 추가 principal | `nfs/NAS@FARM.DECS.INTERNAL`, `nfs/nas.ailab.dgu@AILAB.DGU`를 NAS keytab에서 함께 보존 | 현재 profile에는 별도 추가 acceptor 없음 |
-| NFS SPN 소유자 | 전용 AD user `svc-nfs-farm`; Synology machine account `NAS$`와 분리 | Linux storage computer account `LAB-STORAGE$` |
+| 추가 principal | `nfs/NAS@FARM.DECS.INTERNAL`, `nfs/nas.ailab.dgu@AILAB.DGU`를 NAS keytab에서 함께 보존 | LAB profile에는 추가 acceptor 설정 없음 |
+| NFS SPN 등록 계정 | 전용 AD user `svc-nfs-farm`; Synology machine account `NAS$`와 분리 | Linux storage computer account `LAB-STORAGE$` |
 | NFS service keytab | `/etc/nfs/krb5.keytab`이 ticket 검증 기준이며 `/etc/krb5.keytab`도 checker가 비교 | `/etc/krb5.keytab` |
 | server GSS process | Synology의 `/usr/sbin/svcgssd`; 여러 realm의 `nfs/*`를 받아야 하므로 `-p`로 하나를 고정하지 않음 | Linux `rpc-svcgssd` 또는 NFS server가 관리하는 `rpc.svcgssd` |
 | client machine principal 예 | `FARM8$@FARM.DECS.INTERNAL` | `LAB9$@LAB.DECS.INTERNAL` |
@@ -140,28 +140,28 @@ mount source인 `/294t/dcloud/share`를 대신하지 않는다.
 
 사용자 principal도 realm에 따라 `<username>@FARM.DECS.INTERNAL` 또는
 `<username>@LAB.DECS.INTERNAL`이 된다. 사용자 keytab, host machine keytab과 NFS
-service keytab은 서로 다른 principal과 lifecycle을 가지므로 같은 파일처럼
-취급해서는 안 된다.
+service keytab은 서로 다른 principal과 lifecycle을 가지므로 한 파일로 합쳐서는
+안 된다.
 
 ### 3.3 NFS version이 다른 이유
 
-FARM의 Synology NAS는 NFSv4.1을 광고하지만 rollout 중 `vers=4.1`과
-RPCSEC_GSS 조합에서 timeout 또는 access denied가 관측됐다. 따라서 현재 운영
-baseline은 `vers=4.0,sec=krb5,hard,timeo=600,retrans=2`다. fstab에서 1 MiB
-`rsize/wsize`를 요청해도 Synology가 실제 runtime 값을 128 KiB로 낮춰 협상할 수
-있다.
+FARM의 Synology NAS에는 NFSv4.1 기능이 활성화되어 있지만, rollout에서
+`vers=4.1`과 RPCSEC_GSS를 함께 사용했을 때 timeout 또는 access denied가
+발생했다. 따라서 현재 운영 baseline은
+`vers=4.0,sec=krb5,hard,timeo=600,retrans=2`다. fstab에서 1 MiB
+`rsize/wsize`를 요청해도 실제 연결에서는 Synology와 128 KiB로 협상될 수 있다.
 
-LAB은 Linux storage의 NFSv4.1을 사용한다. NFSv4.1 session/slot 상태는
-server kernel 구현의 영향을 받으므로, 구형 kernel의 idmap deferral과 slot 고착
+LAB은 Linux storage의 NFSv4.1을 사용한다. NFSv4.1 session/slot 동작은
+server kernel 구현에 따라 달라지므로, 구형 kernel의 idmap deferral과 slot 고착
 문제는 [NFSv4.1 session slot 고착](debugging/nfs-v41-session-slot-stuck.md)에서
-별도로 관리한다. FARM이 v4.0이라고 해서 LAB도 v4.0으로 낮추거나, LAB이
-v4.1이라고 해서 Synology NAS를 검증 없이 v4.1로 올리지 않는다.
+별도로 관리한다. 두 환경의 version은 각각 검증된 값이므로 LAB을 임의로 v4.0으로
+낮추거나 Synology NAS를 검증 없이 v4.1로 올리지 않는다.
 
-현재 desired 값은
-[server-state Kerberos/NFS playbook](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/ansible_playbook/kerberos_nfs_client_recovery.yml),
-관측 기준은
-[monitoring exporter 변수](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/ansible_playbook/group_vars/exporters.yml)를
-단일 기준으로 삼는다.
+현재 설정값은
+[server-state Kerberos/NFS playbook](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/ansible_playbook/kerberos_nfs_client_recovery.yml)에
+정의되어 있다. Monitoring에서 기대하는 값은
+[exporter 변수](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/ansible_playbook/group_vars/exporters.yml)에서
+확인한다.
 
 ## 4. 사용자 keytab 발급 흐름
 
@@ -239,7 +239,7 @@ FARM에서는 `nfs/nas.farm.decs.internal@FARM.DECS.INTERNAL`, LAB에서는
 `nfs/lab-storage.lab.decs.internal@LAB.DECS.INTERNAL` ticket을 요청한다. 이 값은
 mount source의 hostname에서 결정되며 단순 표시용 설정이 아니다.
 
-인증 실패 위치에 따라 증상이 달라진다.
+인증이 실패한 단계에 따라 증상이 달라진다.
 
 | 실패 위치 | 대표 증상 |
 | --- | --- |
@@ -290,7 +290,7 @@ keytab을 이용한 fresh login을 한 번 강제해야 한다.
 ## 8. NFS service identity와 KVNO
 
 FARM NFS SPN은 Synology domain member의 machine account `NAS$`가 아니라 전용 AD
-service account `svc-nfs-farm`이 소유한다.
+service account `svc-nfs-farm`에 등록되어 있다.
 
 ```text
 nfs/nas.farm.decs.internal@FARM.DECS.INTERNAL

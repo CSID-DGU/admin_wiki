@@ -4,20 +4,20 @@
 > Prometheus·Grafana·Alertmanager를 통해 시각화와 경보를 제공한다.
 
 이 문서는 monitoring 문서의 시작점이다. **설계**는 수집 데이터가 어떤
-component를 거쳐 metric과 alert가 되는지 설명하고, **운영**은 배포·점검·장애
+구성 요소를 거쳐 metric과 alert가 되는지 설명하고, **운영**은 배포·점검·장애
 대응 명령과 코드 위치를 설명한다.
 
 ## 문서 구성
 
 | 문서 | 핵심 내용 |
 | --- | --- |
-| 현재 페이지 | 책임 범위, 핵심 component와 운영 원칙 |
+| 현재 페이지 | 책임 범위, 핵심 구성 요소와 운영 원칙 |
 | [설계](design.md) | exporter, Prometheus, Grafana, Alertmanager, GSS health와 forensics의 데이터 흐름 |
 | [운영](operations.md) | 배포, endpoint 점검, metric/alert 코드 링크, 장애별 진단 순서 |
 
-처음 보는 사람은 **설계 2절의 전체 구성**에서 실행 영역과 데이터 흐름을 먼저
+처음 보는 사람은 **설계 2절의 전체 구성**에서 배치 영역과 데이터 흐름을 먼저
 확인하고, 실제 점검이나 배포가 필요할 때 **운영 문서**로 이동한다. 장애 대응 중
-설계 문서의 component 설명과 운영 문서의 명령을 번갈아 읽지 않도록, 반복해서
+설계 문서의 구성 요소 설명과 운영 문서의 명령을 번갈아 읽지 않도록, 반복해서
 사용하는 endpoint·metric·진단 순서는 운영 문서에 모았다.
 
 ## 한눈에 보는 구조
@@ -37,12 +37,12 @@ FARM node/GPU metric              -> FARM Prometheus ─┐
 LAB node/GPU metric               -> LAB Prometheus ──┴─> FARM Grafana
 ```
 
-## 핵심 component
+## 핵심 구성 요소
 
-| component | endpoint/산출물 | 역할 |
+| 구성 요소 | endpoint/산출물 | 역할 |
 | --- | --- | --- |
 | `node-exporter` | `:30070/metrics` | CPU, memory, filesystem, disk와 network 같은 일반 host 자원 노출 |
-| `gpu-user-exporter` | `:30072/metrics`, `:30072/-/healthy` | GPU process를 DB의 실제 사용자/container에 귀속 |
+| `gpu-user-exporter` | `:30072/metrics`, `:30072/-/healthy` | GPU process를 DB의 실제 사용자와 container에 연결 |
 | `cluster-monitor-exporter` | `:30074/metrics`, `:30074/healthz` | mount, GSS, GPU, Docker, container, 연결성, D-state 수집 |
 | public health listener | 서버별 `N89/healthz` | 외부에서 NAT와 host 도달 가능성 확인 |
 | NFS GSS worker | `/run`·`/var/lib` state | readiness, canary와 guarded missing-mount recovery |
@@ -55,7 +55,7 @@ LAB node/GPU metric               -> LAB Prometheus ──┴─> FARM Grafana
 ## 운영 경계
 
 - 지속 관측은 `monitoring`, 부팅 orchestration은 `remote-operations`, host desired
-  state는 `server-state`가 소유한다.
+  state는 `server-state`에서 관리한다.
 - `cluster-monitor-exporter`가 직접 mount하지 않는다. 별도 systemd recovery
   worker가 fstab, DNS/RPC, Kerberos readiness, canary와 D-state gate를 통과한
   **missing mount만** 복구한다.

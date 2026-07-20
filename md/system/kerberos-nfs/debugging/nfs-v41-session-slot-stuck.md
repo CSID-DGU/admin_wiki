@@ -317,7 +317,7 @@ sudo grep -E \
 4. storage kernel, `rpc.idmapd`, network와 NFS session 증거를 함께 확인한다.
 5. 상태가 자연 복구되지 않으면 유지보수 창의 client reboot 또는 storage 조치를
    수동 결정한다. reboot는 상태를 지울 뿐 원인 수정은 아니다.
-6. 영구 조치는 해당 idmap deferral fix가 포함된 storage kernel로 올리고 격리
+6. 영구 조치는 idmap deferral fix가 포함된 storage kernel로 올리고 격리
    회귀 실험을 통과시키는 것이다.
 
 운영 mount를 `soft`로 바꾸는 방식은 timeout을 application error로 노출하고 data

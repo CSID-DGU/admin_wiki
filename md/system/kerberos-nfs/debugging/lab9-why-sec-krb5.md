@@ -13,8 +13,8 @@ principal 인증을 유지하면서 RPC payload 암호화 비용을 제외하고
 
 `krb5p`가 잘못된 방식이라는 뜻은 아니다. NFS payload 기밀성이 반드시 필요한
 경로에서는 `krb5p`를 사용해야 한다. 다만 현재 LAB9 사용자 공유의 기본 profile은
-가용성과 지연 안정성을 우선해 `krb5`를 사용하고, `krb5i` 또는 `krb5p`는 요구사항과
-부하 검증을 거친 명시적 opt-in으로 취급한다.
+가용성과 지연 안정성을 우선해 `krb5`를 사용한다. `krb5i` 또는 `krb5p`는
+요구사항이 있고 부하 검증을 통과한 경로에서만 명시적으로 선택한다.
 
 ## 2. security flavor의 차이
 
@@ -74,8 +74,8 @@ D-state process 이름만 달라진 것이 아니라 NFS transport 적체 자체
 
 전환 전 mount probe의 10초는
 `cluster-monitor-exporter`의 command timeout 상한과 같다. 따라서 이 값은 정상
-응답이 10초 걸렸다는 의미보다 probe가 timeout 또는 기존 in-flight probe 상태에
-도달했다는 의미로 해석한다. 전환 후 최대 0.429초는 관측 구간에서 해당 상한에
+응답에 10초가 걸렸다기보다 probe가 timeout 또는 기존 in-flight probe 상태에
+도달했을 가능성이 크다. 전환 후 최대 0.429초는 관측 구간에서 10초 상한에
 도달하지 않았음을 보여준다.
 
 두 구간 모두 lease 만료가 없었다. 따라서 이번 비교에서 확인한 개선은 lease

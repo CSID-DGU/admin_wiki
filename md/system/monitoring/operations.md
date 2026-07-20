@@ -1,6 +1,6 @@
 # Monitoring 운영
 
-이 문서는 monitoring component를 배포하고 endpoint, metric, alert와 incident를
+이 문서는 monitoring 구성 요소를 배포하고 endpoint, metric, alert와 incident를
 점검하는 방법을 설명한다.
 
 ## 운영 원칙
@@ -176,7 +176,7 @@ FARM에서 필요한 Secret:
 
 - FARM Prometheus는 FARM 자원 metric과 FARM/LAB의
   `cluster-monitor-exporter`를 수집하고 중앙 alert rule을 평가한다.
-- FARM Alertmanager와 relay가 FARM/LAB 서비스 경보를 내부 notify API로 전달한다.
+- FARM Alertmanager와 relay는 FARM/LAB 서비스 경보를 내부 notify API로 보낸다.
 - LAB Prometheus는 LAB node/GPU metric을 독립 저장한다. LAB release의 Grafana와
   Alertmanager는 비활성화되어 있다.
 - FARM Grafana는 기본 FARM datasource와 `prometheus-lab` datasource를 함께
@@ -199,12 +199,12 @@ curl -fsS http://127.0.0.1:30070/metrics | head
 ```
 
 `:30070`의 `node-exporter`는 `kube-prometheus-stack`에서 배포하므로 앞의 두 custom
-exporter처럼 host systemd unit을 확인하지 않는다. endpoint가 없으면 해당 cluster의
+exporter처럼 host systemd unit을 확인하지 않는다. endpoint가 없으면 그 cluster의
 DaemonSet, Service와 node scheduling 상태를 확인한다.
 
 public health port는 서버 번호 `N`에 대해 `9000 + N*100 - 11`이다. 예를 들어
 FARM8은 `9789/healthz`다. 이 endpoint는 exporter process/collection freshness와
-외부 NAT 도달 경로를 확인하는 용도이지, 모든 dependency의 readiness를 대신하지
+외부 NAT 도달 경로를 확인하는 용도이며, 모든 dependency가 준비됐음을 보장하지는
 않는다.
 
 NFS GSS host-only API:
@@ -287,7 +287,7 @@ cat /var/lib/decs-nfs-gss/recovery.state
 2. ignored process count가 증가했는지 확인한다.
 3. PID의 cgroup container ID와 Docker inspect를 비교한다.
 4. DB cache refresh success와 cache age/entry를 확인한다.
-5. DB record와 실제 running container가 어긋났다면 user-lifecycle 소유 절차로
+5. DB record와 실제 running container가 어긋났다면 user-lifecycle에서 관리하는 절차로
    고친다.
 
 ### Container SSH/GPU alert
@@ -361,5 +361,5 @@ python3 prometheus/config/tests/test_slack_notify_relay.py
 - incident snapshot 보존 기간, 접근 권한과 개인정보 취급
 - 새 server/metric/dashboard 추가 checklist
 
-설계 문서에는 component 관계와 안전 경계를 유지하고, host별 현재 값과 일회성
+설계 문서에는 구성 요소의 관계와 안전 경계를 유지하고, host별 현재 값과 일회성
 incident 결과는 canonical config/runbook 또는 별도 evidence에 기록한다.

@@ -13,8 +13,8 @@
 | 문서 | 읽어야 하는 경우 | 핵심 내용 |
 | --- | --- | --- |
 | 현재 페이지 | 전체 범위와 문서 위치를 빠르게 확인할 때 | 목적, 원칙, 소유 경계 |
-| [설계](design.md) | 인증이 어느 서버와 프로세스를 거치는지 이해할 때 | keytab 발급, ticket 발급, RPCSEC_GSS, NAS 권한 판정, 설정 근거 |
-| [운영](operations.md) | 계정/컨테이너 생성, timer 확인, mount·KVNO 장애를 처리할 때 | 명령, 점검표, 모니터링 코드, 수동 repair/rotation |
+| [설계](design.md) | 인증이 어느 서버와 프로세스를 거치는지 이해할 때 | FARM/LAB NFS version·principal 차이, keytab 발급, RPCSEC_GSS, 권한 판정 |
+| [운영](operations.md) | 계정/컨테이너 생성, timer 확인, mount·KVNO 장애를 처리할 때 | Synology/Linux storage 차이, 명령, 점검표, 수동 repair/rotation |
 | [디버깅 로그](debugging/index.md) | 재현된 장애의 원인과 실험 조건·명령·증거를 확인할 때 | 장애별 증상, 가설, 재현, 판정, 복구·예방 |
 
 ## 한눈에 보는 구조

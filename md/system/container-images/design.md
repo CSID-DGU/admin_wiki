@@ -84,7 +84,7 @@ root 작업을 최소화한다. 사용자 홈의 기존 비밀번호와 VNC pass
 공유 기능과 identity 격리를 함께 유지한다.
 
 Kerberos keytab과 ccache를 분리한 이유와 container credential 경계는
-[Kerberos/NFS의 keytab과 ccache 모델](../kerberos-nfs/design.md#5-keytab-ccache)을 따른다.
+[Kerberos/NFS의 keytab과 ccache 모델](../kerberos-nfs/design.md#6-keytab-ccache)을 따른다.
 
 ### 3.5 GPU 호환성 표시와 강제 모드
 

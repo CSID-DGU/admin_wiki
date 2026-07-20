@@ -140,7 +140,7 @@ systemctl --user status check-nfs-keytab@farm.service --no-pager
 ```
 
 checker는 drift를 고치지 않는다. KVNO history, repair와 rotation은
-[Kerberos/NFS 운영](../kerberos-nfs/operations.md#7-nas-service-account-kvno)을
+[Kerberos/NFS 운영](../kerberos-nfs/operations.md#8-farm-nas-service-account-kvno)을
 따른다.
 
 ## 5. Prometheus/Alertmanager 배포

@@ -1,8 +1,8 @@
 # NFSv4.1 session slot 고착 해결 및 운영 적용
 
 > 상태: 2026-07-21~22 LAB storage의 OS와 kernel을 교체하고 Kerberos/NFS
-> 구성을 복원했다. 2026-07-22 운영 상태 점검에서 storage의 NFS·Kerberos와
-> LAB1~LAB10의 NFSv4.1 mount가 정상인 것을 확인했다.
+> 구성을 복원했다. 2026-07-23 LAB8 운영 mount에서 `rpc.idmapd`를 15초
+> 지연한 직접 시험에서도 session slot이 영구 고착되지 않았다.
 
 이 문서는 [NFSv4.1 session slot 고착](nfs-v41-session-slot-stuck.md)에서 확인한
 server-side kernel 문제를 실제 LAB storage에서 어떻게 제거하고 운영 구성을
@@ -31,8 +31,9 @@ server-side kernel 문제를 실제 LAB storage에서 어떻게 제거하고 운
 kernel이다.
 
 여기서 `250.el10`은 upstream Linux `6.12.250`을 뜻하지 않고 CentOS/RHEL 계열의
-package release 번호다. 운영 storage에는 다시 fault를 주입하지 않았으며, 해결
-판정은 격리 VM 회귀 결과와 교체 후 실제 서비스 상태를 함께 근거로 한다.
+package release 번호다. 초기 운영 적용은 격리 VM 회귀 결과와 교체 후 실제
+서비스 상태를 근거로 판정했고, 2026-07-23에는 승인된 15초 지연 시험을 LAB8
+운영 mount에서 한 번 추가해 현재 kernel에서도 영구 slot 고착이 없음을 확인했다.
 
 ## 2. 서버별 역할
 
@@ -41,7 +42,8 @@ package release 번호다. 운영 storage에는 다시 fault를 주입하지 않
 | `lab-storage.lab.decs.internal` (`100.100.100.100`) | kernel 문제를 제거한 NFS server. OS, network, data mount, SSSD, keytab, gssproxy와 export를 복원한 대상 |
 | LAB2 / `100.100.100.102` | 운영 Samba AD DC, DNS/KDC. storage machine account와 NFS service principal의 원본 |
 | LAB1~LAB10 | NFS client. 각 서버의 기존 `/etc/fstab`으로 `/home/takoN/share`를 다시 mount |
-| LAB8의 격리 VM | kernel 회귀 시험 전용. 운영 storage 변경 후 검증에는 사용하지 않음 |
+| LAB8 host | `/home/tako8/share` 운영 mount에서 15초 idmap 지연을 직접 검증한 client |
+| LAB8의 격리 VM | kernel matrix와 장시간 지연 회귀 시험 전용 |
 
 keytab은 예전 파일을 backup해서 되돌리지 않았다. LAB2 AD에 등록된 storage
 machine account와 SPN을 기준으로 새 keytab을 만든 뒤 `lab-storage`의
@@ -150,6 +152,63 @@ local 상태 재확인에서는 사라졌다. 같은 시점에 NFS RPC task, tra
 ForeChannel waiter와 NFS D-state가 모두 0이었고 recovery 상태도 `healthy`였다.
 이를 지속된 session slot 고착으로 판정하지 않았다.
 
+### 3.6 LAB8 운영 mount: 15초 `rpc.idmapd` 지연 시험
+
+> **과거 실행 기록:** 아래 내용은 2026-07-23 00:03 KST에 안전장치를 준비한 뒤
+> 한 번 수행한 운영 검증 결과다. 일반 점검 절차가 아니며 이 문서만 보고 운영
+> storage에서 반복 실행하지 않는다.
+
+격리 VM 결과와 별도로 현재 운영 중인 storage kernel에서 같은 idmap 지연 경로가
+영구 slot 고착을 만들지 않는지 직접 확인했다.
+
+| 항목 | 시험 조건 |
+| --- | --- |
+| NFS client | LAB8 host의 운영 mount `/home/tako8/share` |
+| mount | NFSv4.1, `sec=krb5`, `hard` |
+| NFS server | `lab-storage.lab.decs.internal` |
+| storage kernel | `6.12.0-250.el10.x86_64` |
+| workload | 시험 container 내부에서 새 GID `424242`로 test file에 `chown` |
+| idmap fault | storage의 `rpc.idmapd` 응답을 15초 지연 |
+| 안전장치 | 15초 자동 재개 timer와 독립적인 30초 이중 자동 재개 timer |
+| test file | container 내부 `/nfs-test/lab8krbtest/lab8-op-slot15-20260722T150231Z/chown-target` |
+
+workload는 2026-07-23 00:03:13 KST에 시작됐다. 00:03:20에 forensics가 보존한
+snapshot에서는 `chown`이 8초 동안 다음 정상적인 지연 경로에 있었다.
+
+```text
+chown
+  -> nfs4_proc_setattr
+  -> nfs4_call_sync_sequence
+  -> rpc_wait_bit_killable
+```
+
+15초 자동 재개 시점인 00:03:28에 worker는 더 이상 D-state에 남지 않고 종료됐다.
+원래 `chown`의 application 결과는 `EINVAL`이었다.
+
+```text
+/bin/chown: changing group of '.../chown-target': Invalid argument
+```
+
+이 `EINVAL`은 “`chown` 성공”을 의미하지 않는다. 하지만 취약 kernel에서처럼
+동일 요청이 `INUSE` slot에 계속 걸려 영구 D-state로 남지도 않았다. 이후 test
+file 삭제 RPC가 성공했고 client reboot, unmount, NFS service restart 없이
+정상 상태로 돌아왔다. 후속 확인 결과는 다음과 같았다.
+
+| 판정 항목 | 결과 |
+| --- | --- |
+| 지속 NFS D-state | 0 |
+| NFS RPC task | 0 |
+| transport pending | 0 |
+| ForeChannel waiter | 0 |
+| `lease_expired` | 0 |
+| 후속 NFS 작업 | test file 삭제 성공 |
+
+따라서 이 시험은 **운영 kernel `6.12.0-250.el10`에서 15초 idmap 지연이 일시적인
+RPC 대기를 만들 수는 있지만 NFSv4.1 session slot을 영구 고착시키지는 않았음**을
+보여준다. 원래 operation의 application 결과와 session recovery 판정은 분리해야
+한다. 보존된 LAB8 snapshot은
+`/var/lib/decs-nfs-forensics/incidents/20260722T150319Z-nfs_d_state`다.
+
 ## 4. 해결 판정 기준
 
 이번 조치는 다음을 모두 만족해 운영 적용 완료로 판정했다.
@@ -164,6 +223,8 @@ ForeChannel waiter와 NFS D-state가 모두 0이었고 recovery 상태도 `healt
 6. Kerberos NFS export가 LAB1~LAB10 storage망 주소에 열려 있다.
 7. LAB1~LAB10에서 기존 fstab의 NFSv4.1 `sec=krb5` mount가 확인된다.
 8. 지속되는 NFS D-state, RPC task, ForeChannel waiter 또는 lease expiry가 없다.
+9. LAB8 운영 mount의 15초 idmap 지연 후에도 workload가 영구 D-state에 남지 않고
+   후속 NFS RPC가 성공한다.
 
 이 판정은 “2026-06-29 LAB5 장애의 최초 원인이 반드시 이 bug였다”는 뜻은
 아니다. 당시 시작 시점의 storage trace가 없어 과거 장애 원인은 여전히 강한
@@ -242,8 +303,8 @@ process를 더 만들 수 있다.
 2. `lab-storage`가 실수로 구형 kernel로 부팅되지 않았는지 확인한다.
 3. 자동 remount, 강제 unmount, `rpc-gssd` 반복 restart를 중단한다.
 4. storage의 network, nfsd, gssproxy와 session trace를 함께 확인한다.
-5. 운영 storage의 `rpc.idmapd`를 `SIGSTOP`해서 재현하지 않는다. 재실험은 LAB8의
-   격리 VM harness에서만 수행한다.
+5. 2026-07-23의 승인된 단일 시험을 일반 점검처럼 반복하지 않는다. 추가 재실험은
+   LAB8의 격리 VM harness에서 수행한다.
 6. client reboot는 고착된 client state를 지우는 복구 수단일 뿐 근본 해결로
    기록하지 않는다.
 

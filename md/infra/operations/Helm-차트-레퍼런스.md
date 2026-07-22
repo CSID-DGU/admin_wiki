@@ -124,7 +124,7 @@ config-server가 조작하는 대상들의 주소이다. 사용자 홈이 어느
 | `nas.ssh.host` / `port` / `user` / `keyPath` | NAS 홈 생성용 SSH 접속 정보 (키 실체는 Secret, 1.4절) | `""` |
 | `farm.ssh.user` / `keyPath` / `nodes` | farm 노드 keytab 배포용 SSH 정보와 대상 노드 목록 | `""` / `[]` |
 | `farm.adSsh.user` / `keyPath` / `nodes` | AD/DC(krb5 principal 발급) 노드용 SSH 정보 | `""` / `[]` |
-| `farm.homeMountRoot` | 노드 호스트에 마운트된 홈 루트 — 사용자 Pod `/home`의 hostPath 원천이다 ([시스템 아키텍처](../design/시스템-아키텍처.md) 7.5절) | `""` |
+| `farm.homeMountRoot` | 노드 호스트에 마운트된 홈 루트 — 사용자 Pod `/home`의 hostPath 원천이다 ([시스템 아키텍처](../design/시스템-아키텍처.md)의 사용자 Pod 그림) | `""` |
 
 #### security / krb5 — 권한과 인증
 
@@ -138,7 +138,7 @@ config-server가 조작하는 대상들의 주소이다. 사용자 홈이 어느
 
 #### db / redis — 상태 저장소
 
-NodePort 배정 장부는 MySQL에, 이미지 저장/로드 상태는 Redis에 둔다([시스템 아키텍처](../design/시스템-아키텍처.md) 5절).
+NodePort 배정 장부는 MySQL에, 이미지 저장/로드 상태는 Redis에 둔다([시스템 아키텍처](../design/시스템-아키텍처.md)의 NodePort 배정 방식).
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
@@ -196,7 +196,7 @@ helm rollback containerssh-config-server -n ailab-infra
 
 ## 2. pvc-image-chart/ — 이미지 저장소 (현행)
 
-사용자 컨테이너 이미지를 tar로 보관하는 공용 PVC `pvc-image-store`를 배포하는 작은 차트이다. **현행 구조에서 이 PVC를 마운트하는 것은 config-server뿐이다**(`/image-store` — 사용자별 이미지 저장/로드 경로는 `/image-store/images/user-<username>.tar`). 과거에는 게스트 Pod에도 붙였지만 마운트 실패 문제로 사용자 Pod 스펙에서는 제거됐다. 사용자별 홈 PVC가 폐기된 뒤에도 **image-store만 PVC로 남았다**([시스템 아키텍처](../design/시스템-아키텍처.md) 6절).
+사용자 컨테이너 이미지를 tar로 보관하는 공용 PVC `pvc-image-store`를 배포하는 작은 차트이다. **현행 구조에서 이 PVC를 마운트하는 것은 config-server뿐이다**(`/image-store` — 사용자별 이미지 저장/로드 경로는 `/image-store/images/user-<username>.tar`). 과거에는 게스트 Pod에도 붙였지만 마운트 실패 문제로 사용자 Pod 스펙에서는 제거됐다. 사용자별 홈 PVC가 폐기된 뒤에도 **image-store만 PVC로 남았다**([시스템 아키텍처](../design/시스템-아키텍처.md)의 홈 디렉터리와 이미지 저장소).
 
 | 키/장치 | 값 | 의미 |
 |---------|-----|------|
@@ -209,7 +209,7 @@ helm rollback containerssh-config-server -n ailab-infra
 
 ## 3. pvc-chart/ (폐기)
 
-사용자/그룹별 홈 PVC를 동적 생성하던 Helm 차트(`containerssh-pvc-chart`)의 잔재이다. 개별 사용자 PVC 방식은 26-07-02에 폐기되어 현행 흐름에서는 사용하지 않는다(현행은 NFS 직접 마운트 — [시스템 아키텍처](../design/시스템-아키텍처.md) 6절 참조).
+사용자/그룹별 홈 PVC를 동적 생성하던 Helm 차트(`containerssh-pvc-chart`)의 잔재이다. 개별 사용자 PVC 방식은 26-07-02에 폐기되어 현행 흐름에서는 사용하지 않는다(현행은 NFS 직접 마운트 — [시스템 아키텍처](../design/시스템-아키텍처.md)의 홈 디렉터리와 이미지 저장소 참조).
 
 이 디렉터리는 현재 원본 저장소에 남아 있지만 현행 배포 경로에는 사용하지 않는 레거시이다. `Chart.yaml`, `values.yaml`, `README.md`, StorageClass manifest 두 장(`sc-nfs-nas-v3-resizable.yaml`, `old-sc.yaml`)은 과거 클러스터 상태를 해석할 때만 참고한다. 신규 배포나 복구에는 이 차트를 사용하지 않고, 홈은 NFS 직접 마운트와 `pvc-image-chart/`를 기준으로 한다.
 

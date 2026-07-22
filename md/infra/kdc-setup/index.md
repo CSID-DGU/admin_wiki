@@ -1,22 +1,20 @@
 # kdc-setup
 
-> 역할: config-server가 FARM AD 사용자 신원, 사용자 keytab, 선택 노드의 ccache,
-> Kerberos NFS 홈을 연결하는 인프라 경계를 설명한다.
+> config-server가 FARM AD 계정, 사용자 keytab, 노드 ccache, Kerberos NFS 홈에 쓰는 설정과 파일 위치를 정리한다.
 
-`kdc-setup`은 Kubernetes의 config-server 경로를 위한 문서다. 범용 NFS service
-keytab, NAS KVNO, 다른 컨테이너 런타임의 운영 기준은
+`kdc-setup`은 config-server가 사용자 Pod를 만들 때 쓰는 Kerberos 설정 문서다. NAS service keytab, NAS KVNO, 다른 컨테이너 환경의 Kerberos 설정은
 [System Kerberos/NFS](../../system/kerberos-nfs/index.md)에서 다룬다.
 
-## 문서 구성
+## 문서 안내
 
 | 문서 | 읽어야 하는 경우 | 핵심 내용 |
 | --- | --- | --- |
-| 현재 페이지 | 전체 역할과 문서 위치를 빠르게 확인할 때 | 책임 범위, 전환 상태, 문서 경계 |
-| [설계](design.md) | 계정·Pod·자격 증명 흐름을 이해할 때 | AD, Secret, 선택 노드, ccache, NFS의 관계 |
-| [운영](operations.md) | 점검·장애 대응·노드 추가가 필요할 때 | 안전한 점검 순서, 사용자 생명주기, 복구 기준 |
-| [설정](config.md) | 배포 설정의 소유자와 변경 방법을 확인할 때 | Helm·CI·Kubernetes Secret의 주입 경로와 검증 |
+| 현재 페이지 | 문서의 역할을 먼저 볼 때 | AD, Secret, 노드, Pod가 이어지는 순서 |
+| [설계](design.md) | 계정과 Pod를 만들 때 어떤 파일이 필요한지 볼 때 | AD, Secret, 선택 노드, ccache, NFS |
+| [운영](operations.md) | 점검, 장애 대응, 노드 추가를 할 때 | 확인 순서와 명령 |
+| [설정](config.md) | Helm, CI, Secret 설정을 바꿀 때 | 값이 들어가는 곳과 확인 방법 |
 
-## 한눈에 보는 흐름
+## 계정부터 Pod까지의 순서
 
 ```text
 승인 시스템
@@ -27,24 +25,21 @@ keytab, NAS KVNO, 다른 컨테이너 런타임의 운영 기준은
       -> 사용자 Pod: keytab 없이 ccache와 FARM 홈을 사용
 ```
 
-## 책임 경계
+## 누가 무엇을 하나
 
-- config-server는 계정·Pod 수명주기와 제한된 AD·노드 관리 요청을 조정한다.
-- AD는 사용자, 전용 그룹, RFC2307 UID/GID와 사용자 keytab을 제공한다.
-- 선택 노드는 keytab을 root 전용으로 보관하고 사용자 ccache를 갱신한다.
-- Pod는 장기 자격 증명인 keytab을 받지 않고 ccache만 사용한다.
-- NAS 홈 생성·삭제는 Kerberos 관리 채널과 분리된 경로가 담당한다.
-- 비밀 값과 변경 이력은 관리자 전용 시크릿·배포 설정 문서에서 별도로 관리한다.
+- config-server는 계정과 Pod 생성·삭제를 요청하고 AD와 노드 관리 명령을 실행한다.
+- AD는 사용자, 전용 그룹, RFC2307 UID/GID, 사용자 keytab을 만든다.
+- 선택된 노드는 keytab을 root만 읽을 수 있는 경로에 두고 사용자 ccache를 갱신한다.
+- Pod는 keytab을 받지 않고 ccache만 사용한다.
+- NAS 홈 디렉터리 생성·삭제는 NAS 관리 경로에서 처리한다.
+- 비밀 값과 변경 이력은 관리자 전용 시크릿과 배포 설정 문서에만 둔다.
 
-## 전환 상태
+## 이전 Pod 처리
 
-신규 계정과 신규 Pod의 기준은 FARM AD 경로다. 전환 전에 생성된 Pod는 재생성
-전까지 이전 Realm이나 이전 홈 마운트를 유지할 수 있다. 이전 Pod를 새 경로의
-파일·timer로 덮어쓰지 말고, Pod 환경과 hostPath를 확인한 뒤 재생성 계획으로
-전환한다.
+새 계정과 새 Pod는 FARM AD 설정을 사용한다. 전환 전에 만든 Pod는 다시 만들기 전까지 이전 Realm이나 홈 마운트를 쓸 수 있다. 이전 Pod에 새 keytab이나 timer 파일을 덮어쓰지 말고, 현재 Pod의 환경 변수와 hostPath를 확인한 뒤 다시 만든다.
 
 ## 관련 문서
 
-- [System Kerberos/NFS](../../system/kerberos-nfs/index.md): 공통 Kerberos NFS와 NAS service 경계
-- [System container-images](../../system/container-images/index.md): 이미지의 ccache 소비 경계
-- [설정](config.md): config-server 배포 설정의 주입·검증 기준
+- [System Kerberos/NFS](../../system/kerberos-nfs/index.md): NAS와 NFS의 Kerberos 설정
+- [System container-images](../../system/container-images/index.md): 이미지가 ccache를 쓰는 방식
+- [설정](config.md): config-server 배포 설정과 확인 방법

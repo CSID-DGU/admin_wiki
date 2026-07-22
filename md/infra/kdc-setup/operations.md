@@ -52,7 +52,7 @@ sudo env KRB5CCNAME="FILE:/run/user/$target_uid/krb5cc_ailab" klist
 keytab·환경 파일은 root 소유 `0400`, ccache는 대상 UID/GID 소유 `0600`이어야
 한다. `klist -k`로 keytab 내용을 출력하지 않는다.
 
-### NFS와 머신 ticket
+### NFS와 노드 Kerberos ticket
 
 ```bash
 systemctl is-active rpc-gssd

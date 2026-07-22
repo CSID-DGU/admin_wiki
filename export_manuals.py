@@ -105,8 +105,12 @@ MANUALS = (
     Manual(
         "user-lifecycle",
         "user-lifecycle",
-        MD_DIR / "system" / "user-lifecycle.md",
+        MD_DIR / "system" / "user-lifecycle" / "index.md",
         "system/user-lifecycle-manual.pdf",
+        (
+            MD_DIR / "system" / "user-lifecycle" / "design.md",
+            MD_DIR / "system" / "user-lifecycle" / "operations.md",
+        ),
     ),
 )
 

@@ -6,9 +6,10 @@
 
 ## 1. 책임 범위
 
-`container-images`는 여러 CUDA/TensorFlow 조합을 동일한 사용자 경험으로
-제공한다. 이미지가 책임지는 것은 OS·CUDA·Python/Jupyter 패키지와 컨테이너
-안의 계정, SSH, 선택적 VNC, Kerberos ccache 사용 환경이다.
+`container-images`는 CUDA/TensorFlow 조합별로 이미지를 만들되, 그 안의
+구성(계정, SSH, Jupyter 등)은 모든 이미지에서 동일하게 유지한다. 이미지가
+책임지는 것은 OS·CUDA·Python/Jupyter 패키지와 컨테이너
+안의 계정, SSH, VNC(선택), Kerberos ccache 사용 환경이다.
 
 이미지는 UID/GID를 결정하지 않는다. 사용자 identity, 포트, 홈 디렉터리와
 Kerberos keytab은 `user-lifecycle`와 호스트가 관리한다. 이 경계를 지켜야

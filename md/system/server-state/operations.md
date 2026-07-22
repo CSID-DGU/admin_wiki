@@ -2,38 +2,91 @@
 
 > [개요](index.md) · [설계](design.md)
 
-## 1. 기존 서버 점검 흐름
+## 1. 운영 서버 점검 흐름
 
-기존 FARM/LAB 서버에서는 `existing-host-drift` profile을 사용한다.
+### 1.1 `existing-host-drift`란?
 
-```text
-공용 inventory에서 서버 선택
-  -> 공통 기준의 점검 항목 생성
-  -> 서버별 읽기 전용 명령 확인
-  -> 차이가 있는 항목의 복구 계획 확인
-  -> 담당 관리자가 승인한 playbook 실행
+`existing-host-drift`는 `config/profiles.yml`에 정의된 **점검 항목
+묶음의 이름**이다. 그 안에는 접속 확인(baseline-host)부터 os-common,
+docker-engine, nvidia-driver, nvidia-container-runtime, kubernetes-node,
+network-tuning, kerberos-nfs-client, monitoring-exporters,
+user-container-host까지 10개 영역이 순서대로 들어 있다. "운영 중인
+FARM/LAB 서버가 이 10개 영역의 공통 기준을 다 지키고 있는지 확인하는
+점검표"라고 보면 된다.
+
+실제로 실행하는 스크립트는 `./server-state/bin/server-state`이고, 내부
+동작은 `script/cli.py`가 맡는다. `cli.py`가 `config/profiles.yml`을
+읽어서 `existing-host-drift`에 묶인 10개 영역의 점검·복구 항목을 순서대로
+꺼내 쓰는 구조다.
+
+### 1.2 "명령어를 만들어서 보여준다"는 게 무슨 뜻인가
+
+`profiles.yml`에는 완성된 명령이 아니라, `{host}`나 `{repo}` 같은
+자리표시자가 들어간 **명령 틀**만 적혀 있다. 예를 들어 `os-common`
+영역의 점검 항목 하나는 실제로 다음과 같이 정의되어 있다.
+
+```yaml
+# config/profiles.yml (os-common 영역의 점검 항목 중 하나)
+command: "ANSIBLE_CONFIG={repo}/monitoring/ansible_playbook/ansible.cfg \
+  ansible {host} -b -m shell -a '. /etc/os-release && test \"$ID\" = ubuntu ...'"
 ```
 
-전체 서버 또는 특정 서버의 점검 항목을 확인하는 명령은 다음과 같다.
+`check` 명령을 실행하면 `script/cli.py`가 이 틀의 `{host}`를 실제 서버
+이름(`farm8`)으로, `{repo}`를 실제 저장소 경로로 바꿔 채운 뒤, 그 결과
+문자열을 화면에 출력만 한다. 예시:
+
+```text
+$ ./server-state/bin/server-state check --hosts farm8 --profile os-common
+farm8 [os-common] ubuntu-release: DRY-RUN
+  detail: ANSIBLE_CONFIG=/home/jy/server_manage/monitoring/ansible_playbook/ansible.cfg ansible farm8 -b -m shell -a '. /etc/os-release && test "$ID" = ubuntu && printf "%s\n" "$VERSION_ID"'
+```
+
+`detail:` 뒤에 나온 문자열이 "만들어서 보여준 명령"이다. `server-state`는
+자리표시자를 채운 문자열을 Python에서 만들어 출력하기만 할 뿐, 이 명령을
+실제로 실행(예: `subprocess` 호출)하지 않는다. 서버 상태를 실제로
+확인하려면 관리자가 이 문자열을 복사해서 직접 실행해야 한다.
+
+### 1.3 전체 점검 흐름
+
+아래 5단계 중 실제로 서버 상태가 바뀌는 건 5번뿐이고, 그마저도 관리자가
+직접 실행해야만 일어난다.
+
+1. **점검 대상 서버 선택** — 공용 inventory(3절 "공용 inventory와 서버
+   목록" 참고)에서 `--hosts` 조건(`all`, `farm8` 등)에 맞는 서버를
+   로컬에서 골라낸다. 서버에 접속하지 않는다.
+2. **점검 항목 생성** — `config/profiles.yml`의 `existing-host-drift`
+   profile을 서버별 변수(hostname, IP 등)로 채워 로컬에서 명령 목록을
+   만든다. 서버에 접속하지 않는다.
+3. **점검 명령을 DRY-RUN으로 출력** — 서버별로 실행하면 될 읽기 전용
+   Ansible 명령을 화면에 보여줄 뿐, 실행하거나 서버에 접속하지 않는다.
+4. **복구 명령을 DRY-RUN으로 출력** — 3번에서 차이가 발견된 항목에 한해
+   복구용 Ansible 명령(`--check --diff` 포함)을 보여준다. 역시 실행하지
+   않는다.
+5. **관리자가 검토 후 직접 실행** — 3, 4번에서 출력된 명령을 관리자가
+   그대로 복사해 실행해야 서버 상태가 바뀐다. `server-state`는 이 단계를
+   대신 실행하지 않는다.
+
+실제 명령은 다음과 같다. 1~3번 단계가 `check` 한 번으로 함께 실행된다.
 
 ```bash
 cd /home/jy/server_manage
 
+# 전체 서버의 점검 항목 확인
 ./server-state/bin/server-state check \
   --hosts all \
   --profile existing-host-drift
 
+# 특정 서버(farm8)만 확인
 ./server-state/bin/server-state check \
   --hosts farm8 \
   --profile existing-host-drift
 ```
 
-여기서 주의할 점은 현재 `check`가 실제 서버에 접속하여 결과를 수집하는
-명령은 아니라는 것이다. 서버별로 실행할 읽기 전용 Ansible 명령을
-`DRY-RUN`으로 출력한다. 따라서 현재 단계에서는 관리자가 출력된 명령을
-실행하거나, 별도 자동화가 그 명령을 실행해야 실제 상태를 알 수 있다.
+두 명령 모두 서버에 접속하거나 서버 상태를 바꾸지 않는다. 화면에 출력된
+`DRY-RUN` 명령을 관리자가 직접 실행하거나, 별도 자동화가 그 명령을
+실행하도록 연결해야 실제 점검(3번 단계 이후)이 이루어진다.
 
-복구에 사용할 명령도 실행하지 않고 먼저 확인할 수 있다.
+4번 단계, 즉 차이가 있을 때 사용할 복구 명령만 먼저 볼 수도 있다.
 
 ```bash
 ./server-state/bin/server-state plan \
@@ -43,7 +96,7 @@ cd /home/jy/server_manage
 
 ## 2. 신규 서버 구축 흐름
 
-새 서버를 기존 서버와 같은 상태로 만드는 것이 `new-host-bootstrap`의
+새 서버를 운영 서버와 같은 상태로 만드는 것이 `new-host-bootstrap`의
 목적이다. 다만 아무것도 설치되지 않은 장비의 전원 투입부터 전부 처리하는
 형태는 아니다. 다음 조건은 먼저 준비되어 있어야 한다.
 
@@ -87,11 +140,22 @@ Kerberos/NFS의 상세 점검과 복구 순서는
 
 `apply --execute`는 아직 구현되지 않았으며 실행하면 오류로 중단된다.
 
-## 3. 공용 서버 목록
+## 3. 공용 inventory와 서버 목록
 
-기본 inventory는 `user-lifecycle/server_info/servers.jsonl`이다.
-`server-state`가 별도 서버 목록을 만들지 않는 이유는 IP, SSH port와 논리
-server ID를 두 군데에서 관리하여 서로 달라지는 문제를 막기 위해서다.
+기본 inventory는 `user-lifecycle/server_info/servers.jsonl`이다. 서버 한
+대당 한 줄(JSON)로 host 이름, `server_id`, domain(FARM/LAB), SSH 접속 정보
+(`ansible_host`, `ansible_port`, `ansible_user`), 네트워크 인터페이스, OS
+버전 등을 담는다. 이 파일은 사람이 손으로 쓰지 않는다.
+`user-lifecycle/server_info/generate_servers_jsonl.py`가 Ansible `setup`
+facts(각 서버에서 실제로 수집한 정보)와 고정 topology 정보를 합쳐서 만든
+결과물이다.
+
+이 파일은 원래 `user-lifecycle`(사용자·container 생성)이 관리하던 서버
+목록이다. `server-state`는 점검할 서버 목록이 필요할 때 이 파일을 그대로
+읽어서 쓰고("공용" inventory), 자신만의 목록을 별도로 만들지 않는다. IP,
+SSH port와 논리 server ID를 두 군데에서 따로 관리하면 서로 달라지는
+문제가 생기기 때문이다. `server-state`의 `script/inventory.py`가 이
+파일을 읽어서 `--hosts` selector에 맞는 서버를 골라낸다.
 
 ```bash
 ./server-state/bin/server-state list-hosts --hosts all

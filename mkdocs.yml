@@ -89,7 +89,10 @@ nav:
           - 개요: system/container-images/index.md
           - 설계: system/container-images/design.md
           - 운영: system/container-images/operations.md
-      - user-lifecycle: system/user-lifecycle.md
+      - user-lifecycle:
+          - 개요: system/user-lifecycle/index.md
+          - 설계: system/user-lifecycle/design.md
+          - 운영: system/user-lifecycle/operations.md
       - server-state:
           - 개요: system/server-state/index.md
           - 설계: system/server-state/design.md

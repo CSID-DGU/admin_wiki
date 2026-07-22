@@ -1,6 +1,6 @@
 # kdc-setup
 
-> config-server가 FARM AD 계정, 사용자 keytab, 노드 ccache, Kerberos NFS 홈을 어떻게 연결하는지 설명한다.
+> config-server가 FARM AD 계정, 사용자 keytab, 노드 ccache, Kerberos NFS 홈에 쓰는 설정과 파일 위치를 정리한다.
 
 `kdc-setup`은 config-server가 사용자 Pod를 만들 때 쓰는 Kerberos 설정 문서다. NAS service keytab, NAS KVNO, 다른 컨테이너 환경의 Kerberos 설정은
 [System Kerberos/NFS](../../system/kerberos-nfs/index.md)에서 다룬다.

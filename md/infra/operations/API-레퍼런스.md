@@ -12,7 +12,7 @@ config-server의 HTTP API 명세다. `main.py`의 Flask route와 `/accounts` blu
 |------|-----|
 | Base URL (운영) | `http://210.94.179.18:30082` (namespace `ailab-infra`, Service `containerssh-config-service`) |
 | 요청/응답 형식 | JSON (`Content-Type: application/json`) |
-| 인증 | **없음** — 내부망 제한이 전제 조건이다 |
+| 인증 | **없음** — 승인된 운영망 밖으로 노출하지 않는다. 현재 Helm 차트에는 NetworkPolicy가 없으므로 클러스터의 별도 접근 제어가 있는지 확인한다. |
 | 에러 응답 형태 | Pod 계열은 `infra_error()` 포맷(`step`, `error`, `detail`, `progress` 등), 계정 계열은 `{"error": "..."}` 단순 포맷 |
 
 호출 주체는 admin_be(Spring Boot WAS)의 서비스 클래스이다. admin_be 실코드 기준으로 확인한 매핑이다.
@@ -70,7 +70,8 @@ config-server의 HTTP API 명세다. `main.py`의 Flask route와 `/accounts` blu
 7. Pod 스펙을 조립한다(`build_pod_spec`). 이 단계 안에서 아래 일이 함께 일어난다.
    - `/kube_share` 계정 파일 확인 — **passwd에 사용자가 없으면 실패**한다(계정 생성이 선행 조건).
    - 저장된 사용자 이미지(`/image-store/images/user-<username>.tar`)가 있으면 로드하고, 없으면 WAS가 준 base 이미지를 쓴다.
-   - 기본 포트 22(ssh), 8888(jupyter), 추가 포트에 NodePort를 배정한다. DB에서 30000~32767 중 빈 번호를 고르고 `SELECT ... FOR UPDATE`로 동시에 같은 번호를 고르지 못하게 한다.
+   - 기본 포트 22(ssh), 8888(jupyter), 추가 포트에 NodePort를 배정한다. DB에서 30000~32767 중 빈 번호를 고르고 `SELECT ... FOR UPDATE`로 동시에 같은 번호를 고르지 못하게 한다. 클러스터 전체 Service 조회에 실패하면 DB 기록만으로 배정하므로, 이미 다른 Service가 쓰는 포트를 고르면 뒤의 Service 생성이 실패할 수 있다.
+   - 추가 포트에 내부 포트 `6080`이 있거나 용도가 `novnc`, `vnc`이면 Pod 환경 변수에 `ENABLE_VNC=true`를 넣는다.
    - Kerberos 설정이 켜져 있으면 선택된 FARM 노드에 인증 파일과 갱신 설정을 준비한다. 실패하면 여기서 중단된다. 점검과 복구는 [kdc-setup 운영 문서](../kdc-setup/operations.md)를 따른다.
    - NFS user-share를 `/home`에 직접 마운트하도록 볼륨을 구성한다. 사용자 Pod의 `imagePullPolicy`는 `IfNotPresent`이므로 노드에 이미지가 없을 때만 레지스트리에서 가져온다.
 8. Kubernetes에 Pod를 생성한다.
@@ -525,9 +526,9 @@ sequenceDiagram
 
 ---
 
-## 14. 호출 전에 알아둘 점
+## 14. 호출할 때 확인할 점
 
-- 위 12개 API는 요청자를 확인하지 않는다. 내부망 제한과 NetworkPolicy가 적용되어 있어야 한다.
+- 위 12개 API는 요청자를 확인하지 않는다. 승인된 운영망 밖에서 호출할 수 없게 해야 한다. 현재 Helm 차트는 NetworkPolicy를 만들지 않으므로, 네트워크 접근 제어는 클러스터 설정에서 따로 확인한다.
 - `create-pod`를 같은 사용자에게 여러 번 호출하면 Pod와 Service가 여러 개 만들어질 수 있다. 사용자 단위 중복 호출은 admin_be가 막아야 한다.
 - `POST /delete-pod`(Pod, Service, 포트)와 `DELETE /accounts/users`(계정, 홈, principal)를 모두 호출해야 관련 자원이 남지 않는다.
 - 8888 포트도 다른 포트처럼 NodePort Service로 열린다. 게스트 이미지의 Jupyter에 인증이 없으면 외부에서 접속할 수 있으므로 내부망에서만 접근하게 해야 한다.

@@ -12,7 +12,7 @@
 | 동작 방식 | [시스템 아키텍처](design/시스템-아키텍처.md) | 계정, Pod, GPU 노드, 포트가 만들어지는 순서를 볼 때 |
 | 배경 지식 | [기초 개념](design/기초-개념.md) | Kubernetes, NFS, 네트워크 용어를 확인할 때 |
 | 포트 DB | [데이터베이스](design/데이터베이스.md) | NodePort 기록과 DB 복구 방법을 확인할 때 |
-| 개발 시작 | [시작 가이드](operations/시작.md) | 로컬 실행, 브랜치, 배포 방법을 확인할 때 |
+| 개발 시작 | [처음 작업할 때](operations/시작.md) | 로컬 실행, 브랜치, 배포 방법을 확인할 때 |
 | 운영 | [운영 매뉴얼](operations/운영-매뉴얼.md) | 점검, 배포, 장애 대응을 할 때 |
 | API | [API 레퍼런스](operations/API-레퍼런스.md) | config-server 요청과 응답을 확인할 때 |
 | Helm | [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md) | Helm 값과 차트 파일을 바꿀 때 |

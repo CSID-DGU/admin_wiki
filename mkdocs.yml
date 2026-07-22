@@ -83,7 +83,6 @@ nav:
           - 시스템 아키텍처: infra/design/시스템-아키텍처.md
           - 기초 개념: infra/design/기초-개념.md
           - 데이터베이스: infra/design/데이터베이스.md
-          - 배포본과 레거시 경계: infra/design/배포본과-레거시-경계.md
       - 운영:
           - 시작 가이드: infra/operations/시작.md
           - 운영 매뉴얼: infra/operations/운영-매뉴얼.md

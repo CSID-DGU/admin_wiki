@@ -202,7 +202,7 @@ helm rollback containerssh-config-server -n ailab-infra
 |---------|-----|------|
 | `imageStore.size` | `500Gi` | PVC 요청 용량 |
 | `storageClass` | `nfs-nas-v3-expandable` | NFS CSI 기반 StorageClass — 어떤 방식으로 저장소를 만들지 정한 템플릿 |
-| accessModes | `ReadWriteMany` | 여러 Pod가 동시에 마운트할 수 있는 모드 (config-server와 게스트 Pod가 같이 쓰므로 필수) |
+| accessModes | `ReadWriteMany` | 여러 Pod가 동시에 마운트할 수 있는 모드. 현행 소비자는 config-server이지만, 이미지 저장소를 공유 스토리지로 유지하는 계약을 나타낸다 |
 | `helm.sh/resource-policy: keep` | annotation | **릴리스를 지워도 PVC는 남긴다.** 차트 삭제 실수로 이미지 저장소 전체가 날아가는 것을 막는 안전핀이다 |
 
 ---
@@ -211,7 +211,7 @@ helm rollback containerssh-config-server -n ailab-infra
 
 사용자/그룹별 홈 PVC를 동적 생성하던 Helm 차트(`containerssh-pvc-chart`)의 잔재이다. 개별 사용자 PVC 방식은 26-07-02에 폐기되어 현행 흐름에서는 사용하지 않는다(현행은 NFS 직접 마운트 — [시스템 아키텍처](../design/시스템-아키텍처.md) 6절 참조).
 
-이 디렉터리는 develop 브랜치 기준으로 남아 있고(`Chart.yaml`, `values.yaml`, `README.md`, StorageClass manifest 두 장 — `sc-nfs-nas-v3-resizable.yaml`, `old-sc.yaml`), 레거시 정리 브랜치(`chore/remove-legacy-containerssh`)에서는 이미 삭제됐다. 과거 클러스터 상태를 이해할 때 참고용으로만 읽는다. 이 중 `sc-nfs-nas-v3-resizable.yaml`은 image-store가 여전히 쓰는 StorageClass 정의라서 정리 브랜치에서 `pvc-image-chart/`로 옮겨졌다 — 정리가 develop에 합쳐지면 이 절의 디렉터리 자체가 사라진다.
+이 디렉터리는 현재 원본 저장소에 남아 있지만 현행 배포 경로에는 사용하지 않는 레거시이다. `Chart.yaml`, `values.yaml`, `README.md`, StorageClass manifest 두 장(`sc-nfs-nas-v3-resizable.yaml`, `old-sc.yaml`)은 과거 클러스터 상태를 해석할 때만 참고한다. 신규 배포나 복구에는 이 차트를 사용하지 않고, 홈은 NFS 직접 마운트와 `pvc-image-chart/`를 기준으로 한다.
 
 ---
 

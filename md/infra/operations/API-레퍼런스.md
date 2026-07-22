@@ -1,6 +1,6 @@
 # API 레퍼런스
 
-config-server의 전체 HTTP API 명세이다. `main.py`의 `@app.route`와 `/accounts`  총 **11개 엔드포인트**
+config-server의 전체 HTTP API 명세이다. `main.py`의 Flask route와 `/accounts` blueprint를 합쳐 총 **12개 엔드포인트**를 제공한다.
 
 라이브 명세는 Swagger(API 명세를 웹 화면으로 보여주는 도구) UI `http://210.94.179.18:30082/apidocs/`에서도 확인할 수 있다.
 
@@ -23,7 +23,7 @@ config-server의 전체 HTTP API 명세이다. `main.py`의 `@app.route`와 `/ac
 | `PodService` | `POST /create-pod`, `POST /delete-pod` | 승인 시 / 만료 또는 실패를 되돌리는 삭제 시 |
 | `UbuntuAccountService` | `DELETE /accounts/users/{username}` | 만료 또는 실패를 되돌리는 삭제 시 |
 | `GroupService` | `PUT /accounts/groups` | 그룹 생성 시 |
-| (호출처 없음 — 미확인) | `POST /migrate`, `GET /accounts/*`, `DELETE /accounts/groups`, `PUT /accounts/users/{u}/groups` | admin_be 코드에서 호출처가 발견되지 않았다. 운영자 수동 호출·실험용으로 보인다 |
+| (호출처 없음 — 미확인) | `GET /pods/{username}/status`, `POST /migrate`, `GET /accounts/*`, `DELETE /accounts/groups`, `PUT /accounts/users/{u}/groups` | admin_be 코드에서 호출처가 발견되지 않았다. 운영자 수동 호출·실험용으로 보인다 |
 
 ---
 
@@ -71,10 +71,10 @@ config-server의 전체 HTTP API 명세이다. `main.py`의 `@app.route`와 `/ac
    - `/kube_share` 계정 파일 확인 — **passwd에 사용자가 없으면 실패**한다(계정 생성이 선행 조건).
    - 저장된 사용자 이미지(`/image-store/images/user-<username>.tar`)가 있으면 로드하고, 없으면 WAS가 준 base 이미지를 쓴다.
    - 기본 포트 22(ssh)·8888(jupyter)에 추가 포트를 더해, NodePort(클러스터 밖에서 접속할 수 있게 노드에 여는 고정 포트)를 DB에서 빈 번호를 골라 배정한다(30000~32767, `SELECT ... FOR UPDATE` 행 잠금).
-   - Kerberos 인증 준비가 실행된다. FARM NAS 홈 마운트에는 Kerberos 인증이 전제되며, 이 영역은 별도 담당자 관할이라 이 wiki에서는 다루지 않는다. 실패하면 여기서 중단된다.
-   - NFS(네트워크 너머의 저장소를 내 디스크처럼 마운트하는 프로토콜) user-share를 `/home`에 직접 마운트하도록 볼륨을 구성한다. `imagePullPolicy: Never`(이미지를 절대 원격에서 받지 않고 노드에 있는 것만 사용)이다.
+   - Kerberos 인증 준비가 실행된다. FARM NAS 홈 마운트에는 Kerberos 인증이 전제되며, 상세 점검과 복구는 [kdc-setup 운영 문서](../kdc-setup/operations.md)를 따른다. 실패하면 여기서 중단된다.
+   - NFS(네트워크 너머의 저장소를 내 디스크처럼 마운트하는 프로토콜) user-share를 `/home`에 직접 마운트하도록 볼륨을 구성한다. 사용자 Pod의 `imagePullPolicy`는 `IfNotPresent`이므로 노드에 이미지가 없을 때만 레지스트리에서 가져온다.
 8. Kubernetes에 Pod를 생성한다.
-9. 최대 60초 동안 1초 간격으로 Pod가 Ready(트래픽을 받을 준비 완료 상태)가 되기를 기다린다.
+9. 최대 300초 동안 1초 간격으로 Pod가 Ready(트래픽을 받을 준비 완료 상태)가 되기를 기다린다.
 10. Ready가 되면 포트마다 NodePort Service(`ailab-<username>-<용도>-<외부포트>`)를 생성한다.
 11. 성공 응답을 반환한다. 8~10단계 어디서든 실패하면 배정한 NodePort 해제 + 만든 Pod 삭제(+Service 삭제)로, 그때까지 만든 것을 되돌린다.
 
@@ -96,8 +96,8 @@ sequenceDiagram
     CS->>CS: 최소 부하 노드 선택
     CS->>DB: NodePort 배정 (SELECT ... FOR UPDATE, 30000-32767)
     Note over CS,FARM: Kerberos 인증 준비 (별도 담당자 관할)
-    CS->>K: Pod 생성 (NFS /home 직접 마운트, imagePullPolicy Never)
-    loop 최대 60초, 1초 간격
+    CS->>K: Pod 생성 (NFS /home 직접 마운트, imagePullPolicy IfNotPresent)
+    loop 최대 300초, 1초 간격
         CS->>K: Pod Ready 폴링
     end
     CS->>K: NodePort Service 생성 (ssh·jupyter·추가 포트, 포트당 1개)
@@ -131,7 +131,35 @@ sequenceDiagram
 
 ---
 
-## 4. POST /delete-pod
+## 4. GET /pods/&lt;username&gt;/status
+
+| 항목 | 값 |
+|------|-----|
+| 메서드·경로 | `GET /pods/<username>/status` |
+| 호출 주체 | 생성 진행 상황을 조회하는 운영자·클라이언트용 API. admin_be 호출처는 미확인 |
+
+`POST /create-pod`는 Pod 준비가 끝날 때까지 최대 300초 동안 기다리는 동기 API이다. 이 API는 생성 요청이 끝나기 전에도 사용자별 진행 상황을 가볍게 조회한다.
+
+**입력.** 경로의 `username`.
+
+**성공 응답.** `200`
+
+```json
+{
+  "username": "user2100",
+  "stage": "waiting_ready",
+  "message": "이미지 pull / 컨테이너 기동 대기 중",
+  "updated_at": "2026-07-22T01:23:45+00:00"
+}
+```
+
+`stage`는 `unknown`, `started`, `selecting_node`, `building_pod_spec`, `allocating_nodeport`, `deploying_krb5`, `creating_pod`, `waiting_ready`, `creating_services`, `ready`, `failed` 중 하나이다. 생성 이력이 없으면 `stage`는 `unknown`이고 `updated_at`은 없다. `failed`의 `message`에는 보안을 위해 상세 예외나 Kubernetes 오류 원문을 넣지 않으므로, 원인은 config-server 로그에서 확인한다.
+
+**대표 실패.** 상태 저장소 조회에 실패하면 `500`(`POD_STATUS_LOOKUP_FAILED`)을 반환한다.
+
+---
+
+## 5. POST /delete-pod
 
 | 항목 | 값 |
 |------|-----|
@@ -152,7 +180,7 @@ sequenceDiagram
 4. Kubernetes Pod를 삭제하고, watch(쿠버네티스 이벤트 스트림 구독)로 **실제 삭제 완료**를 최대 60초 기다린다. Pod가 원래 없었으면(404) `already_absent: true`로 200을 반환한다.
 5. Kerberos 관련 잔재 정리가 실행된다(별도 담당자 관할 영역, 실패해도 무시하는 best-effort).
 
-**여기서 지워지는 것과 남는 것을 구분해야 한다.** 이 API는 Pod·Service·NodePort DB 행만 정리한다. **계정 파일(passwd 등)·NAS 홈·Kerberos principal은 그대로 남는다.** 그것들은 아래 8절 `DELETE /accounts/users`의 몫이다. 하나만 호출하면 반쪽 삭제가 된다.
+**여기서 지워지는 것과 남는 것을 구분해야 한다.** 이 API는 Pod·Service·NodePort DB 행만 정리한다. **계정 파일(passwd 등)·NAS 홈·Kerberos principal은 그대로 남는다.** 그것들은 아래 10절 `DELETE /accounts/users`의 몫이다. 하나만 호출하면 반쪽 삭제가 된다.
 
 ```mermaid
 sequenceDiagram
@@ -207,7 +235,7 @@ sequenceDiagram
 
 ---
 
-## 5. POST /migrate
+## 6. POST /migrate
 
 | 항목 | 값 |
 |------|-----|
@@ -262,7 +290,7 @@ sequenceDiagram
 
 ---
 
-## 6. GET /accounts/users
+## 7. GET /accounts/users
 
 | 항목 | 값 |
 |------|-----|
@@ -287,7 +315,7 @@ sequenceDiagram
 
 ---
 
-## 7. GET /accounts/users/&lt;username&gt;
+## 8. GET /accounts/users/&lt;username&gt;
 
 | 항목 | 값 |
 |------|-----|
@@ -322,7 +350,7 @@ sequenceDiagram
 
 ---
 
-## 8. PUT /accounts/users
+## 9. PUT /accounts/users
 
 | 항목 | 값 |
 |------|-----|
@@ -354,7 +382,7 @@ sequenceDiagram
 5. shadow(암호 해시 파일)에 SHA-512 crypt 해시를 기록한다. 실패하면 롤백 후 500이다.
 6. `SUDO_ALLOWED_COMMANDS` 설정이 있으면 사용자별 sudoers(sudo 사용 권한을 정의하는 파일)를 0440 권한으로 만든다.
 7. NAS(`192.168.2.30:6954`)에 SSH로 접속해 홈 디렉터리를 만든다(mkdir + chown + chmod 700). NFS가 root_squash(NFS에서 클라이언트 root를 권한 없는 사용자로 강등시키는 안전장치)라서 Pod 스스로는 홈을 만들 수 없기 때문이다. 실패하면 롤백 후 500이다.
-8. Kerberos 인증 준비가 실행된다. FARM NAS 홈 마운트에는 Kerberos 인증이 전제되며, 이 영역은 별도 담당자 관할이라 이 wiki에서는 다루지 않는다. 실패하면 홈 삭제 + 계정 롤백 후 500이다.
+8. Kerberos 인증 준비가 실행된다. FARM NAS 홈 마운트에는 Kerberos 인증이 전제되며, 상세 점검과 복구는 [kdc-setup 운영 문서](../kdc-setup/operations.md)를 따른다. 실패하면 홈 삭제 + 계정 롤백 후 500이다.
 
 **성공 응답.** `201`
 
@@ -378,7 +406,7 @@ sequenceDiagram
 
 ---
 
-## 9. DELETE /accounts/users/&lt;username&gt;
+## 10. DELETE /accounts/users/&lt;username&gt;
 
 | 항목 | 값 |
 |------|-----|
@@ -395,7 +423,7 @@ sequenceDiagram
 4. NAS 홈 디렉터리를 SSH로 삭제한다. **실패해도 경고 로그만 남기고 계속 진행**한다(계정 파일은 이미 지워진 상태).
 5. Kerberos 잔재 정리가 실행된다(별도 담당자 관할, 실패는 무시).
 
-`POST /delete-pod`와 짝으로 호출해야 완전 삭제가 된다(4절의 시퀀스 다이어그램 참조). 이 API만 부르면 Pod·NodePort가 남고, delete-pod만 부르면 계정·홈·principal이 남는다.
+`POST /delete-pod`와 짝으로 호출해야 완전 삭제가 된다(5절의 시퀀스 다이어그램 참조). 이 API만 부르면 Pod·NodePort가 남고, delete-pod만 부르면 계정·홈·principal이 남는다.
 
 **성공 응답.** `200` — `{"status": "deleted", "user": "user2100"}`
 
@@ -408,7 +436,7 @@ sequenceDiagram
 
 ---
 
-## 10. PUT /accounts/groups
+## 11. PUT /accounts/groups
 
 | 항목 | 값 |
 |------|-----|
@@ -440,7 +468,7 @@ sequenceDiagram
 
 ---
 
-## 11. DELETE /accounts/groups/&lt;groupname&gt;
+## 12. DELETE /accounts/groups/&lt;groupname&gt;
 
 | 항목 | 값 |
 |------|-----|
@@ -466,7 +494,7 @@ sequenceDiagram
 
 ---
 
-## 12. PUT /accounts/users/&lt;username&gt;/groups
+## 13. PUT /accounts/users/&lt;username&gt;/groups
 
 | 항목 | 값 |
 |------|-----|
@@ -497,9 +525,9 @@ sequenceDiagram
 
 ---
 
-## 13. 운영 주의 사항
+## 14. 운영 주의 사항
 
-- **인증이 없다.** 위 11개 전부 요청자 검증 없이 동작한다. 내부망 제한·NetworkPolicy(Pod 간 통신을 제한하는 쿠버네티스 방화벽 규칙)가 전제 조건이다.
+- **인증이 없다.** 위 12개 전부 요청자 검증 없이 동작한다. 내부망 제한·NetworkPolicy(Pod 간 통신을 제한하는 쿠버네티스 방화벽 규칙)가 전제 조건이다.
 - **create-pod는 멱등하지 않는다.** 같은 사용자로 반복 호출하면 Pod와 Service가 여러 벌 생긴다. username 단위 중복 방지는 호출자(admin_be)의 책임이다.
 - **삭제는 두 API가 한 쌍이다.** `POST /delete-pod`(Pod·Service·포트) + `DELETE /accounts/users`(계정·홈·principal)를 모두 호출해야 완전 삭제가 된다.
 - **jupyter NodePort 보안.** 8888 포트도 다른 포트와 동일하게 NodePort Service로 열린다. 게스트 이미지의 Jupyter가 무인증 설정이면 외부 개방 시 우회 접근 경로가 되므로 내부망 제한이 필요하다.

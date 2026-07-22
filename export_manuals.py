@@ -74,6 +74,11 @@ MANUALS = (
             / "kerberos-nfs"
             / "debugging"
             / "nfs-v41-session-slot-stuck.md",
+            MD_DIR
+            / "system"
+            / "kerberos-nfs"
+            / "debugging"
+            / "nfs-v41-session-slot-stuck-remediation.md",
         ),
     ),
     Manual(

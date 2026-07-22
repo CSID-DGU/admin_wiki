@@ -119,6 +119,7 @@ nav:
               - 개요: system/kerberos-nfs/debugging/index.md
               - LAB9에서 krb5를 사용하는 이유: system/kerberos-nfs/debugging/lab9-why-sec-krb5.md
               - NFSv4.1 session slot 고착: system/kerberos-nfs/debugging/nfs-v41-session-slot-stuck.md
+              - NFSv4.1 session slot 고착 해결 및 운영 적용: system/kerberos-nfs/debugging/nfs-v41-session-slot-stuck-remediation.md
   - user:
       - 목차: user/index.md
       - LAB & FARM 유저 매뉴얼: user/LAB-FARM-유저-매뉴얼.md

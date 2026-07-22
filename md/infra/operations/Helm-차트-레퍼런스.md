@@ -211,7 +211,7 @@ helm rollback containerssh-config-server -n ailab-infra
 
 사용자/그룹별 홈 PVC를 동적 생성하던 Helm 차트(`containerssh-pvc-chart`)의 잔재이다. 개별 사용자 PVC 방식은 26-07-02에 폐기되어 현행 흐름에서는 사용하지 않는다(현행은 NFS 직접 마운트 — [시스템 아키텍처](../design/시스템-아키텍처.md)의 홈 디렉터리와 이미지 저장소 참조).
 
-이 디렉터리는 현재 원본 저장소에 남아 있지만 현행 배포 경로에는 사용하지 않는 레거시이다. `Chart.yaml`, `values.yaml`, `README.md`, StorageClass manifest 두 장(`sc-nfs-nas-v3-resizable.yaml`, `old-sc.yaml`)은 과거 클러스터 상태를 해석할 때만 참고한다. 신규 배포나 복구에는 이 차트를 사용하지 않고, 홈은 NFS 직접 마운트와 `pvc-image-chart/`를 기준으로 한다.
+이 디렉터리는 저장소에 남아 있지만 현재 배포에는 쓰지 않는다. `Chart.yaml`, `values.yaml`, `README.md`, StorageClass 매니페스트 두 장(`sc-nfs-nas-v3-resizable.yaml`, `old-sc.yaml`)은 이전 클러스터 상태를 확인할 때만 본다. 새로 배포하거나 복구할 때는 이 차트를 쓰지 않고 NFS 직접 마운트와 `pvc-image-chart/`를 사용한다.
 
 ---
 

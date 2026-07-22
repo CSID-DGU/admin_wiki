@@ -14,54 +14,54 @@
 
 ## 2. 전체 데이터와 알림 흐름
 
-다이어그램의 **굵은 바깥 제목은 실행 영역**이고, 각 카드의 **굵은 첫 줄은
-모듈 이름**이다. 카드 안의 `보관·참조 값 / 구성요소`는 명사형으로, `수행 동작`은
-주체와 동사가 있는 문장으로 구분했다. 화살표는 출발 모듈이 도착 모듈에 수행하는
-동작을 뜻하고, 점선은 외부 값을 읽기 전용으로 조회하는 흐름이다.
+다이어그램의 **굵은 바깥 제목은 배치 영역**이고, 각 카드의 **굵은 첫 줄은
+모듈 이름**이다. 카드 안의 `저장 정보 / 구성 요소`에는 명사만 적고, `역할`에는
+주체가 무엇을 하는지 동사로 적었다. 화살표에는 출발 모듈이 요청하거나 제공하는
+동작을 표시했으며, 점선은 외부 값을 읽기 전용으로 조회하는 흐름이다.
 
 ```mermaid
 flowchart TB
     subgraph EXTERNAL_ZONE["<b>외부 관리 · 연동</b>"]
         direction LR
-        KEY["<b>Keytab 점검 모듈</b><br/><b>보관 값</b> profile status JSON<br/><b>수행</b> KVNO drift를 검사함"]
-        DB["<b>UID DB</b><br/><b>보관 값</b> container owner · 사용자 이름"]
-        AD["<b>AD / Storage</b><br/><b>보관 값</b> SPN · KVNO · service keytab"]
-        EXT["<b>외부 Health Probe</b><br/><b>구성요소</b> Google Apps Script"]
+        KEY["<b>Keytab 점검 모듈</b><br/><b>저장 정보</b> profile status JSON<br/><b>역할</b> KVNO drift를 검사함"]
+        DB["<b>UID DB</b><br/><b>저장 정보</b> container owner · 사용자 이름"]
+        AD["<b>AD / Storage</b><br/><b>저장 정보</b> SPN · KVNO · service keytab"]
+        EXT["<b>외부 Health Probe</b><br/><b>구성 요소</b> Google Apps Script"]
     end
 
     subgraph HOST_ZONE["<b>FARM / LAB 관측 대상 호스트</b>"]
         direction LR
-        NODE["<b>기본 자원 Metric 모듈</b><br/><b>구성요소</b> node-exporter · :30070<br/><b>수행</b> CPU·memory·disk·network를 노출함"]
-        GPU["<b>GPU 사용자 Metric 모듈</b><br/><b>구성요소</b> gpu-user-exporter · :30072<br/><b>수행</b> GPU PID를 사용자·container에 연결함"]
-        CM["<b>서비스 상태 Metric 모듈</b><br/><b>구성요소</b> cluster-monitor-exporter · :30074<br/><b>수행</b> mount·GSS·container 상태를 수집함"]
-        GSS["<b>NFS GSS Health 모듈</b><br/><b>보관 값</b> readiness · canary · recovery state<br/><b>수행</b> 인증을 검증하고 missing mount만 복구함"]
-        FOR["<b>NFS Forensics 모듈</b><br/><b>보관 값</b> trace ring · incident snapshot<br/><b>수행</b> 장애 전후 증거를 local disk에 보존함"]
+        NODE["<b>기본 자원 Metric 모듈</b><br/><b>구성 요소</b> node-exporter · :30070<br/><b>역할</b> CPU·memory·disk·network를 노출함"]
+        GPU["<b>GPU 사용자 Metric 모듈</b><br/><b>구성 요소</b> gpu-user-exporter · :30072<br/><b>역할</b> GPU PID를 사용자·container에 연결함"]
+        CM["<b>서비스 상태 Metric 모듈</b><br/><b>구성 요소</b> cluster-monitor-exporter · :30074<br/><b>역할</b> mount·GSS·container 상태를 수집함"]
+        GSS["<b>NFS GSS Health 모듈</b><br/><b>저장 정보</b> readiness · canary · recovery state<br/><b>역할</b> 인증을 검증하고 missing mount만 복구함"]
+        FOR["<b>NFS Forensics 모듈</b><br/><b>저장 정보</b> trace ring · incident snapshot<br/><b>역할</b> 장애 전후 증거를 local disk에 보존함"]
     end
 
     subgraph MONITORING_ZONE["<b>Monitoring control plane</b>"]
         direction LR
-        PF["<b>FARM Prometheus 모듈</b><br/><b>보관 값</b> FARM 자원 + FARM/LAB 서비스 metric<br/><b>수행</b> metric을 수집하고 alert rule을 평가함"]
-        PL["<b>LAB Prometheus 모듈</b><br/><b>보관 값</b> LAB node · GPU metric<br/><b>수행</b> LAB metric을 독립 저장함"]
-        GRAF["<b>Grafana 모듈</b><br/><b>구성요소</b> FARM · prometheus-lab datasource<br/><b>수행</b> 두 환경의 dashboard를 표시함"]
-        ALERT["<b>Alert 전달 모듈</b><br/><b>구성요소</b> Alertmanager · localhost relay<br/><b>수행</b> 경보를 notify API payload로 변환함"]
+        PF["<b>FARM Prometheus 모듈</b><br/><b>저장 정보</b> FARM 자원 + FARM/LAB 서비스 metric<br/><b>역할</b> metric을 수집하고 alert rule을 평가함"]
+        PL["<b>LAB Prometheus 모듈</b><br/><b>저장 정보</b> LAB node · GPU metric<br/><b>역할</b> LAB metric을 독립 저장함"]
+        GRAF["<b>Grafana 모듈</b><br/><b>구성 요소</b> FARM · prometheus-lab datasource<br/><b>역할</b> 두 환경의 dashboard를 표시함"]
+        ALERT["<b>Alert 전달 모듈</b><br/><b>구성 요소</b> Alertmanager · localhost relay<br/><b>역할</b> 경보를 notify API payload로 변환함"]
     end
 
     API["<b>내부 알림 API</b><br/>Slack notify endpoint"]
 
-    DB -.->|"container owner를 반환함"| GPU
-    AD -.->|"ticket·KVNO 조회에 응답함"| GSS
-    AD -.->|"keytab 비교 값에 응답함"| KEY
+    DB -.->|"사용자·container 정보를 제공함"| GPU
+    AD -.->|"ticket·KVNO 조회 결과를 반환함"| GSS
+    AD -.->|"keytab 비교 정보를 제공함"| KEY
     EXT <-->|"public health를 요청하고 heartbeat를 확인함"| CM
     GSS -->|"readiness·recovery state를 기록함"| CM
     FOR -->|"forensics status를 기록함"| CM
 
-    NODE -->|"FARM node metric을 scrape함"| PF
-    NODE -->|"LAB node metric을 scrape함"| PL
-    GPU -->|"FARM GPU metric을 scrape함"| PF
-    GPU -->|"LAB GPU metric을 scrape함"| PL
-    CM -->|"FARM/LAB 서비스 metric을 중앙 scrape함"| PF
-    PF -->|"FARM datasource로 조회함"| GRAF
-    PL -->|"prometheus-lab datasource로 조회함"| GRAF
+    NODE -->|"FARM node metric을 제공함"| PF
+    NODE -->|"LAB node metric을 제공함"| PL
+    GPU -->|"FARM GPU metric을 제공함"| PF
+    GPU -->|"LAB GPU metric을 제공함"| PL
+    CM -->|"FARM/LAB 서비스 metric을 제공함"| PF
+    PF -->|"FARM metric을 제공함"| GRAF
+    PL -->|"LAB metric을 제공함"| GRAF
     PF -->|"firing·resolved 경보를 전달함"| ALERT
     ALERT -->|"변환한 알림을 전송함"| API
 
@@ -79,10 +79,10 @@ flowchart TB
 
 ### 구성요소별 책임
 
-| 실행 영역 | 모듈 | 내부 구성요소·값 | 하는 일 |
+| 배치 영역 | 모듈 | 내부 구성 요소·정보 | 역할 |
 | --- | --- | --- | --- |
 | FARM/LAB host | **기본 자원 Metric** | `node-exporter`, `:30070` | CPU, memory, filesystem, disk와 network metric 노출 |
-| FARM/LAB host | **GPU 사용자 Metric** | `gpu-user-exporter`, `nvidia-smi`, Docker, UID DB cache | GPU process를 실제 사용자·container·GPU에 귀속 |
+| FARM/LAB host | **GPU 사용자 Metric** | `gpu-user-exporter`, `nvidia-smi`, Docker, UID DB cache | GPU process를 실제 사용자·container·GPU에 연결 |
 | FARM/LAB host | **서비스 상태 Metric** | `cluster-monitor-exporter`, `:30074`, public `:N89` | mount, GSS, GPU, Docker, container, 연결성과 D-state 수집 |
 | FARM/LAB host | **NFS GSS Health** | readiness, canary, guarded recovery worker와 state | 인증 stage를 검증하고 안전 조건을 통과한 missing mount만 복구 |
 | FARM/LAB host | **NFS Forensics** | packet/ftrace ring, watcher, snapshot | user share를 읽거나 복구하지 않고 장애 전후 증거 보존 |
@@ -143,6 +143,33 @@ goroutine이 멈춘 상태를 `up=1`만으로는 찾을 수 없기 때문이다.
 - 외부 connectivity heartbeat와 public inbound health
 - NFS GSS readiness/canary/recovery state와 `rpc-gssd` journal
 
+#### Container 실행 상태와 GPU alert gating
+
+container 내부 GPU readiness는 container가 실행 중일 때만 의미가 있다. collector는
+정지한 대상 container에 대해 `cluster_monitor_container_running=0`과
+`cluster_monitor_container_gpu_up=0`을 함께 노출하지만, 이때 `gpu_up=0`은 GPU
+장애가 아니라 검사를 실행할 수 없다는 뜻이다.
+
+따라서 GPU alert는 다음처럼 running metric을 선행조건으로 결합한다. `instance`,
+`server`, `container`, `image` label로 vector를 매칭하여 다른 host의 동명
+container가 결합되지 않게 한다.
+
+```promql
+cluster_monitor_container_gpu_up{job="cluster-monitor-exporter"} == 0
+and on (instance, server, container, image)
+cluster_monitor_container_running{job="cluster-monitor-exporter"} == 1
+```
+
+| Container 상태 | `running` | `gpu_up` | 발생해야 하는 alert |
+| --- | ---: | ---: | --- |
+| 정지 | 0 | 0 | container stopped alert만 발생 |
+| 실행 중, GPU 정상 | 1 | 1 | 없음 |
+| 실행 중, GPU 실패가 5분 지속 | 1 | 0 | container GPU alert 발생 |
+
+이 gating은 하나의 원인인 container 정지가 stopped와 GPU failure로 중복 통지되는
+것을 막고, container가 실제로 실행 중인데 `nvidia-smi`가 실패하는 경우만 GPU
+경보로 분류한다.
+
 #### D-state와 명령 timeout
 
 NFS `hard` mount에서 child process가 D-state에 들어가면 `SIGKILL`에도 즉시
@@ -190,7 +217,7 @@ flowchart LR
 - DB cache entry/refresh success
 - exporter scrape success/duration
 
-DB에 없는 process를 임의 사용자에게 귀속하지 않고 ignored count로 분리한다.
+DB에 없는 process를 임의의 사용자와 연결하지 않고 ignored count로 분리한다.
 매 scrape마다 DB를 조회하지 않도록 활성 container owner를 cache하고 refresh 성공과
 cache 크기를 metric으로 노출한다. 구현은
 [gpu-user-exporter main.go](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/exporters/gpu-user-exporter/main.go)에 있다.
@@ -290,6 +317,13 @@ Prometheus rule은 Alertmanager로 전달되고, Alertmanager는 localhost relay
 sidecar에 native payload를 보낸다. relay가 내부 notify API contract로 변환하여
 `/api/internal/slack/notify`로 전달한다. Grafana password와 Slack webhook은
 values가 아니라 Kubernetes Secret으로 관리한다.
+
+FARM과 LAB의 `ClusterMonitor.*` 경보는 cluster별 receiver로 나누지 않고 하나의
+receiver를 사용한다. `cluster` label은 grouping과 진단 표시에만 사용하며 Slack
+channel 선택에는 사용하지 않는다. relay가 모든 경보에
+`cluster-monitor-slack-webhook-farm` Secret을 적용하므로 LAB 전용 receiver와
+webhook Secret은 필요하지 않다. relay는 alert fingerprint별 마지막 firing/resolved
+상태를 persistent state에 기록하여 동일 상태의 반복 전송도 제거한다.
 
 canonical FARM rule과 routing은
 [prometheus-farm-values.yaml](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/prometheus/config/prometheus-farm-values.yaml),

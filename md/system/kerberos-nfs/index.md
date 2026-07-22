@@ -6,15 +6,15 @@
 이 문서는 Kerberos/NFS 문서의 시작점이다. 처음 읽는 사람은 **설계**에서 전체
 인증 흐름을 먼저 이해한 뒤 **운영**에서 생성·점검·복구 명령을 확인한다. 과거
 장애의 증거와 재현 실험은 **디버깅 로그**에서 확인한다. 환경별 실제 값과 최종
-실행 절차는 인프라 저장소의 FARM/LAB canonical runbook을 단일 기준으로 삼는다.
+실행 절차는 인프라 저장소의 FARM/LAB canonical runbook에서 확인한다.
 
 ## 문서 구성
 
 | 문서 | 읽어야 하는 경우 | 핵심 내용 |
 | --- | --- | --- |
-| 현재 페이지 | 전체 범위와 문서 위치를 빠르게 확인할 때 | 목적, 원칙, 소유 경계 |
-| [설계](design.md) | 인증이 어느 서버와 프로세스를 거치는지 이해할 때 | keytab 발급, ticket 발급, RPCSEC_GSS, NAS 권한 판정, 설정 근거 |
-| [운영](operations.md) | 계정/컨테이너 생성, timer 확인, mount·KVNO 장애를 처리할 때 | 명령, 점검표, 모니터링 코드, 수동 repair/rotation |
+| 현재 페이지 | 전체 범위와 문서 위치를 빠르게 확인할 때 | 목적, 원칙, 관리 범위 |
+| [설계](design.md) | 인증이 어느 서버와 프로세스를 거치는지 이해할 때 | FARM/LAB NFS version·principal 차이, keytab 발급, RPCSEC_GSS, 권한 판정 |
+| [운영](operations.md) | 계정/컨테이너 생성, timer 확인, mount·KVNO 장애를 처리할 때 | Synology/Linux storage 차이, 명령, 점검표, 수동 repair/rotation |
 | [디버깅 로그](debugging/index.md) | 재현된 장애의 원인과 실험 조건·명령·증거를 확인할 때 | 장애별 증상, 가설, 재현, 판정, 복구·예방 |
 
 ## 한눈에 보는 구조
@@ -31,7 +31,7 @@
   -> AD KDC ticket -> NAS svcgssd/NFS -> UID/GID 권한 판정
 ```
 
-현재 구현의 중요한 경계는 다음과 같다.
+현재 구성에서 지켜야 할 원칙은 다음과 같다.
 
 - 사용자 keytab은 장기 자격증명이므로 계산 호스트의
   `/etc/decs-krb/keytabs/<username>.keytab`에 `root:root 0400`으로만 둔다.
@@ -63,9 +63,9 @@ primary GID도 같은 원칙 적용
 더 어긋날 수 있다. 계정 생성 흐름은 Docker와 DB를 확정하기 전에 AD/NAS/host
 identity와 실제 Kerberos NFS 쓰기를 검증한다.
 
-## 모듈 소유 경계
+## 모듈별 관리 범위
 
-| 작업 | 소유 모듈 |
+| 작업 | 담당 모듈 |
 | --- | --- |
 | AD 사용자·그룹, 사용자 keytab, host ccache timer, container 생성 | `user-lifecycle` |
 | 공통 host Kerberos/NFS desired state와 fstab | `server-state` |
@@ -76,7 +76,7 @@ identity와 실제 Kerberos NFS 쓰기를 검증한다.
 관측 실패가 곧바로 AD password 변경이나 NAS service 재시작으로 이어지지 않게
 읽기 전용 monitoring과 상태 변경 작업을 분리한다.
 
-## 단일 기준 문서와 코드
+## 기준 문서와 코드
 
 - [FARM canonical runbook](https://github.com/CSID-DGU/admin_infra_server/blob/main/kerberos-nfs/docs/farm.md)
 - [LAB canonical runbook](https://github.com/CSID-DGU/admin_infra_server/blob/main/kerberos-nfs/docs/lab.md)

@@ -86,6 +86,13 @@ def sync(output_dir: Path) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_md, target)
 
+    # md 옆의 이미지(.png)도 함께 복사 — 문서의 상대 경로 참조가 빌드 트리에서도 유효하도록
+    for asset in sorted(MD_DIR.rglob("*.png")):
+        relative = asset.relative_to(MD_DIR)
+        target = output_dir / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(asset, target)
+
     (output_dir / "downloads.md").write_text(build_downloads(), encoding="utf-8")
 
     stylesheet_target = output_dir / "stylesheets"

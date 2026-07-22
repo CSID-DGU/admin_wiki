@@ -68,8 +68,132 @@ hostname은 `lab-storage.lab.decs.internal`, timezone은 `Asia/Seoul`이며 NTP
 
 ### 3.2 `lab-storage`: 기존 데이터 디스크 재연결
 
-OS 디스크와 별개인 데이터 디스크는 포맷하지 않고 다음 fstab 항목으로 다시
-연결했다.
+#### RAID volume이 처음 보이지 않은 이유
+
+OS 설치 직후에는 294TB 데이터 RAID가 정상적인 `/dev/sda`로 나타나지 않았다.
+이 장비의 controller는 다음 Areca ARC-1284다.
+
+```text
+17:00.0 RAID bus controller: Areca Technology Corp. ARC-12x4
+Subsystem: Areca Technology Corp. ARC-1284 24 Port
+PCI ID: 17d3:1214
+```
+
+CentOS Stream 10의 운영 kernel 설정을 확인하면 ARC-1284용 `arcmsr`가 빠져 있다.
+
+```bash
+grep CONFIG_SCSI_ARCMSR /boot/config-"$(uname -r)"
+```
+
+당시 결과는 다음과 같았다.
+
+```text
+# CONFIG_SCSI_ARCMSR is not set
+```
+
+먼저 `kernel-modules-extra`를 설치했지만 이 kernel용 `arcmsr.ko`는 들어 있지
+않았다.
+
+```bash
+sudo dnf install -y kernel-modules-extra
+modinfo arcmsr
+```
+
+ELRepo의 `kmod-arcmsr`도 확인했지만 EL10용 package가 없었다. 최종 해결은
+ELRepo package 설치가 아니라 **현재 실행 kernel에 맞춰 `arcmsr`를 외부 module로
+직접 빌드하는 것**이었다.
+
+#### `arcmsr` 외부 module 빌드와 설치
+
+2026-07-21에 실제로 설치한 build dependency는 다음과 같다. `kernel-devel`의
+version은 반드시 module을 사용할 kernel과 정확히 같아야 한다.
+
+```bash
+KVER=$(uname -r)
+
+sudo dnf install -y \
+  "kernel-devel-$KVER" \
+  gcc make elfutils-libelf-devel xz
+```
+
+Linux 6.12의
+[`drivers/scsi/arcmsr`](https://github.com/torvalds/linux/tree/v6.12/drivers/scsi/arcmsr)에서
+`Makefile`, `arcmsr.h`, `arcmsr_attr.c`, `arcmsr_hba.c`를 임시 build directory로
+가져왔다. Stream 10 kernel에 backport된 API에 맞게 다음 호환 조정을 적용한 뒤
+외부 module로 빌드했다.
+
+- `slave_configure`를 `sdev_configure`와 `struct queue_limits` signature로 변경
+- `bios_param`의 `struct block_device`를 `struct gendisk`로 변경
+- `del_timer_sync()`를 `timer_delete_sync()`로 변경
+- `from_timer()`를 `timer_container_of()`로 변경
+- sysfs `bin_attribute` 인자를 `const`로 변경
+- PCI device ID table을 `const`로 변경
+
+실제 build 형태는 다음과 같다. upstream 6.12 source를 수정하지 않고 그대로
+빌드하면 Stream 10 kernel API와 맞지 않으므로 위 호환 조정이 필요하다.
+
+```bash
+KVER=$(uname -r)
+BUILD_DIR=$(mktemp -d /tmp/arcmsr-build.XXXXXX)
+
+# BUILD_DIR에 호환 조정을 마친 다음 파일을 준비한다.
+# Makefile  arcmsr.h  arcmsr_attr.c  arcmsr_hba.c
+
+make -C "/usr/src/kernels/$KVER" \
+  M="$BUILD_DIR" \
+  CONFIG_SCSI_ARCMSR=m \
+  modules
+
+modinfo "$BUILD_DIR/arcmsr.ko"
+```
+
+먼저 `insmod`로 현재 boot에서 controller와 RAID volume이 정상적으로 인식되는지
+확인했다.
+
+```bash
+sudo insmod "$BUILD_DIR/arcmsr.ko"
+
+lspci -nnk -s 17:00.0
+lsblk -e7 -o NAME,SIZE,TYPE,FSTYPE,UUID,MOUNTPOINTS,MODEL
+```
+
+`ARC-1284-VOL#000`과 partition UUID가 확인된 후 module을 영구 경로에 설치하고
+boot 때 자동으로 load되도록 등록했다.
+
+```bash
+KVER=$(uname -r)
+
+sudo install -D -m 0644 "$BUILD_DIR/arcmsr.ko" \
+  "/lib/modules/$KVER/extra/arcmsr.ko"
+sudo depmod -a "$KVER"
+
+printf 'arcmsr\n' | sudo tee /etc/modules-load.d/arcmsr.conf >/dev/null
+```
+
+현재 설치된 module은 다음 상태다.
+
+```text
+path=/lib/modules/6.12.0-250.el10.x86_64/extra/arcmsr.ko
+version=v1.51.00.14-20230915
+sha256=8c78e3bb666abc49a17419904ab5911e0fed0c9cb885f0e2c18333b118d7865e
+driver=arcmsr
+volume=ARC-1284-VOL#000
+```
+
+이 module은 RPM 소유 파일이 아니며 서명되지 않은 외부 module이다. 현재 server는
+Secure Boot가 disabled라 load됐고 kernel log에는 out-of-tree module taint가
+기록된다.
+
+> **kernel 업데이트 주의:** 새 kernel을 설치하면 그 version에 맞는
+> `kernel-devel`로 `arcmsr.ko`를 다시 빌드해 새 kernel의
+> `/lib/modules/<새-version>/extra/`에 설치하고 `depmod`를 실행해야 한다. 이를
+> 준비하지 않고 새 kernel로 reboot하면 ARC-1284 volume이 나타나지 않아 `/294t`
+> mount가 실패할 수 있다.
+
+#### XFS mount 복원
+
+driver load 후 RAID volume은 `/dev/sda`, 기존 XFS partition은 `/dev/sda1`로
+나타났다. 데이터 디스크를 포맷하지 않고 다음 fstab 항목으로 다시 연결했다.
 
 ```fstab
 UUID=2a417935-7537-4301-bbcf-5ab2ca836af5 /294t xfs defaults 1 2
@@ -77,6 +201,19 @@ UUID=2a417935-7537-4301-bbcf-5ab2ca836af5 /294t xfs defaults 1 2
 
 2026-07-22 확인 결과는 `/dev/sda1` → `/294t`, XFS, `rw`다. 이 조치에서는
 `/294t`를 다시 포맷하지 않았다.
+
+```bash
+lsblk -e7 -o NAME,SIZE,FSTYPE,UUID,MOUNTPOINTS,MODEL
+findmnt -rn -o TARGET,SOURCE,FSTYPE,OPTIONS /294t
+lspci -nnk -s 17:00.0
+lsmod | grep '^arcmsr'
+```
+
+2026-07-22 이후 kernel log에는 일부 allocation group의 AGFL을 reset했고 block이
+leak됐다는 XFS warning도 기록됐다. 이는 `arcmsr` load와 `/294t` mount 성공 여부와
+별개인 filesystem metadata 점검 항목이다. 운영 export가 연결된 상태에서
+`xfs_repair`를 실행하지 말고, 별도 유지보수 창에 NFS를 중단하고 `/294t`를
+unmount한 뒤 offline 점검·복구해야 한다.
 
 ### 3.3 LAB2와 `lab-storage`: AD·SSSD·keytab 복원
 

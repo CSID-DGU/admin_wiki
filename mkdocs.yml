@@ -75,7 +75,6 @@ nav:
       - Redis 키 카탈로그: backend/Redis-키-카탈로그.md
       - Redis 메시지 큐 작동 원리: backend/Redis-메시지-큐-작동-원리.md
       - 우분투 계정 삭제 스케줄러: backend/우분투-계정-삭제-스케줄러.md
-  - frontend: frontend/index.md
   - infra:
       - 목차: infra/index.md
       - 개요: infra/개요.md
@@ -99,10 +98,6 @@ nav:
           - 개요: system/container-images/index.md
           - 설계: system/container-images/design.md
           - 운영: system/container-images/operations.md
-      - user-lifecycle:
-          - 개요: system/user-lifecycle/index.md
-          - 설계: system/user-lifecycle/design.md
-          - 운영: system/user-lifecycle/operations.md
       - server-state:
           - 개요: system/server-state/index.md
           - 설계: system/server-state/design.md

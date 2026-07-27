@@ -619,15 +619,61 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
     return outputs
 
 
+def export_single_source(browser: str, source: Path, title: str, output_path: Path) -> Path:
+    """Export one Markdown source as a standalone PDF.
+
+    This is used for canonical runbooks that are maintained outside this wiki
+    repository but are published here as versioned PDF snapshots.
+    """
+    source = source.resolve()
+    if not source.is_file():
+        raise FileNotFoundError(f"Markdown source not found: {source}")
+
+    markdown = source.read_text(encoding="utf-8")
+    # Canonical runbook filenames can make the first heading too wide for A4.
+    # Keep the source body intact, but use the requested PDF title as its
+    # visible heading so the heading and the following status block do not
+    # overlap when printed.
+    markdown = re.sub(r"^# .+$", f"# {title}", markdown, count=1, flags=re.MULTILINE)
+    body = markdown_to_html(markdown, browser)
+    document = html_document(title, body)
+    output_path = output_path.resolve()
+
+    with tempfile.TemporaryDirectory(prefix="server-manual-single-") as temp_name:
+        html_path = Path(temp_name) / "manual.html"
+        html_path.write_text(document, encoding="utf-8")
+        print_pdf(browser, html_path, output_path)
+
+    return output_path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--browser", help="Chrome/Chromium executable or path")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--keep-html", action="store_true", help="Keep intermediate HTML beside PDFs")
+    parser.add_argument("--single-source", type=Path, help="Markdown source for one standalone PDF")
+    parser.add_argument("--single-title", help="Title for --single-source PDF")
+    parser.add_argument("--single-output", type=Path, help="Output path for --single-source PDF")
     args = parser.parse_args()
 
     browser = find_browser(args.browser)
-    outputs = export(browser, args.output_dir.resolve(), args.keep_html)
+    single_options = (args.single_source, args.single_title, args.single_output)
+    if any(single_options):
+        if not all(single_options):
+            parser.error(
+                "--single-source, --single-title, and --single-output must be used together"
+            )
+        outputs = [
+            export_single_source(
+                browser,
+                args.single_source,
+                args.single_title,
+                args.single_output,
+            )
+        ]
+    else:
+        outputs = export(browser, args.output_dir.resolve(), args.keep_html)
     for output in outputs:
         print(output)
     return 0

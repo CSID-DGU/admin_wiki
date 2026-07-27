@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | 현재 페이지 | 전체 범위와 문서 위치를 빠르게 확인할 때 | 목적, 원칙, 관리 범위 |
 | [설계](design.md) | 인증이 어느 서버와 프로세스를 거치는지 이해할 때 | FARM/LAB NFS version·principal 차이, keytab 발급, RPCSEC_GSS, 권한 판정 |
+| [FARM/LAB 설정 가이드](setup-guides.md) | 각 환경을 처음 구성하거나 기준값을 다시 확인할 때 | FARM Synology NAS와 LAB Linux storage의 canonical runbook PDF |
 | [운영](operations.md) | 계정/컨테이너 생성, timer 확인, mount·KVNO 장애를 처리할 때 | Synology/Linux storage 차이, 명령, 점검표, 수동 repair/rotation |
 | [디버깅 로그](debugging/index.md) | 재현된 장애의 원인과 실험 조건·명령·증거를 확인할 때 | 장애별 증상, 가설, 재현, 판정, 복구·예방 |
 

@@ -5,7 +5,8 @@
 
 자세한 설정 방법은 아래 문서를 통해 확인할 수 있다.
 
-- [FARM/LAB 설정 가이드](setup-guides.md)
+- [FARM Kerberos 설정 가이드](farm-setup.md)
+- [LAB Kerberos 설정 가이드](lab-setup.md)
 
 ## 1. 설계 목표
 

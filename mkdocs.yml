@@ -114,7 +114,8 @@ nav:
       - kerberos-nfs:
           - 개요: system/kerberos-nfs/index.md
           - 설계: system/kerberos-nfs/design.md
-          - FARM/LAB 설정 가이드: system/kerberos-nfs/setup-guides.md
+          - FARM Kerberos 설정 가이드: system/kerberos-nfs/farm-setup.md
+          - LAB Kerberos 설정 가이드: system/kerberos-nfs/lab-setup.md
           - 운영: system/kerberos-nfs/operations.md
           - 디버깅 로그:
               - 개요: system/kerberos-nfs/debugging/index.md

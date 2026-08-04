@@ -63,17 +63,17 @@ nav:
   - 목차: index.md
   - backend:
       - 목차: backend/index.md
+      - 시작 가이드: backend/시작.md
       - 개요: backend/개요.md
       - 시스템 아키텍처: backend/시스템-아키텍처.md
-      - 코드 컨벤션: backend/코드-컨벤션.md
-      - 운영 가이드: backend/운영-가이드.md
-      - 시작 가이드: backend/시작.md
       - 도메인 설명: backend/도메인-설명.md
+      - 코드 컨벤션: backend/코드-컨벤션.md
       - 핵심 설계 패턴: backend/핵심-설계-패턴.md
       - 인증·보안: backend/인증-보안.md
       - 외부 연동: backend/외부-연동.md
       - Redis 키 카탈로그: backend/Redis-키-카탈로그.md
       - 에러 코드 카탈로그: backend/에러-코드-카탈로그.md
+      - 운영 가이드: backend/운영-가이드.md
   - infra:
       - 목차: infra/index.md
       - 개요: infra/개요.md

@@ -73,6 +73,7 @@ nav:
       - 인증·보안: backend/인증-보안.md
       - 외부 연동: backend/외부-연동.md
       - Redis 키 카탈로그: backend/Redis-키-카탈로그.md
+      - 에러 코드 카탈로그: backend/에러-코드-카탈로그.md
   - infra:
       - 목차: infra/index.md
       - 개요: infra/개요.md

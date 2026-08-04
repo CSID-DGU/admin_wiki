@@ -122,6 +122,24 @@ MANUALS = (
             MD_DIR / "system" / "user-lifecycle" / "operations.md",
         ),
     ),
+    Manual(
+        "admin-be",
+        "Backend (Admin BE)",
+        MD_DIR / "backend" / "index.md",
+        "backend/admin-be-manual.pdf",
+        (
+            MD_DIR / "backend" / "시작.md",
+            MD_DIR / "backend" / "개요.md",
+            MD_DIR / "backend" / "시스템-아키텍처.md",
+            MD_DIR / "backend" / "도메인-설명.md",
+            MD_DIR / "backend" / "코드-컨벤션.md",
+            MD_DIR / "backend" / "핵심-설계-패턴.md",
+            MD_DIR / "backend" / "인증-보안.md",
+            MD_DIR / "backend" / "외부-연동.md",
+            MD_DIR / "backend" / "Redis-키-카탈로그.md",
+            MD_DIR / "backend" / "에러-코드-카탈로그.md",
+        ),
+    ),
 )
 
 
@@ -211,6 +229,19 @@ pre code {
   max-height: 230mm;
   margin: 0 auto;
 }
+.doc-image {
+  margin: 3mm 0 5mm;
+  page-break-inside: avoid;
+  break-inside: avoid-page;
+  text-align: center;
+}
+.doc-image img {
+  max-width: 100%;
+  max-height: 200mm;
+  height: auto;
+  border: 1px solid #d7e0e8;
+  border-radius: 4px;
+}
 ul, ol { margin: 1.5mm 0 4mm; padding-left: 6.5mm; }
 li { margin: 0 0 1.2mm; }
 table {
@@ -262,6 +293,7 @@ TABLE_DELIMITER = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 UL_ITEM = re.compile(r"^\s*[-*+]\s+(.*)$")
 OL_ITEM = re.compile(r"^\s*\d+[.)]\s+(.*)$")
+IMG_TAG = re.compile(r"^<img\b[^>]*>$", re.IGNORECASE)
 
 
 def render_inline(value: str) -> str:
@@ -304,6 +336,8 @@ def is_special(lines: list[str], index: int) -> bool:
     if UL_ITEM.match(line) or OL_ITEM.match(line) or line.startswith(">"):
         return True
     if re.match(r"^\s*(?:---+|___+|\*\*\*+)\s*$", line):
+        return True
+    if IMG_TAG.match(line.strip()):
         return True
     if index + 1 < len(lines) and "|" in line and TABLE_DELIMITER.match(lines[index + 1]):
         return True
@@ -483,6 +517,11 @@ def markdown_to_html(markdown: str, browser: str) -> str:
 
         if re.match(r"^\s*(?:---+|___+|\*\*\*+)\s*$", line):
             out.append("<hr>")
+            index += 1
+            continue
+
+        if IMG_TAG.match(stripped):
+            out.append(f'<figure class="doc-image">{stripped}</figure>')
             index += 1
             continue
 

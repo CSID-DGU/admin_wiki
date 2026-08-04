@@ -73,8 +73,6 @@ nav:
       - 인증·보안: backend/인증-보안.md
       - 외부 연동: backend/외부-연동.md
       - Redis 키 카탈로그: backend/Redis-키-카탈로그.md
-      - Redis 메시지 큐 작동 원리: backend/Redis-메시지-큐-작동-원리.md
-      - 우분투 계정 삭제 스케줄러: backend/우분투-계정-삭제-스케줄러.md
   - infra:
       - 목차: infra/index.md
       - 개요: infra/개요.md

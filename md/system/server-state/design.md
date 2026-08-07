@@ -47,6 +47,11 @@ playbook에 흩어져 있으면 신규 서버를 구축할 때 일부 단계가 
 4. 실행할 계획과 안전 수준을 출력한다.
 5. 관리자가 계획을 검토하고 필요한 명령이나 playbook을 실행한다.
 
+공통 기준을 만드는 부분과 실제 서버를 변경하는 부분을 분리한 이유는 기준을
+읽고 검토하는 과정이 특정 실행 도구에 묶이지 않게 하기 위해서다. 또한 실제
+변경과 rollback은 각 영역을 담당하는 모듈에 남겨 기존 운영 절차를 그대로
+사용한다.
+
 현재 CLI가 어디까지 실행하고 어떤 결과를 출력하는지는
 [운영 문서](operations.md)의 "현재 구현 수준"에서 설명한다.
 
@@ -55,6 +60,12 @@ playbook에 흩어져 있으면 신규 서버를 구축할 때 일부 단계가 
 `new-host-bootstrap`과 `existing-host-drift`는 다음 상태 기준을 같은 순서로
 사용한다. 신규 서버 구축과 운영 서버 점검이 같은 기준을 공유하므로, 공통
 설정이 한쪽 작업에만 반영되는 것을 줄일 수 있다.
+
+표의 **담당 모듈**은 문서상의 분류가 아니라 각 상태 기준의 `owner_module`에
+기록되는 변경 책임이다. 공통 OS, Docker, NVIDIA, Kubernetes package와 network
+tuning은 `server-state`가 직접 관리하고, Kerberos/NFS와 monitoring은 담당
+모듈의 playbook과 runbook을 연결한다. 이렇게 하면 같은 운영 로직을 여러
+모듈에 복제하지 않고 기존 안전 절차와 rollback 책임을 유지할 수 있다.
 
 | 순서 | 영역 | 담당 모듈 | 1. 운영 서버 점검 기준 | 2. 신규 서버 구축 기준 |
 | --- | --- | --- | --- | --- |
@@ -92,6 +103,11 @@ network interface 등의 값은 inventory의 실제 서버 정보로 채운다.
 명령을 `DRY-RUN`으로 생성하며, 관리자가 실행 결과를 확인한 뒤 함께 제시된
 복구 계획을 검토한다. 따라서 이 흐름은 운영 서버를 즉시 변경하는 작업이 아니라,
 서버별 점검 방식과 후속 조치를 동일하게 만드는 역할을 한다.
+
+원격 명령을 계획으로 먼저 보여주는 이유는 여러 운영 서버를 한 번에 점검하더라도
+예상하지 않은 변경이 발생하지 않게 하기 위해서다. 특히 driver, cluster join,
+keytab과 mount 관련 복구는 workload나 인증 상태에 영향을 줄 수 있으므로 점검과
+변경 승인을 분리한다.
 
 **관련 코드**
 
@@ -147,15 +163,35 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 ### 4.1 상태 기준과 작업 흐름
 
 [`config/profiles.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml)이
-공통 상태와 작업 순서의 기준 파일이다.
+공통 상태와 작업 순서의 기준 파일이다. 설정은 **무엇이 정상 상태인지**를 정의하는
+`profiles`와 **어떤 목적으로 어떤 순서로 사용할지**를 정의하는 `profile_sets`로
+나뉜다.
 
-| 설정 | 의미 |
+하나의 상태 기준은 Docker Engine이나 NVIDIA driver처럼 독립적으로 점검하고
+복구할 수 있는 관리 단위다. 서버 목록을 뜻하는 것이 아니며, 특정 host의 값도
+직접 저장하지 않는다.
+
+| 설정 위치 | 포함하는 정보 | 역할 |
+| --- | --- | --- |
+| `profiles.<name>.owner_module` | 모듈 이름 | 기준과 실제 변경 절차를 관리할 책임을 표시한다. |
+| `profiles.<name>.description` | 목표 상태 설명 | 이 상태 기준이 서버에 보장하려는 내용을 설명한다. |
+| `profiles.<name>.checks` | ID, 종류, 설명, 명령 또는 값 | 현재 상태를 어떤 방법으로 점검할지 정의한다. |
+| `profiles.<name>.remediations` | ID, 실행 방식, 안전 수준, 명령 또는 runbook | 기준과 다를 때 어떤 복구 절차를 검토할지 정의한다. |
+| `profile_sets.<name>.profiles` | 상태 기준 이름의 순서 있는 목록 | 목적에 맞는 상태 기준과 실행 순서를 선택한다. |
+
+check는 서버를 변경하지 않는 방식만 사용한다.
+
+| check 종류 | 확인하는 대상 |
 | --- | --- |
-| `profiles` | Docker, NVIDIA, network처럼 독립적으로 점검·복구할 수 있는 상태 기준 목록 |
-| `owner_module` | 해당 기준과 실제 변경 절차를 관리하는 모듈 |
-| `checks` | 서버 상태를 읽거나 필수 값의 존재 여부를 검사하는 항목 |
-| `remediations` | 기준과 다를 때 사용할 명령 또는 수동 절차와 안전 수준 |
-| `profile_sets` | 목적별로 실행할 상태 기준의 이름과 순서 |
+| `local-inventory` | 서버가 공용 inventory에 등록되어 있는지 |
+| `local-path` | 담당 모듈의 설정 파일이나 reference가 로컬에 존재하는지 |
+| `template-value` | 명령 생성에 필요한 서버별 값이 준비되어 있는지 |
+| `remote-read` | 원격 서버의 package, service, 설정 또는 endpoint 상태 |
+
+remediation은 실행 가능한 명령인 `command`와 관리자가 절차를 따라야 하는
+`manual`로 구분한다. 각 항목의 `safety`는 반복 적용 가능한 `safe`, 사전 확인이
+필요한 `gated`, 서비스 영향 가능성이 큰 `risky` 중 하나로 표시한다. CLI는 이
+정보를 사용해 실제 변경 대신 검토할 계획과 안전 수준을 함께 보여준다.
 
 현재 작업 흐름은 다음과 같다.
 
@@ -166,10 +202,16 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 | `managed-host` | 운영 관리 서버에 사용하는 기본 작업 흐름 |
 | `monitoring-host` | monitoring 영역만 점검할 때 사용하는 작업 흐름 |
 
+profile set에는 점검 명령이나 복구 방법을 다시 적지 않고 상태 기준의 이름만
+둔다. 예를 들어 `docker-engine`은 Docker service, daemon과 cgroup driver의
+점검 기준 및 bootstrap 방법을 한 번만 정의하고, `new-host-bootstrap`과
+`existing-host-drift`가 같은 이름을 참조한다.
+
 새 공통 설정은 하나의 상태 기준으로 추가한 뒤 `new-host-bootstrap`과
 `existing-host-drift`에 함께 배치한다. 순서는 선행 조건을 기준으로 정한다.
 예를 들어 NVIDIA Container Toolkit은 NVIDIA driver와 Docker Engine이 준비된
-뒤에 구성한다.
+뒤에 구성한다. 상태 기준과 작업 흐름을 나눈 이유는 점검·복구 내용을 복제하지
+않고도 목적별 구성과 순서만 다르게 만들기 위해서다.
 
 **관련 코드**
 
@@ -185,10 +227,24 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 ### 4.2 서버별 설정값
 
 상태 기준에는 `{host}`, `{storage_interface}`, `{kerberos_realm}`처럼 서버마다
-달라지는 값의 자리가 들어 있다. 이 값은 공용
-[`servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl)과
-domain 규칙에서 가져온다. 서버 목록과 접속 정보를 별도로 복제하지 않기 때문에
-다른 운영 모듈과 같은 대상을 기준으로 작업할 수 있다.
+달라지는 값의 자리만 들어 있다. 실제 값은 다음 세 단계로 결정된다.
+
+| 단계 | 값의 출처 | 예시 |
+| --- | --- | --- |
+| 1. inventory 원본값 | 공용 [`servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl) | host, server ID, domain, SSH 주소·port·계정, management/storage interface와 IP |
+| 2. domain별 파생값 | `Server`가 원본값과 FARM/LAB 규칙으로 계산 | Kerberos realm과 principal, NFS source·option, Kubernetes cluster 이름 |
+| 3. 명령 렌더링 | 상태 기준의 자리표시자에 선택한 서버의 값을 대입 | `{host}` → `farm8`, `{storage_interface}` → 해당 서버의 storage NIC |
+
+inventory를 읽을 때 host, server ID, domain, server number와 접속 주소가 없으면
+해당 서버를 유효한 대상으로 만들지 않는다. 상태 기준에 정의되지 않은
+자리표시자가 있거나 필수 값이 비어 있을 때도 계획을 그대로 만들지 않고 오류나
+`MISSING` 상태로 드러낸다. 잘못된 값으로 원격 명령을 만드는 것보다 계획 생성
+단계에서 중단하거나 누락을 표시하기 위한 처리다.
+
+`server-state`가 별도 서버 목록을 만들지 않는 이유는 host, IP, domain과 network
+정보가 다른 운영 모듈의 대상과 달라지는 것을 막기 위해서다. 공용 inventory를
+사용하면 사용자 container 관리와 서버 상태 관리가 같은 서버 식별 정보와 접속
+정보를 참조한다.
 
 **관련 코드**
 
@@ -200,6 +256,21 @@ domain 규칙에서 가져온다. 서버 목록과 접속 정보를 별도로 �
   정보로 제공한다.
 - [inventory 로딩과 검증](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py%23L86-L133):
   JSONL을 읽고 필수 필드가 있는지 검사한 뒤 서버 정보로 변환한다.
+
+### 4.3 설정을 변경할 때
+
+변경하려는 내용에 따라 수정 위치를 나눈다.
+
+| 변경 내용 | 수정 위치 | 이유 |
+| --- | --- | --- |
+| 전체 서버가 따라야 할 목표 상태나 점검 방법 | `profiles.<name>` | 하나의 상태 기준에서 점검과 복구 내용을 함께 관리한다. |
+| 점검·구축에 포함할 영역이나 적용 순서 | `profile_sets.<name>.profiles` | 상태 기준을 복제하지 않고 목적별 작업 흐름만 변경한다. |
+| 특정 서버의 host, 접속 정보 또는 network 정보 | 공용 `servers.jsonl` 생성 과정 | 모든 운영 모듈이 같은 서버 정보를 사용하게 한다. |
+| 실제 서버 변경 방법 | `server-state` 또는 담당 모듈의 Ansible playbook/runbook | 변경과 rollback 책임을 해당 영역의 소유자에게 유지한다. |
+
+설정을 변경한 뒤에는 profile 로딩, 작업 흐름 순서, inventory 파싱과 서버별 값
+치환 test를 함께 갱신한다. 현재 CLI에서 변경 내용을 확인하고 실제 적용하는
+방법은 [운영 문서](operations.md)의 "공통 설정 추가 방법"에서 설명한다.
 
 ## 5. 코드 지도
 
@@ -216,17 +287,3 @@ domain 규칙에서 가져온다. 서버 목록과 접속 정보를 별도로 �
 | [`bin/server-state`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/bin/server-state), [`script/__main__.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/__main__.py) | shell과 Python에서 CLI를 시작하는 진입점 |
 | [`ansible_playbook/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/tree/main/server-state/ansible_playbook) | `server-state`가 직접 소유하는 공통 서버 설정을 실제 host에 적용한다. 다른 영역은 담당 모듈의 playbook을 사용한다. |
 | [`tests/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/tree/main/server-state/tests) | inventory 선택, 설정 로딩, 작업 흐름 순서와 서버별 값 반영을 검증한다. |
-
-## 6. 주요 설계 결정
-
-| 결정 | 이유 |
-| --- | --- |
-| 공통 상태를 `profiles.yml`에 선언한다. | 점검 기준과 복구 방법을 한곳에서 확인하고, 서버별 절차가 서로 달라지는 것을 줄이기 위해서다. |
-| 운영 서버 점검과 신규 서버 구축이 같은 상태 기준을 사용한다. | 신규 서버에 적용한 설정이 운영 서버 점검에서 빠지거나 그 반대가 되는 것을 방지하기 위해서다. |
-| 서버별 값은 공용 inventory에서 가져온다. | host, IP, domain과 network 정보를 여러 위치에서 중복 관리하지 않기 위해서다. |
-| 영역별 담당 모듈을 명시하고 기존 절차를 연결한다. | `server-state`에 운영 로직을 복제하지 않고, 각 모듈의 안전 절차와 변경 책임을 유지하기 위해서다. |
-| 원격 점검과 복구는 계획을 먼저 보여준다. | driver 변경, Kubernetes join, keytab과 mount처럼 서비스에 영향을 줄 수 있는 작업을 관리자가 검토한 뒤 실행하도록 하기 위해서다. |
-
-이 구조에서 `server-state`의 역할은 모든 작업을 대신 구현하는 것이 아니라,
-서버가 따라야 할 기준과 순서를 일관되게 유지하고 실제 변경 책임을 명확한 코드
-영역으로 연결하는 것이다.

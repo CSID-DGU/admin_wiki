@@ -14,24 +14,15 @@ System 영역은 하나의 애플리케이션이나 순차 실행 파이프라�
 `server-state`는 전체 서버 운영 기준을 확인하는 시작점이고, 나머지 네 모듈은
 이미지, 관측, 원격 기동, 인증·스토리지라는 개별 기능을 소유한다. 아래 순서는
 문서를 이해하기 위한 배치이며 모듈 간 실행 순서나 의존 순서를 뜻하지 않는다.
+각 모듈의 역할과 경계는 다음과 같다.
 
-| 순서 | 구성요소 | 전체 구조에서의 위치 |
-| --- | --- | --- |
-| 1 | `server-state/` | FARM/LAB 서버에 공통으로 필요한 상태와 구축·점검 기준을 정리한다. |
-| 2 | `container-images/` | 사용자가 실행할 GPU 컨테이너 이미지와 컨테이너 시작 환경을 관리한다. |
-| 3 | `monitoring/` | 운영 중인 서버, GPU, 컨테이너와 NFS 상태를 지속적으로 관측한다. |
-| 4 | `remote-operations/` | 전원이 꺼진 서버를 원격으로 깨우고 부팅 시점의 일회성 점검과 시작 작업을 수행한다. |
-| 5 | `kerberos-nfs/` | AD Kerberos 인증과 NFS 공유 스토리지 접근에 필요한 운영 기준을 관리한다. |
-
-## 구성요소별 역할
-
-| 구성요소 | 답하는 질문 | 담당 범위 | 담당하지 않는 범위 |
+| 구성요소 | 핵심 역할 | 담당 범위 | 담당하지 않는 범위 |
 | --- | --- | --- | --- |
-| [`server-state/`](server-state/index.md) | FARM/LAB 서버가 어떤 공통 상태여야 하는가? | 서버 profile, Docker/NVIDIA/Kubernetes/network/NFS 전제조건, 신규 서버 bootstrap 순서, 기존 서버 drift 점검과 remediation 계획 | 상시 monitoring, 전원 제어, 개별 운영 모듈의 구현 대체 |
-| [`container-images/`](container-images/index.md) | 컨테이너 안에는 무엇이 들어가고, 시작할 때 무엇을 설정하는가? | CUDA/TensorFlow image variant, Dockerfile, entrypoint, UID/GID·VNC·Kerberos ccache 런타임 계약, 이미지 테스트·배포 | GPU 서버 자체의 드라이버 설치, 서버 부팅 순서, 상시 상태 관측 |
-| [`monitoring/`](monitoring/index.md) | 지금 서버와 서비스에 어떤 일이 일어나고 있는가? | exporter, Prometheus, Grafana, Alertmanager, GPU/container/NFS 상태, 경보, forensics와 제한된 안전 복구 | 서버 구축 기준 정의, 전체 부팅 orchestration, AD/NFS의 위험한 상태 변경 |
-| [`remote-operations/`](remote-operations/index.md) | 꺼져 있는 서버를 어떻게 서비스 가능한 상태까지 올리는가? | Wake-on-LAN, 부팅 시 1회 health gate, 필수 mount·GPU·SSH 확인, 기존 stopped container 시작과 사후 점검 | 주기적 상태 수집, 서버의 목표 상태 정의, 새 컨테이너 생성 |
-| [`kerberos-nfs/`](kerberos-nfs/index.md) | 사용자가 어떤 신원으로 공유 스토리지에 안전하게 접근하는가? | AD Kerberos, UID/GID 일치, keytab·ccache, RPCSEC_GSS, FARM/LAB NFS 기준 문서, 명시적 repair·rotation·mount 절차 | 공통 host 설정의 전체 적용, 지속 monitoring, 컨테이너 이미지 빌드 |
+| [`server-state/`](server-state/index.md) | FARM/LAB 서버의 공통 상태와 구축·점검 기준 정의 | 서버 profile, Docker/NVIDIA/Kubernetes/network/NFS 전제조건, 신규 서버 bootstrap 순서, 기존 서버 drift 점검과 remediation 계획 | 상시 monitoring, 전원 제어, 개별 운영 모듈의 구현 대체 |
+| [`container-images/`](container-images/index.md) | 사용자 GPU 컨테이너 이미지와 시작 환경 관리 | CUDA/TensorFlow image variant, Dockerfile, entrypoint, UID/GID·VNC·Kerberos ccache 런타임 계약, 이미지 테스트·배포 | GPU 서버 자체의 드라이버 설치, 서버 부팅 순서, 상시 상태 관측 |
+| [`monitoring/`](monitoring/index.md) | 서버와 서비스의 현재 상태를 지속적으로 관측 | exporter, Prometheus, Grafana, Alertmanager, GPU/container/NFS 상태, 경보, forensics와 제한된 안전 복구 | 서버 구축 기준 정의, 전체 부팅 orchestration, AD/NFS의 위험한 상태 변경 |
+| [`remote-operations/`](remote-operations/index.md) | 서버 원격 부팅과 부팅 시점의 일회성 준비 작업 수행 | Wake-on-LAN, 부팅 시 1회 health gate, 필수 mount·GPU·SSH 확인, 기존 stopped container 시작과 사후 점검 | 주기적 상태 수집, 서버의 목표 상태 정의, 새 컨테이너 생성 |
+| [`kerberos-nfs/`](kerberos-nfs/index.md) | AD Kerberos 인증과 NFS 공유 스토리지 접근 기준 관리 | AD Kerberos, UID/GID 일치, keytab·ccache, RPCSEC_GSS, FARM/LAB NFS 기준 문서, 명시적 repair·rotation·mount 절차 | 공통 host 설정의 전체 적용, 지속 monitoring, 컨테이너 이미지 빌드 |
 
 ## 어디서 시작할까
 

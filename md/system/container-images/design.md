@@ -55,8 +55,8 @@ entrypoint의 전체 시작 순서는 다음과 같다.
 
 ### 2.2 계정, 그룹과 권한
 
-container 내부 사용자 이름과 UID/GID는 image가 결정하지 않는다.
-`user-lifecycle`이 DB·AD·NFS와 일치하는 값을 전달하면 entrypoint가 같은 값으로
+container 내부 사용자 이름과 UID/GID는 image가 결정하지 않는다. `infra`가
+DB·AD·NFS와 일치하는 값을 전달하면 entrypoint가 같은 값으로
 사용자와 primary group을 생성하거나 기존 계정을 검증한다. 같은 이름의 사용자나
 그룹이 이미 있는데 UID/GID가 다르면 조용히 덮어쓰지 않고 시작을 중단한다.
 
@@ -66,7 +66,7 @@ container 내부 사용자 이름과 UID/GID는 image가 결정하지 않는다.
 실행은 막는다. 기존 사용자의 password는 재시작할 때 변경하지 않으며, `USER_PW`는
 사용자를 처음 생성할 때만 적용한다.
 
-`user-lifecycle`이 전달하는 주요 값은 다음과 같다.
+`infra`가 전달하는 주요 값은 다음과 같다.
 
 | 값 | 의미 |
 | --- | --- |
@@ -146,7 +146,7 @@ localhost에 bind하고, noVNC가 지정된 web port를 통해 연결한다. 기
 ### 2.5 Kerberos 사용자 환경
 
 container에는 Kerberos client가 포함되지만 host의 machine keytab은 전달하지
-않는다. `user-lifecycle`과 host가 준비한 ccache 경로를 `KRB5CCNAME`으로 받으면
+않는다. `infra`가 준비한 ccache 경로를 `KRB5CCNAME`으로 받으면
 entrypoint가 사용자만 접근할 수 있는 ccache 디렉터리와 shell 환경 변수를
 구성한다. 사용자는 `decs-kerberos-status`로 현재 ticket을 확인할 수 있다.
 
@@ -239,6 +239,6 @@ container까지 막지 않기 위해서다. 운영 배포에서 호환성을 반
 | `scripts/variant_matrix.py` | manifest를 Docker/GitHub Actions build matrix로 변환 |
 | `scripts/build_variants.py` | 로컬 build/push 명령 생성과 실행 |
 | `scripts/test_image_variants.py` | image metadata, TensorFlow와 선택적 GPU smoke test |
-| `scripts/test_uid_create_container.py` | `user-lifecycle` CLI와의 dry-run 계약 검증 |
+| `scripts/test_uid_create_container.py` | `infra`가 전달하는 container 생성 입력값의 dry-run 계약 검증 |
 | `tests/` | `root_squash`, Kerberos, sudo와 build 설정 회귀 test |
 | `.github/workflows/docker-publish.yml` | PR merge 또는 수동 실행 시 matrix build/push |

@@ -67,18 +67,55 @@ playbook에 흩어져 있으면 신규 서버를 구축할 때 일부 단계가 
 
 ### 3.1 운영 서버 점검
 
-`existing-host-drift`는 표의 **운영 서버 점검 기준**을 순서대로 사용한다. 각
-상태 기준은 서버를 변경하지 않고 현재 상태를 읽는 점검 항목과, 차이가 발견됐을
-때 검토할 복구 방법을 함께 제공한다.
+운영 서버 점검의 목적은 한 대 이상의 서버가 공통 기준에서 벗어난 부분을 같은
+방식으로 찾는 것이다. 점검 대상은 공용 inventory에서 전체 서버, FARM/LAB
+영역 또는 개별 서버 단위로 선택한다. `existing-host-drift`는 선택된 각 서버에
+대해 표의 **운영 서버 점검 기준**을 위에서 아래 순서로 전개한다.
+
+각 상태 기준에는 서버를 변경하지 않고 현재 상태를 읽는 점검 항목이 들어 있다.
+예를 들어 Docker Engine은 service와 daemon, cgroup driver를 확인하고, NVIDIA
+driver는 GPU 인식과 package hold 상태를 확인한다. 명령에 필요한 host, domain,
+network interface 등의 값은 inventory의 실제 서버 정보로 채운다.
+
+점검 계획에는 다음 정보가 함께 나타난다.
+
+- 어떤 서버의 어느 상태 기준을 점검하는지
+- 정상 여부를 판단하기 위해 실행할 읽기 전용 명령
+- 해당 영역을 소유하는 모듈
+- 기준과 다를 때 검토할 복구 방법과 안전 수준
+
+현재 구현은 원격 점검 명령을 자동 실행하거나 결과를 판정하지 않는다. 서버별
+명령을 `DRY-RUN`으로 생성하며, 관리자가 실행 결과를 확인한 뒤 함께 제시된
+복구 계획을 검토한다. 따라서 이 흐름은 운영 서버를 즉시 변경하는 작업이 아니라,
+서버별 점검 방식과 후속 조치를 동일하게 만드는 역할을 한다.
 
 ### 3.2 신규 서버 구축
 
-`new-host-bootstrap`은 표의 **신규 서버 구축 기준**을 순서대로 사용한다. SSH,
-sudo, hostname, IP와 inventory가 준비된 서버를 대상으로 공통 package부터
-monitoring과 사용자 container 전제조건까지 같은 순서로 구성한다.
+신규 서버 구축의 목적은 새 서버를 기존 운영 서버와 같은 기준으로 재현 가능하게
+구성하는 것이다. Ubuntu 설치, IP와 hostname 설정, SSH 접속, 비대화형 sudo와
+inventory 등록까지 완료된 서버를 시작점으로 삼는다. 이 조건이 갖춰져야 이후
+설정에 필요한 서버 정보와 원격 실행 경로가 확정된다.
 
-Kerberos/NFS와 monitoring처럼 별도 모듈이 소유한 영역은 구현을 복제하지 않고
-해당 모듈의 점검·복구 절차를 작업 흐름에 연결한다.
+`new-host-bootstrap`은 표의 **신규 서버 구축 기준**을 선행 조건에 맞춰 적용한다.
+공통 OS와 package를 먼저 준비하고, Docker Engine과 NVIDIA driver/runtime,
+Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitoring과
+사용자 container 전제조건을 연결한다. 각 단계에는 운영 서버 점검과 동일한 상태
+기준이 사용되므로, 구축이 끝난 서버도 같은 항목으로 다시 점검할 수 있다.
+
+서버별 IP, domain, storage interface와 Kerberos 정보는 inventory 값으로
+채워진다. 실제 변경 방법은 상태 기준의 복구 항목에 연결되어 있으며, 작업의
+위험도에 따라 다음과 같이 구분한다.
+
+- 반복 실행해도 결과가 같은 설정은 Ansible playbook과 `--check --diff` 계획을
+  먼저 제공한다.
+- NVIDIA driver 변경, Kubernetes join, keytab과 mount처럼 서비스나 보안에
+  영향을 주는 작업은 자동 적용하지 않고 관리자의 확인이 필요한 절차로 남긴다.
+- Kerberos/NFS와 monitoring처럼 별도 모듈이 소유한 영역은 구현을 복제하지 않고
+  해당 모듈의 playbook이나 runbook을 호출한다.
+
+이 흐름의 결과물은 모든 변경을 즉시 실행하는 설치 프로그램이 아니라, 서버별로
+값이 채워진 순서 있는 구축 계획이다. 관리자는 단계별 예상 변경과 담당 모듈을
+확인한 뒤 실제 적용 여부를 결정한다.
 
 ## 4. 설정 구조
 

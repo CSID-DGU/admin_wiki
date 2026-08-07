@@ -89,6 +89,16 @@ network interface 등의 값은 inventory의 실제 서버 정보로 채운다.
 복구 계획을 검토한다. 따라서 이 흐름은 운영 서버를 즉시 변경하는 작업이 아니라,
 서버별 점검 방식과 후속 조치를 동일하게 만드는 역할을 한다.
 
+**관련 코드**
+
+- [`existing-host-drift` 작업 흐름](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/config/profiles.yml#L30-L42):
+  운영 서버에 적용할 상태 기준과 순서를 정의한다.
+- [점검 대상 선택](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/inventory.py#L136-L166):
+  `all`, FARM/LAB 또는 개별 서버 조건을 inventory의 실제 서버 목록에 적용한다.
+- [점검 계획 생성](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py#L78-L86)과
+  [점검 항목 처리](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py#L126-L142):
+  선택된 서버와 상태 기준을 순회하고 로컬 검사 결과 또는 `DRY-RUN` 명령을 만든다.
+
 ### 3.2 신규 서버 구축
 
 신규 서버 구축의 목적은 새 서버를 기존 운영 서버와 같은 기준으로 재현 가능하게
@@ -116,6 +126,17 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 이 흐름의 결과물은 모든 변경을 즉시 실행하는 설치 프로그램이 아니라, 서버별로
 값이 채워진 순서 있는 구축 계획이다. 관리자는 단계별 예상 변경과 담당 모듈을
 확인한 뒤 실제 적용 여부를 결정한다.
+
+**관련 코드**
+
+- [`new-host-bootstrap` 작업 흐름](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/config/profiles.yml#L16-L28):
+  신규 서버에 적용할 상태 기준과 순서를 정의한다.
+- [복구 계획 생성](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py#L89-L108)과
+  [안전 수준별 처리](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py#L145-L166):
+  상태 기준의 변경 방법을 서버별 `DRY-RUN` 명령 또는 수동 절차로 변환한다.
+- [`bootstrap_gpu_server.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/ansible_playbook/bootstrap_gpu_server.yml):
+  공통 OS, Docker, NVIDIA, Kubernetes와 network 설정을 실제 서버에 적용하는
+  Ansible task를 제공한다.
 
 ## 4. 설정 구조
 
@@ -146,6 +167,17 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 예를 들어 NVIDIA Container Toolkit은 NVIDIA driver와 Docker Engine이 준비된
 뒤에 구성한다.
 
+**관련 코드**
+
+- [`profiles.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/config/profiles.yml):
+  `profile_sets`와 `profiles`의 실제 설정을 관리한다.
+- [설정 로딩](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/profiles.py#L69-L111):
+  YAML의 작업 흐름, 상태 기준, 점검 항목과 복구 항목을 내부 모델로 변환한다.
+- [작업 흐름 확장](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/profiles.py#L42-L61):
+  선택한 profile set을 중복 없는 순서 있는 상태 기준 목록으로 바꾼다.
+- [서버별 값 반영](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/profiles.py#L114-L143):
+  상태 기준의 자리표시자를 선택한 서버의 실제 값으로 치환한다.
+
 ### 4.2 서버별 설정값
 
 상태 기준에는 `{host}`, `{storage_interface}`, `{kerberos_realm}`처럼 서버마다
@@ -153,6 +185,17 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 [`servers.jsonl`](https://github.com/CSID-DGU/admin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl)과
 domain 규칙에서 가져온다. 서버 목록과 접속 정보를 별도로 복제하지 않기 때문에
 다른 운영 모듈과 같은 대상을 기준으로 작업할 수 있다.
+
+**관련 코드**
+
+- [`servers.jsonl`](https://github.com/CSID-DGU/admin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl):
+  host, server ID, domain, SSH 접속 정보와 network interface를 저장하는 공용
+  inventory다.
+- [서버 정보와 파생값](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/inventory.py#L14-L83):
+  inventory 필드와 domain별 Kerberos, mount, Kubernetes 값을 하나의 서버
+  정보로 제공한다.
+- [inventory 로딩과 검증](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/inventory.py#L86-L133):
+  JSONL을 읽고 필수 필드가 있는지 검사한 뒤 서버 정보로 변환한다.
 
 ## 5. 코드 지도
 

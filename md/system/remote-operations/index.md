@@ -1,20 +1,20 @@
 # remote-operations
 
-`remote-operations`는 management host에서 FARM/LAB GPU server에 Wake-on-LAN
-packet을 보내고, 부팅된 host의 SSH·공유 스토리지·GPU를 확인한 뒤 기존 사용자
-container를 시작한다. 전원 신호 전송부터 container 내부 SSH와 GPU 확인까지를
-하나의 부팅 작업으로 묶어, server가 사용자 작업을 받을 수 있는 상태인지 확인하는
+`remote-operations`는 관리 서버에서 FARM/LAB GPU 서버에 Wake-on-LAN
+패킷을 보내고, 부팅된 서버의 SSH·공유 스토리지·GPU를 확인한 뒤 기존 사용자
+컨테이너를 시작한다. 부팅 신호 전송부터 컨테이너 내부 SSH와 GPU 확인까지를
+하나의 부팅 작업으로 묶어, 서버가 사용자 작업을 받을 수 있는 상태인지 확인하는
 것이 목표다.
 
-NIC·network, Ansible 원격 접근, host mount와 GPU driver, 사용자 container는 미리
+NIC·네트워크, Ansible 원격 접근, 서버의 공유 스토리지 mount와 GPU driver, 사용자 컨테이너는 미리
 준비된 상태를 입력으로 사용한다. 이 모듈은 부팅 시 그 상태를 확인하고 제한된
-복구를 수행하며, 해결되지 않은 실패를 log와 alert로 남긴다.
+복구를 수행하며, 해결되지 않은 실패를 로그와 알림으로 남긴다.
 
 ## 문서 구성
 
 | 문서 | 핵심 내용 |
 | --- | --- |
 | 현재 페이지 | remote-operations의 목표와 실행 전제 |
-| [설계](design.md) | 실행 구조, target 모델, WOL·health gate·container post-check와 systemd 설계 |
-| [운영](operations.md) | 수동 실행, dry-run, 배포·점검과 장애 대응 절차 |
-| [설정](config.md) | target, network, timeout, mount, log와 alert 설정 준비 |
+| [설계](design.md) | 실행 구조, 대상 서버 지정 방식, 부팅 신호 전송·서버 준비 상태 확인·컨테이너 기동 후 점검과 systemd 설계 |
+| [운영](operations.md) | 수동 실행, 모의 실행, 배포·점검과 장애 대응 절차 |
+| [설정](config.md) | 대상 서버, 네트워크, 제한 시간, 공유 스토리지, 로그와 알림 설정 준비 |

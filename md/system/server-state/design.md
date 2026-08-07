@@ -2,6 +2,10 @@
 
 > [개요](index.md) · [운영](operations.md)
 
+> **GitHub 코드 링크:** `admin_infra_server`는 비공개 저장소다. 코드 링크를
+> 누르면 GitHub 로그인 화면을 거쳐 원래 파일과 line으로 이동한다. 조직 저장소에
+> 접근 권한이 있는 계정으로 로그인해야 한다.
+
 ## 1. 개요
 
 FARM/LAB GPU 서버는 Docker, NVIDIA, Kubernetes, network, Kerberos/NFS와
@@ -91,12 +95,12 @@ network interface 등의 값은 inventory의 실제 서버 정보로 채운다.
 
 **관련 코드**
 
-- [`existing-host-drift` 작업 흐름](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/config/profiles.yml#L30-L42):
+- [`existing-host-drift` 작업 흐름](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml%23L30-L42):
   운영 서버에 적용할 상태 기준과 순서를 정의한다.
-- [점검 대상 선택](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/inventory.py#L136-L166):
+- [점검 대상 선택](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py%23L136-L166):
   `all`, FARM/LAB 또는 개별 서버 조건을 inventory의 실제 서버 목록에 적용한다.
-- [점검 계획 생성](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py#L78-L86)과
-  [점검 항목 처리](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py#L126-L142):
+- [점검 계획 생성](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py%23L78-L86)과
+  [점검 항목 처리](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py%23L126-L142):
   선택된 서버와 상태 기준을 순회하고 로컬 검사 결과 또는 `DRY-RUN` 명령을 만든다.
 
 ### 3.2 신규 서버 구축
@@ -129,12 +133,12 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 
 **관련 코드**
 
-- [`new-host-bootstrap` 작업 흐름](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/config/profiles.yml#L16-L28):
+- [`new-host-bootstrap` 작업 흐름](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml%23L16-L28):
   신규 서버에 적용할 상태 기준과 순서를 정의한다.
-- [복구 계획 생성](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py#L89-L108)과
-  [안전 수준별 처리](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py#L145-L166):
+- [복구 계획 생성](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py%23L89-L108)과
+  [안전 수준별 처리](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py%23L145-L166):
   상태 기준의 변경 방법을 서버별 `DRY-RUN` 명령 또는 수동 절차로 변환한다.
-- [`bootstrap_gpu_server.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/ansible_playbook/bootstrap_gpu_server.yml):
+- [`bootstrap_gpu_server.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/ansible_playbook/bootstrap_gpu_server.yml):
   공통 OS, Docker, NVIDIA, Kubernetes와 network 설정을 실제 서버에 적용하는
   Ansible task를 제공한다.
 
@@ -142,7 +146,7 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 
 ### 4.1 상태 기준과 작업 흐름
 
-[`config/profiles.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/config/profiles.yml)이
+[`config/profiles.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml)이
 공통 상태와 작업 순서의 기준 파일이다.
 
 | 설정 | 의미 |
@@ -169,32 +173,32 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 
 **관련 코드**
 
-- [`profiles.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/config/profiles.yml):
+- [`profiles.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml):
   `profile_sets`와 `profiles`의 실제 설정을 관리한다.
-- [설정 로딩](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/profiles.py#L69-L111):
+- [설정 로딩](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/profiles.py%23L69-L111):
   YAML의 작업 흐름, 상태 기준, 점검 항목과 복구 항목을 내부 모델로 변환한다.
-- [작업 흐름 확장](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/profiles.py#L42-L61):
+- [작업 흐름 확장](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/profiles.py%23L42-L61):
   선택한 profile set을 중복 없는 순서 있는 상태 기준 목록으로 바꾼다.
-- [서버별 값 반영](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/profiles.py#L114-L143):
+- [서버별 값 반영](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/profiles.py%23L114-L143):
   상태 기준의 자리표시자를 선택한 서버의 실제 값으로 치환한다.
 
 ### 4.2 서버별 설정값
 
 상태 기준에는 `{host}`, `{storage_interface}`, `{kerberos_realm}`처럼 서버마다
 달라지는 값의 자리가 들어 있다. 이 값은 공용
-[`servers.jsonl`](https://github.com/CSID-DGU/admin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl)과
+[`servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl)과
 domain 규칙에서 가져온다. 서버 목록과 접속 정보를 별도로 복제하지 않기 때문에
 다른 운영 모듈과 같은 대상을 기준으로 작업할 수 있다.
 
 **관련 코드**
 
-- [`servers.jsonl`](https://github.com/CSID-DGU/admin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl):
+- [`servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl):
   host, server ID, domain, SSH 접속 정보와 network interface를 저장하는 공용
   inventory다.
-- [서버 정보와 파생값](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/inventory.py#L14-L83):
+- [서버 정보와 파생값](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py%23L14-L83):
   inventory 필드와 domain별 Kerberos, mount, Kubernetes 값을 하나의 서버
   정보로 제공한다.
-- [inventory 로딩과 검증](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/inventory.py#L86-L133):
+- [inventory 로딩과 검증](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py%23L86-L133):
   JSONL을 읽고 필수 필드가 있는지 검사한 뒤 서버 정보로 변환한다.
 
 ## 5. 코드 지도
@@ -205,13 +209,13 @@ domain 규칙에서 가져온다. 서버 목록과 접속 정보를 별도로 �
 
 | 파일·디렉터리 | 역할 |
 | --- | --- |
-| [`config/profiles.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/config/profiles.yml) | 상태 기준과 작업 흐름을 선언하는 기준 파일 |
-| [`script/profiles.py`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/profiles.py) | 설정 파일을 읽고 작업 흐름을 상태 기준 목록으로 확장하며 서버별 값을 반영한다. |
-| [`script/inventory.py`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/inventory.py) | 공용 inventory를 읽어 대상 서버를 선택하고 서버별 설정값을 제공한다. |
-| [`script/cli.py`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/cli.py) | CLI 입력, 서버 선택과 상태 기준을 조합하여 점검 결과와 복구 계획을 출력한다. |
-| [`bin/server-state`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/bin/server-state), [`script/__main__.py`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/script/__main__.py) | shell과 Python에서 CLI를 시작하는 진입점 |
-| [`ansible_playbook/`](https://github.com/CSID-DGU/admin_infra_server/tree/main/server-state/ansible_playbook) | `server-state`가 직접 소유하는 공통 서버 설정을 실제 host에 적용한다. 다른 영역은 담당 모듈의 playbook을 사용한다. |
-| [`tests/`](https://github.com/CSID-DGU/admin_infra_server/tree/main/server-state/tests) | inventory 선택, 설정 로딩, 작업 흐름 순서와 서버별 값 반영을 검증한다. |
+| [`config/profiles.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml) | 상태 기준과 작업 흐름을 선언하는 기준 파일 |
+| [`script/profiles.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/profiles.py) | 설정 파일을 읽고 작업 흐름을 상태 기준 목록으로 확장하며 서버별 값을 반영한다. |
+| [`script/inventory.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py) | 공용 inventory를 읽어 대상 서버를 선택하고 서버별 설정값을 제공한다. |
+| [`script/cli.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py) | CLI 입력, 서버 선택과 상태 기준을 조합하여 점검 결과와 복구 계획을 출력한다. |
+| [`bin/server-state`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/bin/server-state), [`script/__main__.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/__main__.py) | shell과 Python에서 CLI를 시작하는 진입점 |
+| [`ansible_playbook/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/tree/main/server-state/ansible_playbook) | `server-state`가 직접 소유하는 공통 서버 설정을 실제 host에 적용한다. 다른 영역은 담당 모듈의 playbook을 사용한다. |
+| [`tests/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/tree/main/server-state/tests) | inventory 선택, 설정 로딩, 작업 흐름 순서와 서버별 값 반영을 검증한다. |
 
 ## 6. 주요 설계 결정
 

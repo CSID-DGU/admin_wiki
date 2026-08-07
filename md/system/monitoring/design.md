@@ -23,17 +23,17 @@ container, Docker, Kerberos/NFS와 외부 연결 상태가 포함된다.
 monitoring은 서버에서 상태를 만드는 구성요소와 metric을 저장·조회·전달하는
 control plane으로 구성된다.
 
-| 구분 | 구성요소 | 역할 |
-| --- | --- | --- |
-| 서버 자원 수집 | `node-exporter` | CPU, memory, filesystem, disk와 network 상태를 metric으로 제공한다. |
-| GPU 사용량 수집 | `gpu-user-exporter` | GPU process를 container와 사용자 정보에 연결한다. |
-| 운영 상태 수집 | `cluster-monitor-exporter` | mount, Kerberos/NFS, Docker, container, GPU와 연결 상태를 수집한다. |
-| NFS 상태 관리 | NFS GSS health | Kerberos 인증 준비 상태를 확인하고 missing mount 복구 절차를 실행한다. |
-| NFS 증거 수집 | NFS forensics | NFS 장애 전후의 packet, kernel과 process 상태를 보존한다. |
-| Keytab 점검 | keytab health check | AD KVNO, storage keytab과 service ticket 상태를 확인한다. |
-| Metric 저장·평가 | FARM/LAB Prometheus | 환경별 metric을 저장하고 FARM에서 공통 service alert rule을 평가한다. |
-| 시각화 | Grafana | FARM/LAB datasource의 시계열을 dashboard로 표시한다. |
-| Alert 전달 | FARM Alertmanager와 relay | 발생·해제된 공통 service alert를 내부 알림 API 형식으로 전달한다. |
+| 구분 | 구성요소 | 구현 형태 | 역할 |
+| --- | --- | --- | --- |
+| 서버 자원 수집 | `node-exporter` | Prometheus 기본 exporter | CPU, memory, filesystem, disk와 network 상태를 metric으로 제공한다. |
+| GPU 사용량 수집 | `gpu-user-exporter` | 커스텀 Go exporter | GPU process를 container와 사용자 정보에 연결한다. |
+| 운영 상태 수집 | `cluster-monitor-exporter` | 커스텀 Go exporter | mount, Kerberos/NFS, Docker, container, GPU와 연결 상태를 수집한다. |
+| NFS 상태 관리 | NFS GSS health | shell·systemd worker | Kerberos 인증 준비 상태를 확인하고 missing mount 복구 절차를 실행한다. |
+| NFS 증거 수집 | NFS forensics | shell·systemd service | NFS 장애 전후의 packet, kernel과 process 상태를 보존한다. |
+| Keytab 점검 | keytab health check | shell·systemd user timer | AD KVNO, storage keytab과 service ticket 상태를 확인한다. |
+| Metric 저장·평가 | FARM/LAB Prometheus | `kube-prometheus-stack` | 환경별 metric을 저장하고 FARM에서 공통 service alert rule을 평가한다. |
+| 시각화 | Grafana | `kube-prometheus-stack` | FARM/LAB datasource의 시계열을 dashboard로 표시한다. |
+| Alert 전달 | FARM Alertmanager와 relay | Alertmanager·Python relay | 발생·해제된 공통 service alert를 내부 알림 API 형식으로 전달한다. |
 
 구성요소 사이의 주요 데이터 흐름은 다음과 같다.
 
@@ -68,6 +68,12 @@ datasource로 사용한다.
 
 ### 3.1 `node-exporter`
 
+**구현 형태:** Prometheus 커뮤니티에서 제공하는 기본
+[`node_exporter`](https://github.com/prometheus/node_exporter)다.
+`kube-prometheus-stack`의 `prometheus-node-exporter` chart가 FARM/LAB node에
+DaemonSet으로 배포한다. 이 저장소는 exporter 구현 코드 대신 환경별 port,
+collector와 scrape 설정을 관리한다.
+
 **역할:** 운영체제와 hardware의 기본 자원 사용량을 제공한다.
 
 **입력:** Linux kernel이 제공하는 `/proc`, `/sys`, filesystem과 network interface
@@ -88,6 +94,10 @@ Prometheus values의 `prometheus-node-exporter` 항목에서 관리한다.
 [`prometheus-lab-values.yaml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Fprometheus-lab-values.yaml)
 
 ### 3.2 `gpu-user-exporter`
+
+**구현 형태:** GPU process, Docker container와 UID DB 사용자 정보를 연결하기
+위해 만든 커스텀 Go exporter다. Prometheus Go client의 custom collector를
+구현해 scrape 요청마다 GPU·container·사용자 정보를 수집하고 metric을 생성한다.
 
 **역할:** 서버의 GPU 사용량을 실제 사용자와 container 단위로 제공한다.
 
@@ -117,7 +127,38 @@ PID와 Docker 정보를 읽을 수 있는 권한으로 실행된다.
 [`gpu-user-exporter README`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2FREADME.md),
 [`deploy_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Fdeploy_exporters.yml)
 
+#### Go 코드 구조
+
+`gpu-user-exporter`의 Go 구현은 `main.go`에 있으며, type과 함수가 다음 역할로
+나뉜다.
+
+| 코드 | 역할 |
+| --- | --- |
+| [`config`, `loadConfig`, `resolveDSN`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L28-L250) | 실행 option과 환경 변수를 읽고 server ID에 맞는 DB 연결 정보를 만든다. |
+| [`main`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L142-L179) | DB 연결, Prometheus registry, custom collector와 HTTP endpoint를 초기화한다. |
+| [`gpuUserCollector`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L121-L336) | metric descriptor와 수집에 필요한 설정·cache를 보관한다. |
+| [`Collect`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L354-L468) | 한 번의 scrape에서 GPU, process, container와 사용자 정보를 결합해 metric을 출력한다. |
+| [`ownerCache`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L50-L59)와 [`refreshIfNeeded`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L610-L680) | UID DB의 active container 정보를 일정 시간 cache하고 container ID 조회를 제공한다. |
+| [`collectGPUInfo`, `collectGPUProcesses`, `collectPmon`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L700-L804) | `nvidia-smi` 출력을 GPU·process·utilization 구조체로 변환한다. |
+| [`collectRunningDockerContainers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L509-L609), [`containerIDFromPID`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L805-L821) | Docker inspect와 `/proc/<pid>/cgroup`에서 container 실행·GPU 할당과 PID 소속을 확인한다. |
+
+실행 흐름은 다음과 같다.
+
+```text
+main -> config·DB·registry 초기화
+     -> Prometheus scrape
+     -> gpuUserCollector.Collect
+     -> DB cache 갱신 + GPU/process/Docker 수집
+     -> PID를 container와 사용자에 연결
+     -> 사용자·container·GPU 단위 집계
+     -> Prometheus metric 출력
+```
+
 ### 3.3 `cluster-monitor-exporter`
+
+**구현 형태:** FARM/LAB 서버의 운영 상태와 환경별 진단 항목을 수집하기 위해 만든
+커스텀 Go exporter다. background collection, metric rendering과 HTTP endpoint를
+직접 구현하며 NFS GSS와 forensics adapter는 별도 Go 파일로 분리한다.
 
 **역할:** 기본 자원 metric만으로 판단하기 어려운 서버와 service의 운영 상태를
 수집한다.
@@ -156,6 +197,30 @@ container image pattern, public health port, NFS state file, forensics state fil
 [`main.go`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go),
 [`환경 설정 예시`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fconfig%2Fcluster_monitor_exporter.example.env),
 [`cluster-monitor-exporter README`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2FREADME.md)
+
+#### Go 코드 구조
+
+| 파일·코드 | 역할 |
+| --- | --- |
+| [`Config`, `loadConfig`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L31-L326) | 환경 파일과 환경 변수를 읽고 수집 주기, timeout, 점검·복구 기능과 state 경로를 검증한다. |
+| [`main`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L134-L211) | `Collector`, background goroutine, metric·health·NFS API와 public health HTTP server를 시작한다. |
+| [`Collector.run`, `collectOnce`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L451-L474) | 설정된 주기로 전체 수집을 실행하고 완성된 metric text와 수집 시각을 교체한다. |
+| [`Collector.collect`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L541-L581) | mount, process, NFS GSS, forensics, GPU, Docker, container와 외부 연결 collector를 순서대로 호출한다. |
+| [`collectMounts`부터 `collectContainers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L711-L1296) | 영역별 host 명령과 상태를 읽고 mount, process, GPU, Docker와 container metric을 생성한다. |
+| [`renderer`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L1558-L1617) | metric help, type, label과 값을 Prometheus text format으로 직렬화한다. |
+| [`nfs_gss_health.go`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fnfs_gss_health.go) | readiness·canary·recovery state와 `rpc-gssd` journal을 metric·health 결과로 변환하고 NFS API를 처리한다. |
+| [`nfs_forensics.go`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fnfs_forensics.go) | forensics status JSON을 snapshot 구조체로 읽고 freshness·incident metric을 생성한다. |
+
+실행 흐름은 다음과 같다.
+
+```text
+main -> Config 로딩·검증
+     -> Collector.run background loop
+     -> collect가 영역별 collector 호출
+     -> renderer가 Prometheus text 생성
+     -> Collector가 마지막 결과와 수집 시각 보관
+     -> /metrics와 /healthz가 저장된 결과 제공
+```
 
 #### Collection freshness
 

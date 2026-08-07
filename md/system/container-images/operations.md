@@ -26,24 +26,24 @@ tag 정책이나 build 도구를 변경할 때 확인해야 할 범위도 함께
 build, 배포, 장애 분석 기록에는 `cuda12.5-tf2.20-ubuntu22.04-260706`처럼 날짜가
 포함된 전체 tag를 사용한다.
 
-## 2. 변경할 파일 선택
+## 2. 목적별 수정 위치
 
-먼저 변경 내용이 build 시점의 image 구성인지, container 시작 시점의 runtime
-구성인지 구분한다.
+변경하려는 목적을 먼저 정한 뒤 그 목적을 소유하는 파일을 수정한다. 하나의 변경이
+image 구성, 시작 동작과 검증에 함께 영향을 주면 표의 관련 파일도 같이 변경한다.
 
-| 변경하려는 내용 | 수정할 위치 | 함께 확인할 항목 |
+| 변경 목적 | 주로 수정할 위치 | 함께 확인하거나 수정할 위치 |
 | --- | --- | --- |
-| CUDA, TensorFlow, Python, Ubuntu 조합이나 최소 driver | [`image-variants.json`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/image-variants.json) | base image 호환성, package 제약, tag와 지원 상태 |
-| apt·conda·pip package, 공통 파일, image label | [`Dockerfile`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/Dockerfile) | 모든 이미지 버전의 build와 package 회귀 test |
-| 계정·그룹·홈·Kerberos·SSH·Jupyter·VNC 시작 동작 | [`entrypoint.sh`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh) | 기존 홈 보존, `root_squash`, 재시작 안전성, 사용자 권한 |
-| build argument와 Docker tag 생성 방식 | [`variant_matrix.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/variant_matrix.py), [`build_variants.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/build_variants.py) | 로컬 build와 배포 matrix가 같은 결과를 만드는지 확인 |
-| image 내부 package·TensorFlow·GPU 검증 | [`test_image_variants.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/test_image_variants.py) | CPU 환경과 실제 GPU host를 분리하여 검증 |
-| 자동 build/push 정의 | [`docker-publish.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/.github/workflows/docker-publish.yml) | workflow 위치, trigger, Docker Hub secret과 release tag |
+| 새로운 CUDA·TensorFlow·Python·Ubuntu 조합을 제공한다. | [`image-variants.json`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/image-variants.json) | [`README.md`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/README.md)의 image·alias 목록, matrix 출력과 GPU smoke test |
+| 모든 이미지 버전에 package나 공통 파일을 추가·갱신한다. | [`Dockerfile`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/Dockerfile) | [`test_image_build_config.sh`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/tests/test_image_build_config.sh), 전체 이미지 버전 build |
+| container 시작 시 계정·그룹·홈·Kerberos·SSH·Jupyter·VNC를 구성하는 동작을 바꾼다. | [`entrypoint.sh`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh) | [`test_entrypoint_root_squash.sh`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/tests/test_entrypoint_root_squash.sh), 기존 홈과 재시작 동작 |
+| image repository, 날짜 tag, alias 또는 지원 상태를 바꾼다. | [`image-variants.json`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/image-variants.json), [`variant_matrix.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/variant_matrix.py) | [`build_variants.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/build_variants.py)의 dry-run tag |
+| 로컬 build 명령이나 build argument 전달 방식을 바꾼다. | [`build_variants.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/build_variants.py) | `variant_matrix.py`, `Dockerfile`의 `ARG`, 배포 workflow의 build argument |
+| image에서 확인할 package·TensorFlow·GPU 항목을 추가한다. | [`test_image_variants.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/test_image_variants.py) | CPU test와 대상 GPU host test 결과 |
+| Docker Hub build/push를 자동화하거나 trigger를 변경한다. | [`docker-publish.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/.github/workflows/docker-publish.yml) | workflow 위치, build context, Docker Hub secret과 release tag |
 
-사용자마다 달라지는 UID/GID, 그룹 membership, 홈 mount와 port를 image에 넣지 않는다.
-이 값들은 container를 생성할 때 `infra`가 전달한다. 반대로 모든 사용자에게 필요한
-package나 시작 동작을 `infra`의 Docker 명령에 복제하지 않고 `Dockerfile` 또는
-`entrypoint.sh`에서 관리한다.
+특정 사용자의 UID/GID, group membership, 홈 mount나 port를 변경하는 것은
+`container-images` 변경 목적이 아니다. 외부에서 전달된 값을 container 내부에서
+처리하는 방식 자체를 바꿀 때만 `entrypoint.sh`를 수정한다.
 
 ## 3. 새 이미지 버전 추가
 

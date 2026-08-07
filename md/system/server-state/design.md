@@ -2,302 +2,236 @@
 
 > [개요](index.md) · [운영](operations.md)
 
-> **GitHub 코드 링크:** `admin_infra_server`는 비공개 저장소다. 코드 링크를
-> 누르면 GitHub 로그인 화면을 거쳐 원래 파일과 line으로 이동한다. 조직 저장소에
-> 접근 권한이 있는 계정으로 로그인해야 한다.
+> **GitHub 코드 링크:** `admin_infra_server`는 비공개 저장소다. 링크를 누르면
+> GitHub 로그인 화면을 거쳐 해당 파일과 line으로 이동한다. 조직 저장소에 접근
+> 권한이 있는 계정으로 로그인해야 한다.
 
 ## 1. 개요
 
-FARM/LAB GPU 서버는 Docker, NVIDIA, Kubernetes, network, Kerberos/NFS와
-monitoring 설정을 공통으로 사용한다. 이 기준과 작업 순서가 여러 모듈과
-playbook에 흩어져 있으면 신규 서버를 구축할 때 일부 단계가 누락될 수 있고,
-운영 서버가 기준에서 벗어나도 같은 방식으로 점검하기 어렵다.
+FARM/LAB GPU 서버는 OS 공통 패키지, Docker, NVIDIA driver/runtime,
+Kubernetes, storage network, Kerberos/NFS와 monitoring 설정을 공통으로
+사용한다. 이 기준과 실제 구현이 여러 playbook에 흩어져 있기만 하면 신규 서버를
+구성할 때 일부 단계가 빠지기 쉽고, 운영 서버가 기준에서 벗어났을 때도 서버마다
+다른 방법으로 점검하게 된다.
 
-`server-state`는 서버가 갖춰야 할 공통 상태와 작업 순서를 한곳에 정의하여
-다음 두 작업이 서로 다른 기준으로 운영되지 않도록 한다.
+`server-state`는 이 문제를 해결하기 위해 다음 정보를 하나의 운영 정책으로
+연결한다.
 
-1. **운영 서버 점검**: 현재 상태를 공통 기준과 비교할 수 있는 점검 항목과
-   복구 계획을 제공한다.
-2. **신규 서버 구축**: 공통 설정을 정해진 순서로 적용하여 기존 운영 서버와
-   같은 상태를 만든다.
+1. **운영 서버 점검**: 선택한 서버가 각 구성요소의 목표 상태를 만족하는지
+   읽기 전용 Ansible 작업으로 점검한다.
+2. **신규 서버 구성**: 같은 구성요소 순서에 따라 예상 변경을 확인하고, 안전
+   수준에 맞는 승인 후 목표 상태를 적용한다.
 
-코드에서는 하나의 관리 영역에 대한 기준을 `profile`, 여러 기준을 목적에 맞게
-순서대로 묶은 작업 흐름을 `profile set`이라고 부른다. 이 문서에서는 각각
-**상태 기준(profile)**과 **작업 흐름(profile set)**으로 표기한다.
+여기서 **구성요소(component)**는 서버 묶음이 아니라 독립적으로 점검하고
+구성할 수 있는 운영 상태의 단위다. 예를 들어 `docker-engine` 구성요소는
+"Docker가 설치되어 있고, service와 daemon이 정상이며, systemd cgroup driver를
+사용한다"는 하나의 목표 상태를 뜻한다.
 
 ## 2. 설계 구조
 
-`server-state`는 서버에 직접 접속해 모든 설정을 자동 변경하는 controller가
-아니라, **대상 서버 정보와 상태 기준을 결합하여 점검·복구 계획을 만드는 조정
-계층**으로 설계되어 있다.
+`server-state`는 기준, 서버별 값, 실행 계획, 실제 구현을 다음과 같이 분리한다.
 
-| 구성 요소 | 역할 |
-| --- | --- |
-| 공용 inventory | 대상 서버를 선택하고 domain, 접속 정보, network interface 등 서버별 값을 제공한다. |
-| 상태 기준(profile) | 하나의 관리 영역에 대해 목표 상태, 점검 항목, 복구 방법과 담당 모듈을 정의한다. |
-| 작업 흐름(profile set) | 여러 상태 기준을 운영 서버 점검이나 신규 서버 구축에 필요한 순서로 묶는다. |
-| CLI | 대상 서버와 작업 흐름을 결합하고, 서버별 점검 명령과 복구 계획을 출력한다. |
-| Ansible playbook과 담당 모듈 | 관리자가 계획을 검토한 뒤 실제 서버 설정을 적용할 때 사용한다. |
+| 계층 | 저장 위치 | 역할 |
+| --- | --- | --- |
+| 정책 | `policy/standard-gpu-server.yml` | 모든 관리 서버에 필요한 구성요소와 적용 순서를 정의한다. |
+| 구성요소 명세 | `components/*.yml` | 각 구성요소의 목표 상태, 담당 모듈, 점검·구성 진입점과 안전 수준을 정의한다. |
+| 서버·환경 설정 | 공용 `servers.jsonl`, `config/environments.yml` | 대상 서버의 접속·network 정보와 FARM/LAB별 Kerberos, NFS, Kubernetes 값을 제공한다. |
+| 실행 계획 | `server_state/` Python package | 입력을 검증하고 대상 서버와 구성요소를 결합하여 안전한 Ansible 인자 배열을 만든다. |
+| 실제 구현 | `ansible/roles/`와 담당 모듈 playbook | 서버 상태를 읽거나 목표 상태에 맞게 구성한다. |
+| 사용자 진입점 | `bin/server-state` | `describe`, `audit`, `plan`, `apply` 명령을 제공한다. |
+
+사용자가 실행하는 파일은 [`bin/server-state`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fbin%2Fserver-state) 하나다.
+내부 Python 구현은 기능별로 `commands.py`, `catalog.py`, `inventory.py`,
+`planner.py`에 나뉜다. `cli/`나 `run/`처럼 실행 방식만 나타내는 디렉터리를
+추가하지 않고 모듈 이름과 같은 `server_state/` package에 둔 이유는, 이 코드가
+명령 실행뿐 아니라 정책 검증·서버 정보 해석·계획 생성을 함께 담당하기 때문이다.
 
 처리 순서는 다음과 같다.
 
-1. inventory에서 작업 대상 서버와 서버별 설정값을 읽는다.
-2. 선택한 작업 흐름을 순서가 있는 상태 기준 목록으로 확장한다.
-3. 각 상태 기준의 점검·복구 명령에 서버별 값을 반영한다.
-4. 실행할 계획과 안전 수준을 출력한다.
-5. 관리자가 계획을 검토하고 필요한 명령이나 playbook을 실행한다.
+1. 공용 inventory에서 `--hosts`에 맞는 서버를 선택한다.
+2. 정책에서 `--component`에 맞는 구성요소를 정책 순서대로 선택한다.
+3. FARM/LAB 설정을 서버 정보와 결합해 Kerberos principal, NFS mount,
+   Kubernetes context 등의 실행값을 만든다.
+4. 각 구성요소 명세에서 현재 명령에 맞는 `audit` 또는 `converge` 진입점을
+   선택한다.
+5. `ansible-playbook` 인자와 extra vars를 배열로 만들고, 명령에 따라 출력하거나
+   실행한다.
 
-공통 기준을 만드는 부분과 실제 서버를 변경하는 부분을 분리한 이유는 기준을
-읽고 검토하는 과정이 특정 실행 도구에 묶이지 않게 하기 위해서다. 또한 실제
-변경과 rollback은 각 영역을 담당하는 모듈에 남겨 기존 운영 절차를 그대로
-사용한다.
+정책과 실제 task를 분리했기 때문에 전체 서버가 따라야 할 순서는 한곳에서 읽을
+수 있고, Docker·Kerberos/NFS·monitoring 같은 구현은 각각의 소유 위치에서
+수정할 수 있다. Python 코드에는 긴 점검·복구 shell 명령을 저장하지 않는다.
 
-현재 CLI가 어디까지 실행하고 어떤 결과를 출력하는지는
-[운영 문서](operations.md)의 "현재 구현 수준"에서 설명한다.
+## 3. 정책 구성과 소유권
 
-## 3. 관리 범위와 소유권
+[`standard-gpu-server.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fpolicy%2Fstandard-gpu-server.yml%23L1-L15)은
+다음 구성요소를 선행 조건에 맞는 순서로 사용한다.
 
-`new-host-bootstrap`과 `existing-host-drift`는 다음 상태 기준을 같은 순서로
-사용한다. 신규 서버 구축과 운영 서버 점검이 같은 기준을 공유하므로, 공통
-설정이 한쪽 작업에만 반영되는 것을 줄일 수 있다.
+| 순서 | 구성요소 | 담당 모듈 | 목표 상태 | 구성 안전 수준 |
+| ---: | --- | --- | --- | --- |
+| 1 | `baseline-access` | `server-state` | inventory, Ansible 접속, 비대화형 sudo와 hostname이 일치한다. | 수동·승인 필요 |
+| 2 | `os-common` | `server-state` | 지원 Ubuntu와 공통 package가 준비되어 있다. | 안전 |
+| 3 | `docker-engine` | `server-state` | Docker service와 daemon이 정상이고 systemd cgroup driver를 사용한다. | 승인 필요 |
+| 4 | `nvidia-driver` | `server-state` | GPU를 인식하는 지정 driver가 설치·hold되어 있다. | 고위험 승인 필요 |
+| 5 | `nvidia-runtime` | `server-state` | NVIDIA Container Toolkit이 Docker와 containerd에 설정되어 있다. | 승인 필요 |
+| 6 | `kubernetes-packages` | `server-state` | kubeadm, kubelet, kubectl이 설치·hold되고 kubelet이 활성화되어 있다. | 승인 필요 |
+| 7 | `kubernetes-membership` | `server-state` | 올바른 cluster에 join되어 있고 domain label이 설정되어 있다. | 수동·고위험 |
+| 8 | `storage-network` | `server-state` | inventory의 storage NIC RX queue를 4096으로 유지한다. | 안전 |
+| 9 | `kerberos-nfs` | `kerberos-nfs` | machine identity와 NFS service ticket이 유효하고 `sec=krb5` mount가 정상이다. | 승인 필요 |
+| 10 | `monitoring` | `monitoring` | exporter service와 metrics·health endpoint가 정상이다. | 안전 |
+| 11 | `user-container` | `user-lifecycle` | 관리형 사용자 container 작업에 필요한 DB 설정과 Docker 접근이 준비되어 있다. | 수동·승인 필요 |
 
-표의 **담당 모듈**은 문서상의 분류가 아니라 각 상태 기준의 `owner_module`에
-기록되는 변경 책임이다. 공통 OS, Docker, NVIDIA, Kubernetes package와 network
-tuning은 `server-state`가 직접 관리하고, Kerberos/NFS와 monitoring은 담당
-모듈의 playbook과 runbook을 연결한다. 이렇게 하면 같은 운영 로직을 여러
-모듈에 복제하지 않고 기존 안전 절차와 rollback 책임을 유지할 수 있다.
-
-| 순서 | 영역 | 담당 모듈 | 1. 운영 서버 점검 기준 | 2. 신규 서버 구축 기준 |
-| --- | --- | --- | --- | --- |
-| 1 | 기본 접속 조건 | `server-state` | inventory 등록, Ansible 접속, 비대화형 sudo, hostname | 자동 설정 전 SSH, sudo, hostname, IP와 inventory 준비 |
-| 2 | 공통 OS | `server-state` | Ubuntu 계열 여부, 공통 package 설치 여부 | apt repository, NFS, Kerberos와 network 도구 설치 |
-| 3 | Docker Engine | `server-state` | service 활성 상태, daemon 응답, systemd cgroup driver | Docker repository/package와 `daemon.json` 설정 |
-| 4 | NVIDIA driver | `server-state` | GPU와 driver 인식 여부, driver package hold 여부 | 설정된 driver package 설치와 apt hold |
-| 5 | NVIDIA Container Toolkit | `server-state` | `nvidia-ctk`, Docker와 containerd의 NVIDIA runtime | toolkit 설치 후 Docker/containerd runtime 설정 |
-| 6 | Kubernetes node | `server-state` | Kubernetes package, kubelet, cluster join 정보와 node label | Kubernetes package 설치와 kubelet 활성화 |
-| 7 | network tuning | `server-state` | storage NIC 정보, RX queue 4096 이상, 영속화 service | storage NIC RX queue를 4096으로 유지하는 systemd service |
-| 8 | Kerberos/NFS | `kerberos-nfs` | realm, machine keytab, service ticket, `rpc-gssd`, mount 상태 | client package와 설정, GSS 준비 상태 구성 |
-| 9 | monitoring | `monitoring` | exporter service와 metrics/health endpoint | monitoring 모듈의 exporter 배포 playbook 사용 |
-| 10 | 사용자 container 전제조건 | `user-lifecycle` | 사용자 DB 환경, server inventory, Docker 접근 | 사용자·container 생성에 필요한 host 조건 준비 |
+담당 모듈은 단순한 문서 분류가 아니다. 구성요소 명세의 `owner`와 실제 파일
+위치가 일치한다. 공통 host 설정은 `server-state/ansible/roles/`에 있고,
+Kerberos/NFS 점검과 role은 `kerberos-nfs/`, exporter 점검·배포는
+`monitoring/`, 사용자 container 전제조건은 `user-lifecycle/`에 있다. 다른
+모듈이 이미 가진 로직을 `server-state`에 복사하지 않으므로 수정 책임과
+rollback 범위가 분명해진다.
 
 ### 3.1 운영 서버 점검
 
-운영 서버 점검의 목적은 한 대 이상의 서버가 공통 기준에서 벗어난 부분을 같은
-방식으로 찾는 것이다. 점검 대상은 공용 inventory에서 전체 서버, FARM/LAB
-영역 또는 개별 서버 단위로 선택한다. `existing-host-drift`는 선택된 각 서버에
-대해 표의 **운영 서버 점검 기준**을 위에서 아래 순서로 전개한다.
+운영 서버 점검은 대상 서버가 정책의 목표 상태에서 벗어난 부분을 구성요소
+단위로 찾는다. `audit`은 서버와 구성요소를 정책 순서대로 결합하고 각 명세의
+`audit` 진입점을 실행한다. 모든 audit 명세는 `safe`여야 하며, catalog를 읽을
+때 이 조건을 검증한다.
 
-각 상태 기준에는 서버를 변경하지 않고 현재 상태를 읽는 점검 항목이 들어 있다.
-예를 들어 Docker Engine은 service와 daemon, cgroup driver를 확인하고, NVIDIA
-driver는 GPU 인식과 package hold 상태를 확인한다. 명령에 필요한 host, domain,
-network interface 등의 값은 inventory의 실제 서버 정보로 채운다.
+`server-state`가 소유하는 구성요소는
+[`ansible/playbooks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Faudit.yml%23L1-L54)이
+해당 role의 `tasks/audit.yml`을 선택한다. 예를 들어 Docker 점검은
+[`docker_engine/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fdocker_engine%2Ftasks%2Faudit.yml%23L1-L13)에서
+service 활성 상태, daemon 응답, cgroup driver를 읽는다. Kerberos/NFS와
+monitoring은 각각
+[`kerberos-nfs/ansible/audit_client.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fkerberos-nfs%2Fansible%2Faudit_client.yml)과
+[`monitoring/ansible_playbook/audit_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Faudit_exporters.yml)을
+직접 사용한다.
 
-점검 계획에는 다음 정보가 함께 나타난다.
+점검은 기본적으로 실제 서버에 접속해 읽기 전용 task를 수행한다.
+`--show-command`를 사용하면 접속하지 않고 생성된 명령만 확인할 수 있다. 이 두
+동작을 같은 audit 정의에서 제공하므로, 화면에서 검토한 명령과 실제로 실행되는
+명령이 달라지지 않는다.
 
-- 어떤 서버의 어느 상태 기준을 점검하는지
-- 정상 여부를 판단하기 위해 실행할 읽기 전용 명령
-- 해당 영역을 소유하는 모듈
-- 기준과 다를 때 검토할 복구 방법과 안전 수준
+### 3.2 신규 서버 구성
 
-현재 구현은 원격 점검 명령을 자동 실행하거나 결과를 판정하지 않는다. 서버별
-명령을 `DRY-RUN`으로 생성하며, 관리자가 실행 결과를 확인한 뒤 함께 제시된
-복구 계획을 검토한다. 따라서 이 흐름은 운영 서버를 즉시 변경하는 작업이 아니라,
-서버별 점검 방식과 후속 조치를 동일하게 만드는 역할을 한다.
+신규 서버 구성은 Ubuntu 설치, IP·hostname, SSH, 비대화형 sudo와 inventory
+등록이 끝난 서버를 시작점으로 한다. `plan`은 각 구성요소의 `converge` 진입점을
+Ansible `--check --diff`로 실행하여 예상 변경을 확인한다. `apply`는 같은
+진입점을 실제 모드로 실행하되 명세의 안전 수준에 따라 명시적인 승인을 요구한다.
 
-원격 명령을 계획으로 먼저 보여주는 이유는 여러 운영 서버를 한 번에 점검하더라도
-예상하지 않은 변경이 발생하지 않게 하기 위해서다. 특히 driver, cluster join,
-keytab과 mount 관련 복구는 workload나 인증 상태에 영향을 줄 수 있으므로 점검과
-변경 승인을 분리한다.
+`server-state` 소유 구성요소의 구성 순서는
+[`ansible/playbooks/converge.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Fconverge.yml%23L1-L25)에
+role로 선언되어 있다. 각 role의 `tasks/main.yml`이 실제 설정을 맡는다. 예를
+들어 [`docker_engine/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fdocker_engine%2Ftasks%2Fmain.yml)은
+apt source와 package, `daemon.json`, service 상태를 관리한다.
 
-**관련 코드**
-
-- [`existing-host-drift` 작업 흐름](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml%23L30-L42):
-  운영 서버에 적용할 상태 기준과 순서를 정의한다.
-- [점검 대상 선택](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py%23L136-L166):
-  `all`, FARM/LAB 또는 개별 서버 조건을 inventory의 실제 서버 목록에 적용한다.
-- [점검 계획 생성](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py%23L78-L86)과
-  [점검 항목 처리](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py%23L126-L142):
-  선택된 서버와 상태 기준을 순회하고 로컬 검사 결과 또는 `DRY-RUN` 명령을 만든다.
-
-### 3.2 신규 서버 구축
-
-신규 서버 구축의 목적은 새 서버를 기존 운영 서버와 같은 기준으로 재현 가능하게
-구성하는 것이다. Ubuntu 설치, IP와 hostname 설정, SSH 접속, 비대화형 sudo와
-inventory 등록까지 완료된 서버를 시작점으로 삼는다. 이 조건이 갖춰져야 이후
-설정에 필요한 서버 정보와 원격 실행 경로가 확정된다.
-
-`new-host-bootstrap`은 표의 **신규 서버 구축 기준**을 선행 조건에 맞춰 적용한다.
-공통 OS와 package를 먼저 준비하고, Docker Engine과 NVIDIA driver/runtime,
-Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitoring과
-사용자 container 전제조건을 연결한다. 각 단계에는 운영 서버 점검과 동일한 상태
-기준이 사용되므로, 구축이 끝난 서버도 같은 항목으로 다시 점검할 수 있다.
-
-서버별 IP, domain, storage interface와 Kerberos 정보는 inventory 값으로
-채워진다. 실제 변경 방법은 상태 기준의 복구 항목에 연결되어 있으며, 작업의
-위험도에 따라 다음과 같이 구분한다.
-
-- 반복 실행해도 결과가 같은 설정은 Ansible playbook과 `--check --diff` 계획을
-  먼저 제공한다.
-- NVIDIA driver 변경, Kubernetes join, keytab과 mount처럼 서비스나 보안에
-  영향을 주는 작업은 자동 적용하지 않고 관리자의 확인이 필요한 절차로 남긴다.
-- Kerberos/NFS와 monitoring처럼 별도 모듈이 소유한 영역은 구현을 복제하지 않고
-  해당 모듈의 playbook이나 runbook을 호출한다.
-
-이 흐름의 결과물은 모든 변경을 즉시 실행하는 설치 프로그램이 아니라, 서버별로
-값이 채워진 순서 있는 구축 계획이다. 관리자는 단계별 예상 변경과 담당 모듈을
-확인한 뒤 실제 적용 여부를 결정한다.
-
-**관련 코드**
-
-- [`new-host-bootstrap` 작업 흐름](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml%23L16-L28):
-  신규 서버에 적용할 상태 기준과 순서를 정의한다.
-- [복구 계획 생성](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py%23L89-L108)과
-  [안전 수준별 처리](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py%23L145-L166):
-  상태 기준의 변경 방법을 서버별 `DRY-RUN` 명령 또는 수동 절차로 변환한다.
-- [`bootstrap_gpu_server.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/ansible_playbook/bootstrap_gpu_server.yml):
-  공통 OS, Docker, NVIDIA, Kubernetes와 network 설정을 실제 서버에 적용하는
-  Ansible task를 제공한다.
+Kubernetes join은 짧은 수명의 token과 cluster 선택이 필요하고, 잘못 적용하면
+scheduler와 workload에 영향을 준다. 따라서 `kubernetes-membership`의 구성은
+자동 명령이 아니라 수동 절차로 남긴다. `baseline-access`와 `user-container`도
+저장소의 값만으로 안전하게 완성할 수 없으므로 수동 진입점을 사용한다. 수동
+구성요소가 포함된 `apply` 요청은 일부만 먼저 실행하지 않고 전체 요청을
+중단한다.
 
 ## 4. 설정 구조
 
-### 4.1 상태 기준과 작업 흐름
+### 4.1 정책과 구성요소
 
-[`config/profiles.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml)이
-공통 상태와 작업 순서의 기준 파일이다. 설정은 **무엇이 정상 상태인지**를 정의하는
-`profiles`와 **어떤 목적으로 어떤 순서로 사용할지**를 정의하는 `profile_sets`로
-나뉜다.
+정책 파일은 구성요소 ID와 순서만 가진다. 목표 상태나 실행 방법을 정책에
+반복해서 적지 않으므로, 구성요소의 구현을 바꾸더라도 전체 순서는 그대로 유지할
+수 있다.
 
-하나의 상태 기준은 Docker Engine이나 NVIDIA driver처럼 독립적으로 점검하고
-복구할 수 있는 관리 단위다. 서버 목록을 뜻하는 것이 아니며, 특정 host의 값도
-직접 저장하지 않는다.
+각 `components/<id>.yml`은 다음 정보를 가진다.
 
-| 설정 위치 | 포함하는 정보 | 역할 |
-| --- | --- | --- |
-| `profiles.<name>.owner_module` | 모듈 이름 | 기준과 실제 변경 절차를 관리할 책임을 표시한다. |
-| `profiles.<name>.description` | 목표 상태 설명 | 이 상태 기준이 서버에 보장하려는 내용을 설명한다. |
-| `profiles.<name>.checks` | ID, 종류, 설명, 명령 또는 값 | 현재 상태를 어떤 방법으로 점검할지 정의한다. |
-| `profiles.<name>.remediations` | ID, 실행 방식, 안전 수준, 명령 또는 runbook | 기준과 다를 때 어떤 복구 절차를 검토할지 정의한다. |
-| `profile_sets.<name>.profiles` | 상태 기준 이름의 순서 있는 목록 | 목적에 맞는 상태 기준과 실행 순서를 선택한다. |
-
-예를 들어 [`docker-engine` 상태 기준](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml%23L96-L117)은
-다음과 같이 구성되어 있다.
-
-| 설정 | `docker-engine`의 값 | 의미 |
-| --- | --- | --- |
-| `owner_module` | `server-state` | Docker 공통 기준과 bootstrap 절차를 `server-state`가 관리한다. |
-| `description` | systemd cgroup driver를 사용하는 Docker Engine | Docker가 갖춰야 할 목표 상태를 요약한다. |
-| `checks` | `docker-service`, `docker-daemon`, `docker-cgroup-driver` | service 활성 상태, daemon 응답과 cgroup driver가 목표 상태인지 점검한다. |
-| `remediations` | `bootstrap-docker-engine`, `command`, `gated` | bootstrap playbook의 Docker 관련 task를 실행하기 전에 예상 변경을 검토하게 한다. |
-| `profile_sets`에서의 사용 | `new-host-bootstrap`, `existing-host-drift`, `managed-host` | 같은 Docker 기준을 신규 서버 구축과 운영 서버 점검에 함께 사용한다. |
-
-check는 상태 기준(profile)이 요구하는 상태가 대상 서버에 충족되어 있는지
-점검한다. 점검 과정에서는 서버 설정을 변경하지 않으며, 로컬 inventory와 파일,
-필수 서버값 또는 원격 서버의 package, service, 설정과 endpoint를 읽는다. 현재
-구현에서 `remote-read`는 원격 명령을 직접 실행하지 않고 `DRY-RUN`으로 보여준다.
-
-| check 종류 | 확인하는 대상 |
+| 필드 | 의미 |
 | --- | --- |
-| `local-inventory` | 서버가 공용 inventory에 등록되어 있는지 |
-| `local-path` | 담당 모듈의 설정 파일이나 reference가 로컬에 존재하는지 |
-| `template-value` | 명령 생성에 필요한 서버별 값이 준비되어 있는지 |
-| `remote-read` | 원격 서버의 package, service, 설정 또는 endpoint 상태 |
+| `id` | 파일 이름과 일치하는 구성요소 식별자 |
+| `owner` | 해당 상태와 구현을 관리하는 모듈 |
+| `desired_state` | 서버가 만족해야 할 목표 상태 |
+| `audit` | 읽기 전용 점검 playbook, 선택 tag, host 변수와 `safe` 수준 |
+| `converge` | 실제 구성 playbook 또는 수동 reference와 적용 안전 수준 |
 
-remediation은 실행 가능한 명령인 `command`와 관리자가 절차를 따라야 하는
-`manual`로 구분한다. 각 항목의 `safety`는 반복 적용 가능한 `safe`, 사전 확인이
-필요한 `gated`, 서비스 영향 가능성이 큰 `risky` 중 하나로 표시한다. CLI는 이
-정보를 사용해 실제 변경 대신 검토할 계획과 안전 수준을 함께 보여준다.
+예를 들어
+[`components/docker-engine.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fdocker-engine.yml%23L1-L13)은
+다음처럼 연결된다.
 
-현재 작업 흐름은 다음과 같다.
+```yaml
+id: docker-engine
+owner: server-state
+desired_state: Docker Engine is installed, enabled, responsive, and configured with the systemd cgroup driver.
+audit:
+  kind: ansible-playbook
+  playbook: server-state/ansible/playbooks/audit.yml
+  tags: [docker-engine]
+  safety: safe
+converge:
+  kind: ansible-playbook
+  playbook: server-state/ansible/playbooks/converge.yml
+  tags: [docker-engine, cgroups]
+  safety: gated
+```
 
-| 작업 흐름(profile set) | 용도 |
+이 명세 안에 점검 command나 복구 task 자체가 들어 있는 것은 아니다. `audit`과
+`converge`는 **어느 구현을 실행할지 가리키는 진입점**이고, 실제 내용은
+`docker_engine/tasks/audit.yml`과 `docker_engine/tasks/main.yml`에 있다.
+명세는 목표와 실행 경로를 설명하고, role은 구현을 담당하도록 나눈 것이다.
+
+[`catalog.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcatalog.py%23L19-L147)는
+정책과 구성요소를 내부 모델로 읽으면서 중복 ID, 누락된 구성요소, 잘못된 실행
+종류·안전 수준, 읽기 전용이 아닌 audit을 거부한다. 선택 순서는 사용자가
+`--component`를 입력한 순서가 아니라 정책의 선행 조건 순서를 유지한다.
+
+### 4.2 서버와 FARM/LAB 설정
+
+서버별 사실과 환경별 운영값은 서로 다른 파일에서 관리한다.
+
+| 출처 | 포함하는 값 |
 | --- | --- |
-| `new-host-bootstrap` | 신규 서버의 표준 구축 순서 |
-| `existing-host-drift` | 운영 서버의 공통 설정 점검·복구 순서 |
-| `managed-host` | 운영 관리 서버에 사용하는 기본 작업 흐름 |
-| `monitoring-host` | monitoring 영역만 점검할 때 사용하는 작업 흐름 |
+| 공용 [`servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fuser-lifecycle%2Fserver_info%2Fservers.jsonl) | host, server ID, domain, SSH 주소·port·계정, management/storage interface와 IP |
+| [`config/environments.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fconfig%2Fenvironments.yml%23L1-L22) | FARM/LAB realm, Kerberos config, storage host와 mount, Kubernetes context, 공통 계산 규칙 |
 
-profile set에는 점검 명령이나 복구 방법을 다시 적지 않고 상태 기준의 이름만
-둔다. 예를 들어 `docker-engine`은 Docker service, daemon과 cgroup driver의
-점검 기준 및 bootstrap 방법을 한 번만 정의하고, `new-host-bootstrap`과
-`existing-host-drift`가 같은 이름을 참조한다.
+[`inventory.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Finventory.py%23L18-L219)는
+inventory의 필수 필드를 검증하고 `all`, FARM/LAB, 개별 host/server ID를
+선택한다. 그런 다음 server ID와 환경 설정을 결합해 machine principal, NFS
+service principal, mount target, public health port 등의 Ansible extra vars를
+만든다. FARM/LAB 규칙을 `Server` 객체나 command 문자열에 숨기지 않고 설정
+파일로 분리했기 때문에 값의 출처를 코드 수정 없이 확인할 수 있다.
 
-새 공통 설정은 하나의 상태 기준으로 추가한 뒤 `new-host-bootstrap`과
-`existing-host-drift`에 함께 배치한다. 순서는 선행 조건을 기준으로 정한다.
-예를 들어 NVIDIA Container Toolkit은 NVIDIA driver와 Docker Engine이 준비된
-뒤에 구성한다. 상태 기준과 작업 흐름을 나눈 이유는 점검·복구 내용을 복제하지
-않고도 목적별 구성과 순서만 다르게 만들기 위해서다.
+### 4.3 실행 계획과 안전 수준
 
-**관련 코드**
+[`planner.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fplanner.py%23L15-L120)는
+서버별 context와 구성요소 진입점을 결합해 하나의 `PlanItem`을 만든다. 실행
+명령은 shell 문자열이 아니라 argv tuple로 구성하고, 서버값은 JSON extra vars로
+전달한다. `plan`일 때만 `--check --diff`를 추가하며, 수동 구성요소는 명령 대신
+reference를 반환한다.
 
-- [`profiles.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml):
-  `profile_sets`와 `profiles`의 실제 설정을 관리한다.
-- [설정 로딩](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/profiles.py%23L69-L111):
-  YAML의 작업 흐름, 상태 기준, 점검 항목과 복구 항목을 내부 모델로 변환한다.
-- [작업 흐름 확장](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/profiles.py%23L42-L61):
-  선택한 profile set을 중복 없는 순서 있는 상태 기준 목록으로 바꾼다.
-- [서버별 값 반영](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/profiles.py%23L114-L143):
-  상태 기준의 자리표시자를 선택한 서버의 실제 값으로 치환한다.
+구성 안전 수준은 다음과 같다.
 
-### 4.2 서버별 설정값
-
-상태 기준에는 `{host}`, `{storage_interface}`, `{kerberos_realm}`처럼 서버마다
-달라지는 값의 자리만 들어 있다. 실제 값은 다음 세 단계로 결정된다.
-
-| 단계 | 값의 출처 | 예시 |
+| 수준 | 적용 조건 | 예시 |
 | --- | --- | --- |
-| 1. inventory 원본값 | 공용 [`servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl) | host, server ID, domain, SSH 주소·port·계정, management/storage interface와 IP |
-| 2. domain별 파생값 | `Server`가 원본값과 FARM/LAB 규칙으로 계산 | Kerberos realm과 principal, NFS source·option, Kubernetes cluster 이름 |
-| 3. 명령 렌더링 | 상태 기준의 자리표시자에 선택한 서버의 값을 대입 | `{host}` → `farm8`, `{storage_interface}` → 해당 서버의 storage NIC |
+| `safe` | `apply --execute` | 공통 package, storage RX queue, exporter 배포 |
+| `gated` | `--approve-gated` 또는 더 강한 `--approve-risky` 추가 | Docker, NVIDIA runtime, Kubernetes package, Kerberos/NFS |
+| `risky` | `--approve-risky` 추가 | NVIDIA driver |
+| 수동 | CLI가 실행하지 않고 reference를 출력 | 초기 접속 조건, Kubernetes join, 사용자 container 전제조건 구성 |
 
-inventory를 읽을 때 host, server ID, domain, server number와 접속 주소가 없으면
-해당 서버를 유효한 대상으로 만들지 않는다. 상태 기준에 정의되지 않은
-자리표시자가 있거나 필수 값이 비어 있을 때도 계획을 그대로 만들지 않고 오류나
-`MISSING` 상태로 드러낸다. 잘못된 값으로 원격 명령을 만드는 것보다 계획 생성
-단계에서 중단하거나 누락을 표시하기 위한 처리다.
+[`commands.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcommands.py%23L150-L230)는
+`audit`, `plan`, `apply`를 동일한 계획 모델로 처리한다. `apply`는 실행 전 모든
+항목을 먼저 검사한다. 승인되지 않았거나 수동인 항목이 하나라도 있으면 허용된
+항목도 실행하지 않으므로, 부분 적용 후 중단되는 상태를 피한다.
 
-`server-state`가 별도 서버 목록을 만들지 않는 이유는 host, IP, domain과 network
-정보가 다른 운영 모듈의 대상과 달라지는 것을 막기 위해서다. 공용 inventory를
-사용하면 사용자 container 관리와 서버 상태 관리가 같은 서버 식별 정보와 접속
-정보를 참조한다.
+## 5. 코드 위치
 
-**관련 코드**
-
-- [`servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/server_info/servers.jsonl):
-  host, server ID, domain, SSH 접속 정보와 network interface를 저장하는 공용
-  inventory다.
-- [서버 정보와 파생값](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py%23L14-L83):
-  inventory 필드와 domain별 Kerberos, mount, Kubernetes 값을 하나의 서버
-  정보로 제공한다.
-- [inventory 로딩과 검증](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py%23L86-L133):
-  JSONL을 읽고 필수 필드가 있는지 검사한 뒤 서버 정보로 변환한다.
-
-### 4.3 설정을 변경할 때
-
-변경하려는 내용에 따라 수정 위치를 나눈다.
-
-| 변경 내용 | 수정 위치 | 이유 |
-| --- | --- | --- |
-| 전체 서버가 따라야 할 목표 상태나 점검 방법 | `profiles.<name>` | 하나의 상태 기준에서 점검과 복구 내용을 함께 관리한다. |
-| 점검·구축에 포함할 영역이나 적용 순서 | `profile_sets.<name>.profiles` | 상태 기준을 복제하지 않고 목적별 작업 흐름만 변경한다. |
-| 특정 서버의 host, 접속 정보 또는 network 정보 | 공용 `servers.jsonl` 생성 과정 | 모든 운영 모듈이 같은 서버 정보를 사용하게 한다. |
-| 실제 서버 변경 방법 | `server-state` 또는 담당 모듈의 Ansible playbook/runbook | 변경과 rollback 책임을 해당 영역의 소유자에게 유지한다. |
-
-설정을 변경한 뒤에는 profile 로딩, 작업 흐름 순서, inventory 파싱과 서버별 값
-치환 test를 함께 갱신한다. 현재 CLI에서 변경 내용을 확인하고 실제 적용하는
-방법은 [운영 문서](operations.md)의 "공통 설정 추가 방법"에서 설명한다.
-
-## 5. 코드 지도
-
-아래 순서로 보면 설정이 실행 계획으로 바뀌는 흐름을 확인할 수 있다. 각 파일의
-세부 함수보다 **설정, 서버 정보, 조정, 실제 적용** 사이의 경계를 이해하는 것이
-중요하다.
+아래 순서로 보면 정책이 실제 Ansible 작업으로 이어지는 경계를 확인할 수 있다.
 
 | 파일·디렉터리 | 역할 |
 | --- | --- |
-| [`config/profiles.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml) | 상태 기준과 작업 흐름을 선언하는 기준 파일 |
-| [`script/profiles.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/profiles.py) | 설정 파일을 읽고 작업 흐름을 상태 기준 목록으로 확장하며 서버별 값을 반영한다. |
-| [`script/inventory.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/inventory.py) | 공용 inventory를 읽어 대상 서버를 선택하고 서버별 설정값을 제공한다. |
-| [`script/cli.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/cli.py) | CLI 입력, 서버 선택과 상태 기준을 조합하여 점검 결과와 복구 계획을 출력한다. |
-| [`bin/server-state`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/bin/server-state), [`script/__main__.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/script/__main__.py) | shell과 Python에서 CLI를 시작하는 진입점 |
-| [`ansible_playbook/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/tree/main/server-state/ansible_playbook) | `server-state`가 직접 소유하는 공통 서버 설정을 실제 host에 적용한다. 다른 영역은 담당 모듈의 playbook을 사용한다. |
-| [`tests/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/tree/main/server-state/tests) | inventory 선택, 설정 로딩, 작업 흐름 순서와 서버별 값 반영을 검증한다. |
+| [`policy/standard-gpu-server.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fpolicy%2Fstandard-gpu-server.yml) | 구성요소와 전체 적용 순서 |
+| [`components/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Fcomponents) | 구성요소별 목표 상태, owner, 진입점, 안전 수준 |
+| [`server_state/catalog.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcatalog.py) | 정책·구성요소 로딩, 검증과 순서 선택 |
+| [`server_state/inventory.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Finventory.py) | 서버 선택과 FARM/LAB 실행값 생성 |
+| [`server_state/planner.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fplanner.py) | 서버·구성요소별 Ansible 실행 계획 생성 |
+| [`server_state/commands.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcommands.py) | CLI 입력, 안전 승인, subprocess 실행과 결과 출력 |
+| [`ansible/playbooks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Faudit.yml) | `server-state` 소유 role의 읽기 전용 audit 순서 |
+| [`ansible/playbooks/converge.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Fconverge.yml) | `server-state`와 Kerberos/NFS role의 구성 순서 |
+| [`ansible/roles/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Fansible%2Froles) | 공통 host 구성요소별 `audit.yml`과 `main.yml` |
+| [`kerberos-nfs/ansible/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fkerberos-nfs%2Fansible) | Kerberos/NFS 점검과 client role |
+| [`monitoring/ansible_playbook/audit_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Faudit_exporters.yml) | exporter service와 endpoint 점검 |
+| [`monitoring/ansible_playbook/deploy_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Fdeploy_exporters.yml) | exporter build·배포·검증 |
+| [`user-lifecycle/ansible_playbook/audit_host.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fuser-lifecycle%2Fansible_playbook%2Faudit_host.yml) | 사용자 container 작업의 host 전제조건 점검 |
+| [`tests/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Ftests) | 정책 순서, 설정 검증, server context, 계획과 안전 gate 테스트 |

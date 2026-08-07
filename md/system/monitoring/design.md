@@ -31,9 +31,9 @@ control plane으로 구성된다.
 | NFS 상태 관리 | NFS GSS health | Kerberos 인증 준비 상태를 확인하고 missing mount 복구 절차를 실행한다. |
 | NFS 증거 수집 | NFS forensics | NFS 장애 전후의 packet, kernel과 process 상태를 보존한다. |
 | Keytab 점검 | keytab health check | AD KVNO, storage keytab과 service ticket 상태를 확인한다. |
-| Metric 저장·평가 | FARM/LAB Prometheus | metric을 저장하고 FARM에서 공통 alert rule을 평가한다. |
+| Metric 저장·평가 | FARM/LAB Prometheus | 환경별 metric을 저장하고 FARM에서 공통 service alert rule을 평가한다. |
 | 시각화 | Grafana | FARM/LAB datasource의 시계열을 dashboard로 표시한다. |
-| Alert 전달 | Alertmanager와 relay | 발생·해제된 alert를 내부 알림 API 형식으로 전달한다. |
+| Alert 전달 | FARM Alertmanager와 relay | 발생·해제된 공통 service alert를 내부 알림 API 형식으로 전달한다. |
 
 구성요소 사이의 주요 데이터 흐름은 다음과 같다.
 
@@ -43,19 +43,26 @@ flowchart LR
     NODE_L["LAB node-exporter"] --> PL["LAB Prometheus"]
     GPU_F["FARM gpu-user-exporter"] --> PF
     GPU_L["LAB gpu-user-exporter"] --> PL
-    GSS["NFS GSS state"] --> CM["cluster-monitor-exporter"]
-    FORENSICS["NFS forensics state"] --> CM
-    CM --> PF
+    GSS_F["FARM NFS GSS state"] --> CM_F["FARM cluster-monitor-exporter"]
+    GSS_L["LAB NFS GSS · forensics state"] --> CM_L["LAB cluster-monitor-exporter"]
+    CM_F --> PF
+    CM_L --> PF
     PF --> GRAFANA["Grafana"]
     PL --> GRAFANA
-    PF --> ALERT["Alertmanager"]
+    PF --> ALERT["FARM Alertmanager"]
     ALERT --> RELAY["알림 relay"]
     RELAY --> API["내부 알림 API"]
 ```
 
-FARM Prometheus는 FARM 서버의 자원·GPU metric과 FARM/LAB 전체의 운영 상태
-metric을 수집한다. LAB Prometheus는 LAB 서버의 자원·GPU metric을 별도로
-저장한다. Grafana는 두 Prometheus를 datasource로 사용한다.
+FARM Prometheus는 FARM 서버의 자원·GPU metric과 FARM/LAB 전체의
+`cluster-monitor-exporter` metric을 수집한다. 공통 service alert rule은 FARM
+Prometheus가 평가하고 FARM Alertmanager로 전달한다.
+
+LAB Prometheus는 LAB 서버의 node·GPU metric을 별도로 저장하며 Alertmanager를
+실행하지 않는다. 현재 LAB node·GPU metric은 Grafana 조회에 사용되고, LAB의
+mount·Kerberos/NFS·Docker·container 같은 운영 상태 경보는 FARM Prometheus가
+LAB `cluster-monitor-exporter`를 수집해 처리한다. Grafana는 두 Prometheus를
+datasource로 사용한다.
 
 ## 3. 서버 metric 수집
 
@@ -288,8 +295,9 @@ Alertmanager와 Grafana를 함께 실행한다. Prometheus data는 FARM local PV
 저장한다.
 
 **LAB 구성:** LAB node·GPU metric을 별도 Prometheus에 저장한다. LAB control
-plane과 storage가 FARM과 분리되어 있으며 Grafana와 Alertmanager 기능은 FARM
-구성을 사용한다.
+plane과 storage가 FARM과 분리되어 있으며 LAB release의 Grafana와 Alertmanager는
+비활성화되어 있다. LAB node·GPU metric은 FARM Grafana가 LAB datasource를 통해
+조회한다.
 
 **주요 설정:** scrape target, label, retention, storage, alert rule과 Helm release
 설정은 환경별 values에서 관리한다. FARM values가 운영 alert rule의 기준 파일이다.
@@ -304,8 +312,9 @@ plane과 storage가 FARM과 분리되어 있으며 Grafana와 Alertmanager 기�
 **역할:** Prometheus가 생성한 alert를 묶고 상태별로 routing한 뒤 내부 알림 API에
 전달한다.
 
-**입력:** Prometheus alert rule이 만든 firing·resolved alert와 Alertmanager
-label·annotation을 사용한다.
+**입력:** FARM Prometheus의 공통 service alert rule이 만든 firing·resolved
+alert와 Alertmanager label·annotation을 사용한다. 이 rule에는 FARM/LAB
+`cluster-monitor-exporter` 상태가 함께 포함된다.
 
 **처리:** FARM Alertmanager가 native webhook payload를 localhost relay로 보낸다.
 relay는 alert를 내부 notify API contract로 변환하고 전송 실패를 queue와 retry로

@@ -93,23 +93,23 @@ nav:
           - 설정: infra/kdc-setup/config.md
   - system:
       - 목차: system/index.md
-      - container-images:
-          - 개요: system/container-images/index.md
-          - 설계: system/container-images/design.md
-          - 운영: system/container-images/operations.md
       - server-state:
           - 개요: system/server-state/index.md
           - 설계: system/server-state/design.md
           - 운영: system/server-state/operations.md
+      - container-images:
+          - 개요: system/container-images/index.md
+          - 설계: system/container-images/design.md
+          - 운영: system/container-images/operations.md
+      - monitoring:
+          - 개요: system/monitoring/index.md
+          - 설계: system/monitoring/design.md
+          - 운영: system/monitoring/operations.md
       - remote-operations:
           - 개요: system/remote-operations/index.md
           - 설계: system/remote-operations/design.md
           - 운영: system/remote-operations/operations.md
           - 설정: system/remote-operations/config.md
-      - monitoring:
-          - 개요: system/monitoring/index.md
-          - 설계: system/monitoring/design.md
-          - 운영: system/monitoring/operations.md
       - kerberos-nfs:
           - 개요: system/kerberos-nfs/index.md
           - 설계: system/kerberos-nfs/design.md

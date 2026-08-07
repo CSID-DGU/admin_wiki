@@ -46,6 +46,16 @@ MANUALS = (
         "system/server-manage-index.pdf",
     ),
     Manual(
+        "server-state",
+        "server-state",
+        MD_DIR / "system" / "server-state" / "index.md",
+        "system/server-state-manual.pdf",
+        (
+            MD_DIR / "system" / "server-state" / "design.md",
+            MD_DIR / "system" / "server-state" / "operations.md",
+        ),
+    ),
+    Manual(
         "container-images",
         "container-images",
         MD_DIR / "system" / "container-images" / "index.md",
@@ -53,6 +63,27 @@ MANUALS = (
         (
             MD_DIR / "system" / "container-images" / "design.md",
             MD_DIR / "system" / "container-images" / "operations.md",
+        ),
+    ),
+    Manual(
+        "monitoring",
+        "monitoring",
+        MD_DIR / "system" / "monitoring" / "index.md",
+        "system/monitoring-manual.pdf",
+        (
+            MD_DIR / "system" / "monitoring" / "design.md",
+            MD_DIR / "system" / "monitoring" / "operations.md",
+        ),
+    ),
+    Manual(
+        "remote-operations",
+        "remote-operations",
+        MD_DIR / "system" / "remote-operations" / "index.md",
+        "system/remote-operations-manual.pdf",
+        (
+            MD_DIR / "system" / "remote-operations" / "design.md",
+            MD_DIR / "system" / "remote-operations" / "operations.md",
+            MD_DIR / "system" / "remote-operations" / "config.md",
         ),
     ),
     Manual(
@@ -79,37 +110,6 @@ MANUALS = (
             / "kerberos-nfs"
             / "debugging"
             / "nfs-v41-session-slot-stuck-remediation.md",
-        ),
-    ),
-    Manual(
-        "monitoring",
-        "monitoring",
-        MD_DIR / "system" / "monitoring" / "index.md",
-        "system/monitoring-manual.pdf",
-        (
-            MD_DIR / "system" / "monitoring" / "design.md",
-            MD_DIR / "system" / "monitoring" / "operations.md",
-        ),
-    ),
-    Manual(
-        "remote-operations",
-        "remote-operations",
-        MD_DIR / "system" / "remote-operations" / "index.md",
-        "system/remote-operations-manual.pdf",
-        (
-            MD_DIR / "system" / "remote-operations" / "design.md",
-            MD_DIR / "system" / "remote-operations" / "operations.md",
-            MD_DIR / "system" / "remote-operations" / "config.md",
-        ),
-    ),
-    Manual(
-        "server-state",
-        "server-state",
-        MD_DIR / "system" / "server-state" / "index.md",
-        "system/server-state-manual.pdf",
-        (
-            MD_DIR / "system" / "server-state" / "design.md",
-            MD_DIR / "system" / "server-state" / "operations.md",
         ),
     ),
     Manual(

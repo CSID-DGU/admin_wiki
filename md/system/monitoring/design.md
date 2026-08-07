@@ -11,12 +11,11 @@
 `monitoring`의 목표는 FARM/LAB 서버와 주요 service의 현재 상태와 변화 추이를
 지속적으로 관측하고, 운영자가 dashboard와 alert를 통해 이상 상태를 확인할 수
 있게 하는 것이다. 관측 범위에는 CPU, memory, filesystem, network, GPU,
-container, Docker, Kerberos/NFS와 외부 연결 상태가 포함된다.
+container, Docker와 외부 연결 상태가 포함된다.
 
 서버에서는 상태를 수집해 Prometheus metric으로 제공한다. Prometheus는 metric을
 주기적으로 저장하고 alert rule을 평가하며, Grafana는 저장된 시계열을 dashboard로
-표시한다. NFS 인증 점검, 장애 증거 수집과 제한된 복구 작업은 별도 service로
-실행되고 그 결과를 exporter가 metric으로 변환한다.
+표시한다.
 
 ## 2. 설계 구조
 
@@ -27,10 +26,7 @@ control plane으로 구성된다.
 | --- | --- | --- | --- |
 | 서버 자원 수집 | `node-exporter` | Prometheus 기본 exporter | CPU, memory, filesystem, disk와 network 상태를 metric으로 제공한다. |
 | GPU 사용량 수집 | `gpu-user-exporter` | 커스텀 Go exporter | GPU process를 container와 사용자 정보에 연결한다. |
-| 운영 상태 수집 | `cluster-monitor-exporter` | 커스텀 Go exporter | mount, Kerberos/NFS, Docker, container, GPU와 연결 상태를 수집한다. |
-| NFS 상태 관리 | NFS GSS health | shell·systemd worker | Kerberos 인증 준비 상태를 확인하고 missing mount 복구 절차를 실행한다. |
-| NFS 증거 수집 | NFS forensics | shell·systemd service | NFS 장애 전후의 packet, kernel과 process 상태를 보존한다. |
-| Keytab 점검 | keytab health check | shell·systemd user timer | AD KVNO, storage keytab과 service ticket 상태를 확인한다. |
+| 운영 상태 수집 | `cluster-monitor-exporter` | 커스텀 Go exporter | Docker, container, GPU와 연결 상태를 수집한다. |
 | Metric 저장·평가 | FARM/LAB Prometheus | `kube-prometheus-stack` | 환경별 metric을 저장하고 FARM에서 공통 service alert rule을 평가한다. |
 | 시각화 | Grafana | `kube-prometheus-stack` | FARM/LAB datasource의 시계열을 dashboard로 표시한다. |
 | Alert 전달 | FARM Alertmanager와 relay | Alertmanager·Python relay | 발생·해제된 공통 service alert를 내부 알림 API 형식으로 전달한다. |
@@ -43,10 +39,8 @@ flowchart LR
     NODE_L["LAB node-exporter"] --> PL["LAB Prometheus"]
     GPU_F["FARM gpu-user-exporter"] --> PF
     GPU_L["LAB gpu-user-exporter"] --> PL
-    GSS_F["FARM NFS GSS state"] --> CM_F["FARM cluster-monitor-exporter"]
-    GSS_L["LAB NFS GSS · forensics state"] --> CM_L["LAB cluster-monitor-exporter"]
-    CM_F --> PF
-    CM_L --> PF
+    CM_F["FARM cluster-monitor-exporter"] --> PF
+    CM_L["LAB cluster-monitor-exporter"] --> PF
     PF --> GRAFANA["Grafana"]
     PL --> GRAFANA
     PF --> ALERT["FARM Alertmanager"]
@@ -60,7 +54,7 @@ Prometheus가 평가하고 FARM Alertmanager로 전달한다.
 
 LAB Prometheus는 LAB 서버의 node·GPU metric을 별도로 저장하며 Alertmanager를
 실행하지 않는다. 현재 LAB node·GPU metric은 Grafana 조회에 사용되고, LAB의
-mount·Kerberos/NFS·Docker·container 같은 운영 상태 경보는 FARM Prometheus가
+Docker·container 같은 운영 상태 경보는 FARM Prometheus가
 LAB `cluster-monitor-exporter`를 수집해 처리한다. Grafana는 두 Prometheus를
 datasource로 사용한다.
 
@@ -158,14 +152,13 @@ main -> config·DB·registry 초기화
 
 **구현 형태:** FARM/LAB 서버의 운영 상태와 환경별 진단 항목을 수집하기 위해 만든
 커스텀 Go exporter다. background collection, metric rendering과 HTTP endpoint를
-직접 구현하며 NFS GSS와 forensics adapter는 별도 Go 파일로 분리한다.
+직접 구현한다.
 
 **역할:** 기본 자원 metric만으로 판단하기 어려운 서버와 service의 운영 상태를
 수집한다.
 
-**입력:** mount 정보, storage host와 peer 연결, process·kernel 상태,
-`nvidia-smi`, Docker와 container 상태, systemd service, NFS GSS state file,
-forensics state file과 `rpc-gssd` journal을 읽는다.
+**입력:** process·kernel 상태, `nvidia-smi`, Docker와 container 상태, systemd
+service와 외부 연결 상태를 읽는다.
 
 **처리:** background collection loop가 각 점검을 실행해 마지막 결과를 memory에
 보관한다. HTTP 요청은 이 결과를 Prometheus 형식으로 출력한다. 외부 명령에는
@@ -173,25 +166,21 @@ timeout을 적용하며, 마지막 수집 시각과 허용된 stale 시간을 �
 
 주요 관측 항목은 다음과 같다.
 
-- required mount의 source, target, filesystem, security option과 응답 시간
-- Kerberos/NFS readiness, canary, recovery와 `rpc-gssd` 상태
-- NFS/RPC D-state process, lease, hung-task와 forensics 상태
 - host GPU와 Docker daemon 상태
 - 대상 container의 실행, SSH와 GPU 상태
-- storage·peer·외부 network 연결 상태
+- 외부 network 연결 상태
 
 **출력:** `:30074/metrics`, `:30074/healthz`와 서버별 public `:N89/healthz`를
 제공한다. `/healthz`는 HTTP process 응답과 최근 collection freshness를 함께
-확인한다. loopback listener에는 NFS GSS readiness 조회와 canary·recovery worker
-실행 API가 있다.
+확인한다.
 
 **제한된 복구:** 설정으로 활성화한 경우 대상 container 시작, container SSH
-service 시작과 NVML driver/library symlink 복구를 수행한다. NFS mount 작업은
-별도 recovery service가 담당한다. 복구 시도와 결과는 metric으로 기록한다.
+service 시작과 NVML driver/library symlink 복구를 수행한다. 복구 시도와 결과는
+metric으로 기록한다.
 
-**주요 설정:** 수집 주기, stale 기준, command timeout, required mount, 대상
-container image pattern, public health port, NFS state file, forensics state file과
-복구 기능 활성화 여부를 `/etc/default/cluster-monitor-exporter`에서 관리한다.
+**주요 설정:** 수집 주기, stale 기준, command timeout, 대상 container image
+pattern, public health port와 복구 기능 활성화 여부를
+`/etc/default/cluster-monitor-exporter`에서 관리한다.
 
 관련 코드:
 [`main.go`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go),
@@ -202,14 +191,12 @@ container image pattern, public health port, NFS state file, forensics state fil
 
 | 파일·코드 | 역할 |
 | --- | --- |
-| [`Config`, `loadConfig`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L31-L326) | 환경 파일과 환경 변수를 읽고 수집 주기, timeout, 점검·복구 기능과 state 경로를 검증한다. |
-| [`main`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L134-L211) | `Collector`, background goroutine, metric·health·NFS API와 public health HTTP server를 시작한다. |
+| [`Config`, `loadConfig`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L31-L326) | 환경 파일과 환경 변수를 읽고 수집 주기, timeout, endpoint와 기능별 설정을 검증한다. |
+| [`main`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L134-L211) | `Collector`, background goroutine, metric·health endpoint와 public health HTTP server를 시작한다. |
 | [`Collector.run`, `collectOnce`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L451-L474) | 설정된 주기로 전체 수집을 실행하고 완성된 metric text와 수집 시각을 교체한다. |
-| [`Collector.collect`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L541-L581) | mount, process, NFS GSS, forensics, GPU, Docker, container와 외부 연결 collector를 순서대로 호출한다. |
-| [`collectMounts`부터 `collectContainers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L711-L1296) | 영역별 host 명령과 상태를 읽고 mount, process, GPU, Docker와 container metric을 생성한다. |
+| [`Collector.collect`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L541-L581) | 영역별 collector를 순서대로 호출하고 한 번의 수집 결과를 만든다. |
+| [`collectHostGPU`부터 `collectContainers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L1117-L1296) | host 명령과 Docker 상태를 읽고 GPU, Docker와 container metric을 생성한다. |
 | [`renderer`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L1558-L1617) | metric help, type, label과 값을 Prometheus text format으로 직렬화한다. |
-| [`nfs_gss_health.go`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fnfs_gss_health.go) | readiness·canary·recovery state와 `rpc-gssd` journal을 metric·health 결과로 변환하고 NFS API를 처리한다. |
-| [`nfs_forensics.go`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fnfs_forensics.go) | forensics status JSON을 snapshot 구조체로 읽고 freshness·incident metric을 생성한다. |
 
 실행 흐름은 다음과 같다.
 
@@ -246,110 +233,9 @@ cluster_monitor_container_running{job="cluster-monitor-exporter"} == 1
 `instance`, `server`, `container`, `image` label을 함께 사용해 같은 서버와 같은
 container의 시계열을 결합한다.
 
-## 4. Kerberos/NFS 상태와 장애 증거
+## 4. Metric 저장, 시각화와 alert
 
-### 4.1 NFS GSS health
-
-**역할:** Kerberos NFS client가 mount를 사용할 준비가 되었는지 단계별로
-확인하고, mount가 사라진 경우 안전 조건을 확인한 뒤 복구 작업을 수행한다.
-
-**입력:** host keytab, Kerberos ticket, NFS service principal, `rpc_pipefs`,
-`rpc-gssd`, fstab, DNS·storage RPC, mount 상태와 환경별 canary 결과를 사용한다.
-
-**처리:** readiness service는 다음 순서로 인증 준비 상태를 확인한다.
-
-```text
-host keytab -> machine kinit -> NFS service kvno
--> rpc_pipefs -> rpc-gssd -> environment canary
-```
-
-canary는 전용 read-only export에서 실제 service path를 확인한다. recovery
-service는 operational mount가 없는 경우 fstab, DNS·storage RPC, readiness,
-canary와 D-state를 확인하고 `mount <target>`을 실행한다. 재시도 간격과 inhibit
-상태는 persistent state에 기록한다.
-
-**출력:** readiness, canary와 recovery 결과를 다음 state file에 저장한다.
-
-```text
-/run/decs-nfs-gss/ready.state
-/var/lib/decs-nfs-gss/canary.state
-/var/lib/decs-nfs-gss/recovery.state
-```
-
-`cluster-monitor-exporter`의 NFS GSS collector가 이 파일과 systemd·journal 상태를
-읽어 `cluster_monitor_nfs_gss_*` metric으로 제공한다.
-
-**주요 설정:** realm, principal, mount source·target·security, canary source,
-retry와 backoff, state 경로와 systemd unit 이름을 Ansible exporter 변수에서
-관리한다.
-
-관련 코드:
-[`readiness script`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fscript%2Fdecs_nfs_gss_ready.sh),
-[`canary script`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fscript%2Fdecs_nfs_gss_canary_probe.sh),
-[`recovery script`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fscript%2Fdecs_nfs_gss_mount_recovery.sh),
-[`nfs_gss_health.go`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fnfs_gss_health.go)
-
-### 4.2 NFS forensics
-
-**역할:** 간헐적인 NFS 장애가 발생하기 전후의 network, kernel, storage와 process
-상태를 local disk에 보존한다.
-
-**입력:** TCP/2049 packet, NFSv4·SUNRPC tracepoint, block·SCSI·driver event,
-kernel NFS 통계, D-state process와 memory/writeback 상태를 사용한다.
-
-**처리:** trace buffer service가 크기가 제한된 pcap·ftrace ring을 유지한다.
-watch timer는 5초 간격으로 상태를 기록하며, incident threshold를 감지하면
-snapshot service가 장애 직전 ring을 고정하고 추가 진단 정보를 수집한다.
-
-**출력:** 최근 상태와 incident 자료를 local path에 저장한다.
-
-```text
-/run/decs-nfs-forensics/status.json
-/run/decs-nfs-forensics/samples.tsv
-/var/lib/decs-nfs-forensics/ring/
-/var/lib/decs-nfs-forensics/incidents/
-```
-
-`cluster-monitor-exporter`는 `status.json`을 읽어
-`cluster_monitor_nfs_forensics_*` metric으로 제공한다. incident directory는
-root 전용 권한을 사용하며 보존 개수와 ring 크기를 제한한다.
-
-**주요 설정:** client·storage capture filter, packet snap length, ring 크기,
-watch interval, incident retention, block device, SCSI 주소와 IRQ를 Ansible 변수로
-관리한다.
-
-관련 코드:
-[`trace buffer`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fnfs-forensics%2Fbin%2Fdecs_nfs_trace_buffer.sh),
-[`watcher`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fnfs-forensics%2Fbin%2Fdecs_nfs_forensics_watch.sh),
-[`snapshot`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fnfs-forensics%2Fbin%2Fdecs_nfs_forensics_snapshot.sh),
-[`nfs_forensics.go`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fnfs_forensics.go)
-
-### 4.3 Keytab health check
-
-**역할:** AD와 storage의 Kerberos NFS service 정보가 서로 일치하고 실제 service
-ticket을 사용할 수 있는지 주기적으로 확인한다.
-
-**입력:** 환경 profile의 AD endpoint, required SPN, storage keytab 경로와 GSS
-service 설정을 사용한다.
-
-**처리:** profile별 systemd user timer가 공통 checker를 실행한다. checker는 AD
-KVNO와 principal, storage keytab, service ticket 복호화와 GSS service 상태를
-순서대로 확인한다.
-
-**출력:** profile별 JSON status와 exit code를 제공한다. exit code 0은 정상, 1은
-점검 오류, 2는 설정 drift를 의미한다. status에는 stage와 진단 결과가 기록된다.
-
-**주요 설정:** FARM/LAB별 endpoint, realm, principal, keytab 위치와 SSH 설정은
-`config/farm.env`, `config/lab.env`에서 관리한다.
-
-관련 코드:
-[`check-nfs-keytab.sh`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fhealth-checks%2Fkerberos-nfs-keytab%2Fscript%2Fcheck-nfs-keytab.sh),
-[`keytab checker config`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fmonitoring%2Fhealth-checks%2Fkerberos-nfs-keytab%2Fconfig),
-[`systemd timer`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fhealth-checks%2Fkerberos-nfs-keytab%2Fsystemd%2Fuser%2Fcheck-nfs-keytab%40.timer)
-
-## 5. Metric 저장, 시각화와 alert
-
-### 5.1 Prometheus
+### 4.1 Prometheus
 
 **역할:** exporter metric을 주기적으로 수집해 시계열로 저장하고 alert rule을
 평가한다.
@@ -372,7 +258,7 @@ plane과 storage가 FARM과 분리되어 있으며 LAB release의 Grafana와 Ale
 [`prometheus-lab-values.yaml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Fprometheus-lab-values.yaml),
 [`deploy_prometheus.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Fdeploy_prometheus.yml)
 
-### 5.2 Alertmanager와 relay
+### 4.2 Alertmanager와 relay
 
 **역할:** Prometheus가 생성한 alert를 묶고 상태별로 routing한 뒤 내부 알림 API에
 전달한다.
@@ -395,9 +281,9 @@ Secret으로 제공한다.
 [`FARM Alertmanager 설정`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Fprometheus-farm-values.yaml),
 [`alert relay`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Falertmanager-slack-notify-relay-configmap.yaml)
 
-### 5.3 Grafana
+### 4.3 Grafana
 
-**역할:** FARM과 LAB의 시계열을 서버, GPU, network와 storage 관점의 dashboard로
+**역할:** FARM과 LAB의 시계열을 서버, GPU와 network 관점의 dashboard로
 제공한다.
 
 **입력:** 기본 FARM datasource와 UID가 `prometheus-lab`인 LAB datasource를
@@ -406,8 +292,8 @@ Secret으로 제공한다.
 **처리:** dashboard query가 datasource, cluster, server, instance, GPU와 network
 interface label을 기준으로 시계열을 선택하고 비교한다.
 
-**출력:** FARM Grafana의 GPU usage, network traffic과 storage latency dashboard를
-제공한다. Grafana service는 NodePort `30080`을 사용한다.
+**출력:** FARM Grafana의 GPU usage와 network traffic dashboard를 제공한다.
+Grafana service는 NodePort `30080`을 사용한다.
 
 **주요 설정:** datasource와 dashboard ConfigMap은 `monitoring/grafana/`에서,
 Grafana service·persistence·Secret 연결은 FARM Prometheus values에서 관리한다.
@@ -417,15 +303,13 @@ Grafana service·persistence·Secret 연결은 FARM Prometheus values에서 관�
 [`LAB datasource`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fgrafana%2Fdatasources%2Flab-prometheus-datasource-values.yaml),
 [`Grafana PV`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Fgrafana-pv.yaml)
 
-## 6. 배포와 설정 구조
+## 5. 배포와 설정 구조
 
 | 위치 | 역할 |
 | --- | --- |
 | `monitoring/ansible_playbook/inventory.ini` | FARM/LAB 배포 대상과 SSH 접속 정보 |
-| `monitoring/ansible_playbook/group_vars/exporters.yml` | exporter, NFS GSS와 forensics 공통 설정 |
+| `monitoring/ansible_playbook/group_vars/exporters.yml` | 두 custom exporter의 공통·서버별 설정 |
 | `monitoring/ansible_playbook/deploy_exporters.yml` | 두 custom exporter build·설치·검증 |
-| `monitoring/ansible_playbook/deploy_nfs_gss_health.yml` | readiness, canary와 recovery service 설치 |
-| `monitoring/ansible_playbook/deploy_nfs_forensics.yml` | trace buffer, watcher와 snapshot service 설치 |
 | `monitoring/ansible_playbook/deploy_prometheus.yml` | FARM/LAB monitoring stack 검증·배포 |
 | `monitoring/prometheus/config/` | Prometheus, Alertmanager, PV와 storage 설정 |
 | `monitoring/grafana/` | datasource와 dashboard 원본 |
@@ -435,27 +319,15 @@ Ansible은 Go exporter binary를 build하고 서버별 환경 파일과 systemd 
 확인한 뒤 환경별 Helm values를 적용한다. 구체적인 변경·배포·점검 절차는
 [운영 문서](operations.md)에서 설명한다.
 
-## 7. 주요 설계 기준
+## 6. 주요 설계 기준
 
-### 7.1 HTTP 응답과 collection 상태 분리
+### 6.1 HTTP 응답과 collection 상태 분리
 
 `cluster-monitor-exporter`는 background loop의 결과를 endpoint에서 제공한다.
 Prometheus의 `up`, exporter의 마지막 collection 시각과 stale 기준을 함께 사용해
 HTTP listener와 실제 점검 진행 상태를 각각 확인한다.
 
-### 7.2 NFS command 실행 시간 제한
-
-NFS `hard` mount에서 command가 D-state에 들어갈 수 있으므로 외부 명령마다
-timeout을 사용한다. D-state process와 hung-task 증가는 별도 metric으로 기록하고
-수집 loop는 다음 점검을 계속 진행한다.
-
-### 7.3 관측, 증거 수집과 복구 분리
-
-exporter는 metric 수집과 worker 실행 요청을 담당한다. NFS GSS recovery service는
-mount 작업을 담당하고, forensics service는 packet·kernel 증거를 local storage에
-보존한다. 각 작업 결과는 state file을 통해 exporter에 전달된다.
-
-### 7.4 Alert label과 secret 관리
+### 6.2 Alert label과 secret 관리
 
 alert는 `instance`, `server`, `container`, `image`, `cluster`처럼 진단에 필요한
 label을 사용한다. credential과 password는 Kubernetes Secret과 systemd 환경

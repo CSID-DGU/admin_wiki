@@ -67,7 +67,7 @@ def sync(output_dir: Path) -> Path:
     for manual in MANUALS:
         source = rewrite_links(manual.source.read_text(encoding="utf-8"), manual.slug)
         page_relative = page_name(manual)
-        if manual.slug != "server-manage":
+        if manual.slug not in {"server-manage", "server-state"}:
             prefix = "../" * len(page_relative.parent.parts)
             pdf_button = f"\n[이 문서의 PDF 열기]({prefix}pdf/{manual.output}){{ .md-button }}\n\n"
             first_break = source.find("\n")

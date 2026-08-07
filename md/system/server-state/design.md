@@ -179,7 +179,21 @@ Kubernetes node, network tuning을 차례로 구성한 뒤 Kerberos/NFS, monitor
 | `profiles.<name>.remediations` | ID, 실행 방식, 안전 수준, 명령 또는 runbook | 기준과 다를 때 어떤 복구 절차를 검토할지 정의한다. |
 | `profile_sets.<name>.profiles` | 상태 기준 이름의 순서 있는 목록 | 목적에 맞는 상태 기준과 실행 순서를 선택한다. |
 
-check는 서버를 변경하지 않는 방식만 사용한다.
+예를 들어 [`docker-engine` 상태 기준](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/server-state/config/profiles.yml%23L96-L117)은
+다음과 같이 구성되어 있다.
+
+| 설정 | `docker-engine`의 값 | 의미 |
+| --- | --- | --- |
+| `owner_module` | `server-state` | Docker 공통 기준과 bootstrap 절차를 `server-state`가 관리한다. |
+| `description` | systemd cgroup driver를 사용하는 Docker Engine | Docker가 갖춰야 할 목표 상태를 요약한다. |
+| `checks` | `docker-service`, `docker-daemon`, `docker-cgroup-driver` | service 활성 상태, daemon 응답과 cgroup driver가 목표 상태인지 점검한다. |
+| `remediations` | `bootstrap-docker-engine`, `command`, `gated` | bootstrap playbook의 Docker 관련 task를 실행하기 전에 예상 변경을 검토하게 한다. |
+| `profile_sets`에서의 사용 | `new-host-bootstrap`, `existing-host-drift`, `managed-host` | 같은 Docker 기준을 신규 서버 구축과 운영 서버 점검에 함께 사용한다. |
+
+check는 상태 기준(profile)이 요구하는 상태가 대상 서버에 충족되어 있는지
+점검한다. 점검 과정에서는 서버 설정을 변경하지 않으며, 로컬 inventory와 파일,
+필수 서버값 또는 원격 서버의 package, service, 설정과 endpoint를 읽는다. 현재
+구현에서 `remote-read`는 원격 명령을 직접 실행하지 않고 `DRY-RUN`으로 보여준다.
 
 | check 종류 | 확인하는 대상 |
 | --- | --- |

@@ -232,7 +232,9 @@ python3 scripts/test_uid_create_container.py \
 
 ### 7.1 로컬 build와 push
 
-Docker Hub 인증과 test가 완료된 환경에서 `--push`를 추가한다.
+Docker Hub 로그인에 사용할 관리자 계정은
+[관리자 계정 통합관리문서](https://docs.google.com/spreadsheets/d/10sNMctmhgjY1GeCX8jRZuzM0vpt6DfJ3V4ah2Tfgr1Q/edit?pli=1&gid=0#gid=0)에서
+확인한다. 인증과 test가 완료된 환경에서 `--push`를 추가한다.
 
 ```bash
 docker login

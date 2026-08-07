@@ -123,18 +123,21 @@ PID와 Docker 정보를 읽을 수 있는 권한으로 실행된다.
 
 #### Go 코드 구조
 
-`gpu-user-exporter`의 Go 구현은 `main.go`에 있으며, type과 함수가 다음 역할로
-나뉜다.
+`gpu-user-exporter`의 Go 구현은 `main.go`에 있다. 아래 표는 실행 흐름을 이해하는
+순서로 정리했다. `main`에서 시작해 설정과 collector 구성을
+확인한 뒤, 한 번의 scrape가 원천 데이터를 수집하고 사용자별 metric을 만드는
+과정을 따라가면 된다.
 
 | 코드 | 역할 |
 | --- | --- |
-| [`config`, `loadConfig`, `resolveDSN`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L28-L250) | 실행 option과 환경 변수를 읽고 server ID에 맞는 DB 연결 정보를 만든다. |
 | [`main`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L142-L179) | DB 연결, Prometheus registry, custom collector와 HTTP endpoint를 초기화한다. |
-| [`gpuUserCollector`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L121-L336) | metric descriptor와 수집에 필요한 설정·cache를 보관한다. |
+| [`config`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L28-L39), [`loadConfig`, `resolveDSN`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L181-L250) | 실행 option과 환경 변수를 읽고 server ID에 맞는 DB 연결 정보를 만든다. |
+| [`gpuUserCollector`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L121-L138), [`newGPUUserCollector`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L252-L336) | 설정과 DB cache를 보관하고 exporter가 제공할 metric을 정의한다. |
 | [`Collect`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L354-L468) | 한 번의 scrape에서 GPU, process, container와 사용자 정보를 결합해 metric을 출력한다. |
 | [`ownerCache`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L50-L59)와 [`refreshIfNeeded`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L610-L680) | UID DB의 active container 정보를 일정 시간 cache하고 container ID 조회를 제공한다. |
-| [`collectGPUInfo`, `collectGPUProcesses`, `collectPmon`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L700-L804) | `nvidia-smi` 출력을 GPU·process·utilization 구조체로 변환한다. |
-| [`collectRunningDockerContainers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L509-L609), [`containerIDFromPID`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L805-L821) | Docker inspect와 `/proc/<pid>/cgroup`에서 container 실행·GPU 할당과 PID 소속을 확인한다. |
+| [`collectGPUInfo`, `collectGPUProcesses`, `collectPmon`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L700-L790) | `nvidia-smi` 출력을 GPU·process·utilization 구조체로 변환한다. |
+| [`containerIDFromPID`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L805-L816) | `/proc/<pid>/cgroup`에서 GPU process가 속한 container ID를 찾는다. |
+| [`runningContainerZeroKeys`, `collectRunningDockerContainers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fgpu-user-exporter%2Fmain.go%23L470-L539) | 실행 중인 container와 GPU 할당을 확인해 GPU process가 없는 사용자 container에도 값이 0인 시계열을 만든다. |
 
 실행 흐름은 다음과 같다.
 
@@ -189,14 +192,19 @@ pattern, public health port와 복구 기능 활성화 여부를
 
 #### Go 코드 구조
 
+`cluster-monitor-exporter`도 진입점에서 metric 제공까지의 실행 순서로 읽는다.
+`main`이 설정과 HTTP server를 준비하고, background loop가 영역별 점검 결과를
+metric text로 만든 뒤 HTTP handler가 마지막 결과를 제공한다.
+
 | 파일·코드 | 역할 |
 | --- | --- |
-| [`Config`, `loadConfig`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L31-L326) | 환경 파일과 환경 변수를 읽고 수집 주기, timeout, endpoint와 기능별 설정을 검증한다. |
 | [`main`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L134-L211) | `Collector`, background goroutine, metric·health endpoint와 public health HTTP server를 시작한다. |
+| [`Config`, `loadConfig`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L31-L325) | 환경 파일과 환경 변수를 읽고 수집 주기, timeout, endpoint와 기능별 설정을 구성한다. |
 | [`Collector.run`, `collectOnce`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L451-L474) | 설정된 주기로 전체 수집을 실행하고 완성된 metric text와 수집 시각을 교체한다. |
 | [`Collector.collect`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L541-L581) | 영역별 collector를 순서대로 호출하고 한 번의 수집 결과를 만든다. |
 | [`collectHostGPU`부터 `collectContainers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L1117-L1296) | host 명령과 Docker 상태를 읽고 GPU, Docker와 container metric을 생성한다. |
 | [`renderer`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L1558-L1617) | metric help, type, label과 값을 Prometheus text format으로 직렬화한다. |
+| [`handleMetrics`, `handleHealthz`, `collectionHealth`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fexporters%2Fcluster-monitor-exporter%2Fcmd%2Fcluster-monitor-exporter%2Fmain.go%23L476-L539) | 마지막 수집 결과를 `/metrics`로 제공하고 수집 시각을 기준으로 health 상태를 응답한다. |
 
 실행 흐름은 다음과 같다.
 

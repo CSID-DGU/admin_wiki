@@ -97,7 +97,7 @@ IP, gateway, DNS, netplan, hostname, SSH와 sudo는 bootstrap 전에 준비해�
 
 | 작업 흐름(profile set) | 용도 |
 | --- | --- |
-| `new-host-bootstrap` | 신규 SSH-ready 서버의 표준 구축 순서 |
+| `new-host-bootstrap` | 신규 서버의 표준 구축 순서 |
 | `existing-host-drift` | 운영 서버의 공통 설정 점검·복구 순서 |
 | `managed-host` | 운영 관리 서버용 기본 별칭 |
 | `monitoring-host` | monitoring 항목만 확인할 때 사용 |

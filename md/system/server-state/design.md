@@ -2,7 +2,7 @@
 
 > [개요](index.md) · [운영](operations.md)
 
-## 1. 이 모듈이 하는 일
+## 1. 개요
 
 `server-state`는 FARM/LAB 서버가 모두 같은 공통 설정을 유지하도록
 기준을 정의하는 모듈이다. 목적은 크게 두 가지다.
@@ -12,6 +12,10 @@
    확인하고 차이가 있으면 복구할 방법을 제시한다.
 2. **신규 서버 구축**: 새 서버에 공통 설정을 같은 순서로 적용하여 운영
    서버와 동일한 표준 상태로 만든다.
+
+이 문서에서 **확인**은 운영 서버의 현재 상태를 공통 기준과 비교하여 빠진
+설정이나 차이를 찾는 것을 의미한다. **설정**은 신규 서버를 구축하거나 확인에서
+발견한 차이를 해소하기 위해 필요한 공통 설정을 적용하는 것을 의미한다.
 
 즉, 서버마다 설치 방법을 다시 기억해서 수동으로 설정하는 대신 하나의 공통
 기준을 사용하려고 만든 코드다.
@@ -34,27 +38,7 @@
 NVIDIA와 network 설정은 직접 관리하고, Kerberos/NFS와 monitoring처럼 별도
 모듈이 소유한 기능은 해당 모듈의 점검·복구 명령을 한 순서로 연결한다.
 
-## 2. 디렉터리 지도
-
-| 경로 | 핵심 기능 |
-| --- | --- |
-| `README.md` | 모듈 개요와 책임 범위 요약 |
-| `bin/server-state` | CLI 실행 파일 |
-| `script/cli.py` | `list-hosts`, `check`, `plan`, `apply` 출력 |
-| `script/inventory.py` | 공용 JSONL inventory 로드와 host 선택 |
-| `script/profiles.py` | profile set 확장과 서버별 변수 치환 |
-| `script/__main__.py` | `python -m script`로 CLI를 실행할 수 있게 하는 진입점 |
-| `config/profiles.yml` | 공통 상태, 점검과 복구 명령의 기준 |
-| `ansible_playbook/bootstrap_gpu_server.yml` | 신규/운영 서버의 공통 설정 task |
-| `ansible_playbook/kerberos_nfs_client_recovery.yml` | Kerberos NFS 상태 점검과 제한된 복구 |
-| `docs/standard-gpu-server-pipeline.md` | 신규/운영 서버 표준 단계의 개발 문서 |
-| `docs/module-boundaries.md` | 모듈별 소유권 경계 정의 (§6 "모듈별 소유권"의 원본 문서) |
-| `docs/repo-inventory-cleanup.md` | 레포 내 일회성/legacy 파일 정리 감사 기록 |
-| `docs/reusable-operational-files.md` | 재사용 가능한 운영 파일 목록 |
-| `requirements.txt` | Python 의존성 (`PyYAML`) |
-| `tests/` | inventory와 profile 처리 unit test |
-
-## 3. 무엇을 확인하고 설정하는가
+## 2. 관리 범위
 
 `new-host-bootstrap`과 `existing-host-drift`는 다음 항목을 같은 순서로
 사용한다. 따라서 새로운 공통 설정을 추가할 때 두 흐름에 함께 넣을 수 있다.
@@ -94,7 +78,7 @@ IP 주소, gateway, DNS와 netplan 전체를 자동으로 설정하는 기능은
 하는 조건이다. 향후 모든 서버의 netplan까지 통일하려면 별도의 profile과
 검증 규칙을 추가해야 한다.
 
-## 4. 현재 구현 수준
+## 3. 현재 구현 수준
 
 이 모듈은 최종적으로 공통 기준과 실제 서버 상태를 자동 비교하고 필요한
 복구까지 안전하게 실행하는 것을 목표로 한다. 현재 구현 수준은 다음과 같다.
@@ -115,7 +99,7 @@ IP 주소, gateway, DNS와 netplan 전체를 자동으로 설정하는 기능은
 단계**이고, 한 명령으로 전체 서버를 자동 검사·복구하는 controller까지 완성된
 상태는 아니다.
 
-## 5. profile 구조
+## 4. profile 구조
 
 `config/profiles.yml`에는 작은 단위의 profile과 이를 순서대로 묶은 profile
 set이 있다.
@@ -139,7 +123,7 @@ set이 있다.
 - 차이가 있을 때 사용할 remediation 명령
 - 자동 실행할 수 없는 작업의 runbook과 safety level
 
-## 6. 모듈별 소유권
+## 5. 모듈별 소유권
 
 | 영역 | 실제 소유자 | `server-state`의 역할 |
 | --- | --- | --- |
@@ -153,7 +137,7 @@ set이 있다.
 소유권을 나눈 이유는 `server-state`에 모든 운영 코드를 복사하지 않고, 실제
 담당 모듈의 rollback과 안전 절차를 그대로 사용하기 위해서다.
 
-## 7. 상태 표시
+## 6. 상태 표시
 
 | 상태 | 의미 |
 | --- | --- |

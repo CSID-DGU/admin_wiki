@@ -2,7 +2,7 @@
 
 > [개요](index.md) · [운영](operations.md)
 
-## 1. 해결하려는 문제
+## 1. 개요
 
 FARM/LAB GPU 서버는 Docker, NVIDIA, Kubernetes, network, Kerberos/NFS와
 monitoring 설정을 공통으로 사용한다. 이 기준과 작업 순서가 여러 모듈과

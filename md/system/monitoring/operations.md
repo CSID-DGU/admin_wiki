@@ -1,4 +1,4 @@
-# Monitoring 운영
+# monitoring 운영
 
 이 문서는 monitoring 구성 요소를 배포하고 endpoint, metric, alert와 incident를
 점검하는 방법을 설명한다.
@@ -287,8 +287,8 @@ cat /var/lib/decs-nfs-gss/recovery.state
 2. ignored process count가 증가했는지 확인한다.
 3. PID의 cgroup container ID와 Docker inspect를 비교한다.
 4. DB cache refresh success와 cache age/entry를 확인한다.
-5. DB record와 실제 running container가 어긋났다면 user-lifecycle에서 관리하는 절차로
-   고친다.
+5. UID DB의 container record와 실제 running container를 비교하고 DB 갱신 절차로
+   수정한다.
 
 ### Container SSH/GPU alert
 

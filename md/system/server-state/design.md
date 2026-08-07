@@ -48,14 +48,18 @@ driver 상태를 하나의 구성요소로 관리한다.
 CLI에서 관리한다.
 
 각 구성요소는 서버의 현재 상태를 점검하는 작업과, 서버를 목표 상태에 맞게
-설정하는 작업을 정의한다. 설정 작업을 실행하는 방법은 다음 네 가지로 구분한다.
+설정하는 작업을 정의한다. 설정 작업에는 실행 형태와 안전 수준이 각각 지정된다.
 
-| 적용 방식 | CLI 동작 |
+| 실행 형태 | 동작 |
 | --- | --- |
-| 수동 준비 | `plan`이 준비 절차를 표시하며 관리자가 해당 절차를 수행한다. |
-| 일반 적용 (`safe`) | `plan`으로 예상 변경을 확인하고 `apply --execute`로 적용한다. |
-| 승인 후 적용 (`gated`) | `plan` 확인 후 `apply --execute --approve-gated`로 적용한다. |
-| 고위험 승인 후 적용 (`risky`) | 작업 영향과 운영 일정을 확인하고 `apply --execute --approve-risky`로 적용한다. |
+| `ansible-playbook` | `plan`으로 예상 변경을 확인하고 `apply`로 설정 playbook을 실행한다. |
+| `manual` | CLI가 운영 절차를 표시하고 관리자가 해당 절차를 수행한다. |
+
+| 안전 수준 | 실행 조건 |
+| --- | --- |
+| `safe` | `apply --execute`로 실행한다. |
+| `gated` | 운영 영향을 확인하고 `--approve-gated`로 승인한다. |
+| `risky` | 작업 영향과 운영 일정을 확인하고 `--approve-risky`로 승인한다. |
 
 ### 3.1 `baseline-access`
 
@@ -68,8 +72,8 @@ hostname·inventory hostname 일치 여부를 확인한다.
 **설정:** IP, hostname, SSH key, 관리 계정과 sudo 권한을 준비하고 두
 inventory에 서버를 등록한다.
 
-**적용 방식:** 수동 준비. 이 구성요소는 이후 Ansible 작업을 실행하기 위한
-선행 조건이다.
+**설정 실행:** `manual`, `gated`. 관리자가 준비 절차를 수행한다. 이 구성요소는
+이후 Ansible 작업을 실행하기 위한 선행 조건이다.
 
 관련 코드: [`baseline-access.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fbaseline-access.yml),
 [`baseline_access/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fbaseline_access%2Ftasks%2Faudit.yml)
@@ -85,8 +89,8 @@ inventory에 서버를 등록한다.
 
 **설정:** apt cache를 갱신하고 공통 package 목록을 설치한다.
 
-**적용 방식:** 일반 적용 (`safe`). `apply --execute`가 package 설치 task를
-실행한다.
+**설정 실행:** `ansible-playbook`, `safe`. `apply --execute`가 package 설치
+task를 실행한다.
 
 관련 코드: [`os-common.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fos-common.yml),
 [`os_common/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fos_common%2Ftasks%2Faudit.yml),
@@ -105,7 +109,7 @@ driver 값을 확인한다.
 기존 `daemon.json`에 필요한 값을 병합하고 변경된 경우 Docker service를
 재시작한다.
 
-**적용 방식:** 승인 후 적용 (`gated`). package source와 daemon 설정 변경,
+**설정 실행:** `ansible-playbook`, `gated`. package source와 daemon 설정 변경,
 service 재시작 가능성을 확인한 뒤 `--approve-gated`로 승인한다.
 
 관련 코드: [`docker-engine.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fdocker-engine.yml),
@@ -122,8 +126,8 @@ showhold`에서 NVIDIA driver package를 확인한다.
 
 **설정:** 지정 driver package를 설치하고 apt hold를 설정한다.
 
-**적용 방식:** 고위험 승인 후 적용 (`risky`). driver 변경은 GPU workload와
-reboot 일정에 영향을 줄 수 있으므로 `plan` 결과와 서버 운영 일정을 확인한 뒤
+**설정 실행:** `ansible-playbook`, `risky`. driver 변경은 GPU workload와 reboot
+일정에 영향을 줄 수 있으므로 `plan` 결과와 서버 운영 일정을 확인한 뒤
 `--approve-risky`로 승인한다.
 
 관련 코드: [`nvidia-driver.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fnvidia-driver.yml),
@@ -142,7 +146,7 @@ runtime 항목을 확인한다.
 configure`를 Docker와 containerd에 실행한다. 설정 변경 후 관련 service를
 재시작한다.
 
-**적용 방식:** 승인 후 적용 (`gated`). container runtime 설정과 service
+**설정 실행:** `ansible-playbook`, `gated`. container runtime 설정과 service
 재시작 영향을 확인한 뒤 `--approve-gated`로 승인한다.
 
 관련 코드: [`nvidia-runtime.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fnvidia-runtime.yml),
@@ -159,8 +163,8 @@ configure`를 Docker와 containerd에 실행한다. 설정 변경 후 관련 ser
 **설정:** Kubernetes apt key와 repository를 등록하고 세 package를 설치·hold한
 뒤 kubelet을 활성화한다.
 
-**적용 방식:** 승인 후 적용 (`gated`). Kubernetes package version과 kubelet
-영향을 확인한 뒤 `--approve-gated`로 승인한다.
+**설정 실행:** `ansible-playbook`, `gated`. Kubernetes package version과
+kubelet 영향을 확인한 뒤 `--approve-gated`로 승인한다.
 
 관련 코드: [`kubernetes-packages.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fkubernetes-packages.yml),
 [`kubernetes_packages/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fkubernetes_packages%2Ftasks%2Faudit.yml),
@@ -177,8 +181,8 @@ domain label을 조회한다.
 **설정:** 관리자가 cluster, join token과 node 정보를 확인한 뒤 승인된
 `kubeadm join` 명령을 실행한다.
 
-**적용 방식:** 수동 준비. join token의 유효 시간과 cluster 선택을 관리자가
-확인한다.
+**설정 실행:** `manual`, `risky`. join token의 유효 시간과 cluster 선택을
+관리자가 확인한다.
 
 관련 코드: [`kubernetes-membership.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fkubernetes-membership.yml),
 [`kubernetes_membership/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fkubernetes_membership%2Ftasks%2Faudit.yml),
@@ -194,8 +198,8 @@ domain label을 조회한다.
 
 **설정:** RX queue를 설정하는 oneshot systemd unit을 설치하고 활성화한다.
 
-**적용 방식:** 일반 적용 (`safe`). `apply --execute`가 systemd unit 설치와
-활성화 task를 실행한다.
+**설정 실행:** `ansible-playbook`, `safe`. `apply --execute`가 systemd unit
+설치와 활성화 task를 실행한다.
 
 관련 코드: [`storage-network.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fstorage-network.yml),
 [`storage_network/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fstorage_network%2Ftasks%2Faudit.yml),
@@ -213,9 +217,9 @@ source·option을 순서대로 확인한다.
 **설정:** domain Kerberos 설정을 설치하고 keytab과 principal을 검증한다. NFS
 GSS readiness·recovery unit을 설치하고 fstab에 mount를 기록한다.
 
-**적용 방식:** 승인 후 적용 (`gated`). Kerberos 설정, fstab과 mount recovery
-영향을 확인한 뒤 `--approve-gated`로 승인한다. 실제 mount 실행은 별도
-`server_state_mount_now` 값으로 제어한다.
+**설정 실행:** `ansible-playbook`, `gated`. Kerberos 설정, fstab과 mount
+recovery 영향을 확인한 뒤 `--approve-gated`로 승인한다. 실제 mount 실행은
+별도 `server_state_mount_now` 값으로 제어한다.
 
 관련 코드: [`kerberos-nfs.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fkerberos-nfs.yml),
 [`audit_client.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fkerberos-nfs%2Fansible%2Faudit_client.yml),
@@ -233,8 +237,8 @@ endpoint 응답을 확인한다.
 **설정:** exporter binary를 build하고 설정 파일과 systemd unit을 설치한다.
 service를 시작한 뒤 metrics 응답을 검증한다.
 
-**적용 방식:** 일반 적용 (`safe`). `apply --execute`가 exporter 배포와 검증
-playbook을 실행한다.
+**설정 실행:** `ansible-playbook`, `safe`. `apply --execute`가 exporter 배포와
+검증 playbook을 실행한다.
 
 관련 코드: [`monitoring.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fmonitoring.yml),
 [`audit_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Faudit_exporters.yml),
@@ -251,14 +255,15 @@ playbook과 변수를 사용한 명령을 화면에 출력한다.
 ### 4.2 `plan`
 
 `plan`은 구성요소의 설정 playbook을 Ansible `--check --diff`로 실행한다.
-package, 파일과 service의 예상 변경을 확인할 수 있다. 수동 준비 구성요소는
-실행 명령 대신 준비 절차 reference를 표시한다.
+package, 파일과 service의 예상 변경을 확인할 수 있다. `manual` 구성요소는 실행
+명령 대신 준비 절차 reference를 표시한다.
 
 ### 4.3 `apply`
 
-`apply`는 모든 선택 항목의 적용 방식을 먼저 확인한다. 일반 적용은 `--execute`,
-승인 후 적용은 `--approve-gated`, 고위험 승인은 `--approve-risky`를 사용한다.
-선택 항목 전체가 실행 조건을 충족하면 Ansible 설정 작업을 시작한다.
+`apply`는 모든 선택 항목의 실행 형태와 안전 수준을 먼저 확인한다.
+`ansible-playbook` 구성요소는 `--execute`로 실행하며, `gated`는
+`--approve-gated`, `risky`는 `--approve-risky` 승인을 함께 사용한다. `manual`
+구성요소는 운영 절차 reference를 표시한다.
 
 ## 5. 설정 구조
 
@@ -272,7 +277,7 @@ package, 파일과 service의 예상 변경을 확인할 수 있다. 수동 준�
 | `id` | `--component`에서 사용하는 이름 |
 | `desired_state` | 점검과 설정의 기준이 되는 서버 상태 |
 | `audit` | 점검 playbook, tag와 `safe` 수준 |
-| `converge` | 설정 playbook 또는 수동 절차와 적용 승인 수준 |
+| `converge` | 설정 playbook 또는 수동 절차와 안전 수준 |
 
 [`docker-engine.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fdocker-engine.yml)은
 다음과 같이 구성된다.

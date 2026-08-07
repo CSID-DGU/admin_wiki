@@ -10,7 +10,7 @@ entrypoint 구성과 `user-lifecycle`과의 계약을 설명하고, **운영**�
 | 문서 | 핵심 내용 |
 | --- | --- |
 | 현재 페이지 | 책임 범위와 문서 안내 |
-| [설계](design.md) | 디렉터리 지도, manifest 기반 variant, Dockerfile/entrypoint 구성, user-lifecycle 계약 |
+| [설계](design.md) | 개요, 공통 image 구성, CUDA/TensorFlow variant별 차이, user-lifecycle 계약, 디렉터리 지도 |
 | [운영](operations.md) | 빌드/배포 흐름, 테스트 전략, 변경 가이드, 운영 안전 수칙 |
 
 처음 보는 사람은 **설계 문서**에서 이미지가 무엇을 책임지고 무엇을 책임지지

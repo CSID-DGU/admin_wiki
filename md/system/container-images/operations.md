@@ -21,7 +21,7 @@ cd /home/jy/server_manage/container-images
 python3 scripts/build_variants.py --dry-run
 ```
 
-특정 variant build:
+특정 이미지 버전 build:
 
 ```bash
 python3 scripts/build_variants.py \
@@ -30,7 +30,7 @@ python3 scripts/build_variants.py \
 
 registry push는 build 결과와 tag 목록을 확인한 뒤 `--push`를 추가한다. 날짜
 tag는 재현 가능한 배포 지점을 만들고, `stable`/`latest` alias는 현재 권장
-variant를 가리킨다. 운영 기록에는 alias보다 날짜가 포함된 tag를 남기는 것이
+이미지 버전을 가리킨다. 운영 기록에는 alias보다 날짜가 포함된 tag를 남기는 것이
 좋다.
 
 ## 2. 테스트 전략
@@ -61,7 +61,7 @@ python3 scripts/test_uid_create_container.py \
 
 ## 3. 변경 가이드
 
-### 새 variant 추가
+### 새 이미지 버전 추가
 
 1. `image-variants.json`에 버전, base image와 최소 driver를 추가한다.
 2. `python3 scripts/variant_matrix.py` 결과의 tag를 확인한다.
@@ -81,6 +81,6 @@ python3 scripts/test_uid_create_container.py \
 - 실제 사용자 비밀번호를 image layer나 manifest에 넣지 않는다.
 - keytab을 image 또는 container mount로 제공하지 않는다.
 - `latest`만 기록하지 말고 장애 분석이 가능한 날짜 tag를 남긴다.
-- experimental variant를 stable alias로 바꾸기 전에 실장비 GPU test를 한다.
+- `experimental` 이미지 버전을 `stable` alias로 바꾸기 전에 실장비 GPU test를 한다.
 - sudo 완화는 ccache와 host bind mount에 대한 우회 가능성을 먼저 검토한다.
 - 로컬 source 변경과 이미 registry에 push된 image를 구분해서 진단한다.

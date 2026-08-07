@@ -8,26 +8,25 @@
 
 ## 1. 개요
 
-GPU 컨테이너는 CUDA와 TensorFlow가 설치되어 있는 것만으로는 바로 사용할 수
-없다. 컨테이너가 시작되면 사용자의 계정과 그룹이 준비되어야 하고, 공유 홈
-디렉터리에 같은 UID/GID로 접근할 수 있어야 한다. SSH와 Jupyter가 실행되어야
-하며, 필요한 경우 VNC와 Kerberos 인증 환경도 함께 사용할 수 있어야 한다.
+`container-images`의 목표는 GPU container가 시작된 직후 사용자가 자신의
+계정과 공유 홈으로 접속하고, 선택한 GPU software 환경에서 바로 작업을 시작할
+수 있게 하는 것이다.
 
-이 값들은 사용자와 실행 host마다 다르다. 계정, UID/GID, supplemental group,
-홈 디렉터리, Kerberos ccache와 서비스 port를 image에 고정하면 사용자별로
-image를 다시 만들어야 하고, DB·공유 스토리지와 컨테이너의 identity가 서로
-달라질 수 있다. 기존 홈을 mount하는 경우에는 컨테이너를 재시작하더라도 사용자
-설정과 password 파일을 보존해야 한다.
+모든 container는 전달받은 UID/GID로 계정과 그룹을 구성하고, 공유 홈의 사용자
+설정과 password 파일을 이어서 사용한다. SSH와 Jupyter를 기본으로 제공하고,
+필요한 경우 VNC와 Kerberos ccache 환경도 함께 구성한다. 이를 통해 container를
+재시작하거나 다른 이미지 버전을 선택해도 같은 사용자 identity와 작업 환경을
+유지한다.
 
-`container-images`는 공통 `entrypoint.sh`가 시작 시 전달받은 값으로 계정,
-권한, 홈과 사용자 서비스를 구성하여 모든 image에서 같은 실행 환경을 제공한다.
-그 위에 CUDA, TensorFlow, Python과 Ubuntu 조합이 다른 image variant를 제공한다.
-따라서 사용자는 필요한 GPU software 조합을 선택하되, 어떤 variant를 사용해도
-동일한 방식으로 SSH, Jupyter, VNC와 공유 홈을 사용할 수 있다.
+계정, supplemental group, 홈 디렉터리와 Kerberos 정보처럼 사용자와 host마다
+달라지는 값은 공통 `entrypoint.sh`가 시작 시 반영한다. CUDA, TensorFlow,
+Python과 Ubuntu 조합은 각각의 이미지 버전으로 제공한다. 따라서 사용자는 필요한
+GPU software 조합을 선택하면서도 모든 이미지 버전에서 동일한 방식으로 SSH, Jupyter,
+VNC와 공유 홈을 사용할 수 있다.
 
 ## 2. 사용자 실행 환경
 
-`Dockerfile`은 모든 variant에 필요한 프로그램과 `entrypoint.sh`를 image에
+`Dockerfile`은 모든 이미지 버전에 필요한 프로그램과 `entrypoint.sh`를 image에
 포함한다. 실제 사용자 정보와 실행 옵션은 container를 시작할 때 전달되며,
 entrypoint가 이를 검증하고 런타임 환경을 구성한다.
 
@@ -35,7 +34,7 @@ entrypoint가 이를 검증하고 런타임 환경을 구성한다.
 
 entrypoint의 전체 시작 순서는 다음과 같다.
 
-1. image variant, CUDA/TensorFlow version과 host NVIDIA driver를 확인한다.
+1. 선택한 이미지 버전, CUDA/TensorFlow version과 host NVIDIA driver를 확인한다.
 2. 전달받은 UID/GID로 사용자, primary group과 supplemental group을 구성한다.
 3. Kerberos ccache를 사용할 수 있도록 사용자 환경을 준비한다.
 4. 홈 디렉터리의 소유권과 쓰기 가능 여부를 확인하고 초기 설정을 보완한다.
@@ -44,7 +43,7 @@ entrypoint의 전체 시작 순서는 다음과 같다.
 7. Kerberos ticket이 없어 홈을 쓸 수 없다면 SSH만 먼저 제공하고, 홈이 준비된
    뒤 사용자 서비스를 시작한다.
 
-이 순서를 하나의 entrypoint에서 관리하므로 image variant마다 사용자 환경을
+이 순서를 하나의 entrypoint에서 관리하므로 이미지 버전마다 사용자 환경을
 별도로 구현하지 않는다.
 
 **관련 코드**
@@ -165,9 +164,9 @@ Kerberos keytab과 ccache를 분리하는 이유와 credential 경계는
 달라진다. `container-images`는 공통 image 구성과 CUDA/TensorFlow 조합만 분리해
 관리한다.
 
-### 3.1 모든 variant의 공통 build 구성
+### 3.1 모든 이미지 버전의 공통 build 구성
 
-모든 variant는 하나의 `Dockerfile`을 사용하고 다음 프로그램을 공통으로
+모든 이미지 버전은 하나의 `Dockerfile`을 사용하고 다음 프로그램을 공통으로
 포함한다.
 
 | 영역 | 공통 구성 |
@@ -178,15 +177,15 @@ Kerberos keytab과 ccache를 분리하는 이유와 credential 경계는
 | GUI | Chrome, Xfce, TigerVNC, noVNC와 websockify |
 | 사용자 환경 | 한국어 글꼴과 입력기, 공통 entrypoint와 Jupyter config 위치 |
 
-variant별 Dockerfile을 복제하지 않는 이유는 보안 patch와 공통 package 변경을
+이미지 버전별 Dockerfile을 복제하지 않는 이유는 보안 patch와 공통 package 변경을
 한 번만 적용하기 위해서다. 실제 차이는 build argument로 전달하며 공통 설치와
-시작 흐름은 모든 variant에서 동일하게 유지한다.
+시작 흐름은 모든 이미지 버전에서 동일하게 유지한다.
 
-### 3.2 CUDA/TensorFlow variant
+### 3.2 CUDA/TensorFlow 조합별 이미지
 
-variant 간 차이는 `image-variants.json`에 정의한다.
+이미지 버전 간 차이는 `image-variants.json`에 정의한다.
 
-| manifest 값 | variant마다 달라지는 내용 |
+| manifest 값 | 이미지 버전마다 달라지는 내용 |
 | --- | --- |
 | `base_image` | CUDA, cuDNN과 Ubuntu가 포함된 NVIDIA base image |
 | `cuda_version` | image가 제공하는 CUDA major/minor version |
@@ -204,8 +203,8 @@ TensorFlow package, conda 제약과 최소 host driver가 달라진다.
 | 11.8 | 2.13.0 | 구버전 Jupyter·IPython과 `typing_extensions=4.5` 제약 | 520.61.05 | `stable`, `legacy` |
 | 12.2 | 2.15.0 | 기본 TensorFlow package와 공통 Jupyter package | 535.104.05 | `stable` |
 | 12.3 | 2.16.1 | `tensorflow[and-cuda]` package 사용 | 545.23.08 | `stable` |
-| 12.5 | 2.20.0 | TensorFlow 2.20 기준 variant | 555.42.06 | `stable`, `latest` |
-| 12.8 | 2.20.0 | H200 대상 experimental variant | 570.124.06 | `experimental`, `h200-experimental` |
+| 12.5 | 2.20.0 | TensorFlow 2.20 기준 이미지 | 555.42.06 | `stable`, `latest` |
+| 12.8 | 2.20.0 | H200 대상 실험 이미지 | 570.124.06 | `experimental`, `h200-experimental` |
 
 로컬 빌드 도구와 GitHub Actions는 같은 manifest를 읽어 build argument와 tag를
 만든다. 따라서 지원 조합을 한곳에서 검토하고 로컬과 CI가 서로 다른 image를
@@ -226,7 +225,7 @@ container까지 막지 않기 위해서다. 운영 배포에서 호환성을 반
 - [`Dockerfile`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/Dockerfile):
   공통 package를 설치하고 manifest 값을 build argument로 받는다.
 - [`image-variants.json`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/image-variants.json):
-  지원하는 CUDA/TensorFlow 조합, 최소 driver와 tag를 정의한다.
+  지원하는 이미지 버전별 CUDA/TensorFlow 조합, 최소 driver와 tag를 정의한다.
 - [`print_image_runtime_info`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L196-L232):
   image의 요구 driver와 실제 host driver를 비교한다.
 
@@ -234,7 +233,7 @@ container까지 막지 않기 위해서다. 운영 배포에서 호환성을 반
 
 | 경로 | 핵심 기능 |
 | --- | --- |
-| [`Dockerfile`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/Dockerfile) | 모든 variant가 공유하는 단일 image 정의 |
+| [`Dockerfile`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/Dockerfile) | 모든 이미지 버전이 공유하는 단일 image 정의 |
 | [`image-variants.json`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/image-variants.json) | base image, CUDA/TensorFlow, 최소 driver와 alias 목록 |
 | [`entrypoint.sh`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh) | 시작 시 계정·그룹·홈·SSH·Jupyter·VNC·Kerberos 환경 구성 |
 | `scripts/variant_matrix.py` | manifest를 Docker/GitHub Actions build matrix로 변환 |

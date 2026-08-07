@@ -8,15 +8,14 @@
 
 ## 1. 개요
 
-`server-state`의 목표는 FARM/LAB GPU 서버의 공통 운영 상태를 하나의 정책으로
-관리하는 것이다. 정책은 OS 공통 패키지, Docker, NVIDIA driver/runtime,
-Kubernetes, storage network, Kerberos/NFS와 monitoring의 목표 상태와 실행
-순서를 정의한다. 이 정책은 다음 두 작업에 공통으로 사용한다.
+`server-state`의 주요 목표는 FARM/LAB GPU 서버가 공통 운영 기준에 맞게
+설정되어 있는지 일관된 방법으로 점검하는 것이다. 운영 기준은 OS 공통 패키지,
+Docker, NVIDIA driver/runtime, Kubernetes, storage network, Kerberos/NFS와
+monitoring의 목표 상태와 점검 순서를 정의한다.
 
-1. **운영 서버 점검**: 선택한 서버가 각 구성요소의 목표 상태를 만족하는지
-   읽기 전용 Ansible 작업으로 점검한다.
-2. **신규 서버 구성**: 같은 구성요소 순서에 따라 예상 변경을 확인하고, 안전
-   수준에 맞는 승인 후 목표 상태를 적용한다.
+각 구성요소에는 서버를 목표 상태로 만드는 설정 작업도 연결되어 있다. 같은
+구성요소 순서로 예상 변경과 작업 영향을 확인하면 신규 서버를 공통 운영 기준에
+맞게 구성할 때도 사용할 수 있다.
 
 **구성요소(component)**는 독립적으로 점검하고 설정할 수 있는 운영 상태의
 단위다. 예를 들어 `docker-engine`은 Docker 설치, service, daemon과 cgroup

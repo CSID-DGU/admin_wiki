@@ -1,7 +1,8 @@
 # server-state
 
-`server-state`는 FARM/LAB GPU 서버가 따라야 할 공통 운영 상태를 정의하고,
-운영 서버 점검과 신규 서버 구성을 같은 기준과 순서로 수행하는 모듈이다.
+`server-state`는 FARM/LAB GPU 서버의 공통 운영 기준을 정의하고, 각 서버가 해당
+기준에 맞게 설정되어 있는지 점검하는 모듈이다. 구성요소별 설정 작업은 신규
+서버를 같은 운영 기준에 맞게 구성할 때도 사용한다.
 
 서버 상태는 OS 공통 패키지, Docker, NVIDIA, Kubernetes, storage network,
 Kerberos/NFS와 monitoring으로 나뉜다. 각 구성요소에는 목표 상태, 점검 방법,

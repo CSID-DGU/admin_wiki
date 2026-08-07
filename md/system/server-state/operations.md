@@ -2,9 +2,30 @@
 
 > [개요](index.md) · [설계](design.md)
 
-## 1. 운영 서버 점검 흐름
+## 1. 현재 구현 수준
 
-### 1.1 `existing-host-drift`란?
+이 모듈은 최종적으로 공통 기준과 실제 서버 상태를 자동 비교하고 필요한
+복구까지 안전하게 실행하는 것을 목표로 한다. 현재 구현 수준은 다음과 같다.
+
+| 기능 | 현재 상태 |
+| --- | --- |
+| 전체 서버가 따라야 할 공통 profile 정의 | 구현됨 |
+| 신규/운영 서버에 같은 profile 순서 사용 | 구현됨 |
+| 서버별 점검 명령 생성 | 구현됨 |
+| 신규 서버 설정용 Ansible task | 구현됨 |
+| `check`가 원격 서버를 순회하고 결과 판정 | 아직 구현되지 않음 |
+| `apply --execute`로 복구 자동 실행 | 아직 구현되지 않음. 명시적으로 거부됨 |
+| 주기적인 전체 서버 drift 검사와 알림 | 아직 구현되지 않음 |
+| IP/DNS/netplan 전체 표준화 | 아직 구현되지 않음 |
+
+따라서 “모든 서버가 같은 설정인지 확인하고 새 서버를 똑같이 설정한다”는
+이해는 맞다. 다만 현재는 **기준, 점검 명령, 복구 playbook을 한곳에 정리한
+단계**이고, 한 명령으로 전체 서버를 자동 검사·복구하는 controller까지 완성된
+상태는 아니다.
+
+## 2. 운영 서버 점검 흐름
+
+### 2.1 `existing-host-drift`란?
 
 `existing-host-drift`는 `config/profiles.yml`에 정의된 **점검 항목
 묶음의 이름**이다. 그 안에는 접속 확인(baseline-host)부터 os-common,
@@ -19,7 +40,7 @@ FARM/LAB 서버가 이 10개 영역의 공통 기준을 다 지키고 있는지 
 읽어서 `existing-host-drift`에 묶인 10개 영역의 점검·복구 항목을 순서대로
 꺼내 쓰는 구조다.
 
-### 1.2 "명령어를 만들어서 보여준다"는 게 무슨 뜻인가
+### 2.2 "명령어를 만들어서 보여준다"는 게 무슨 뜻인가
 
 `profiles.yml`에는 완성된 명령이 아니라, `{host}`나 `{repo}` 같은
 자리표시자가 들어간 **명령 틀**만 적혀 있다. 예를 들어 `os-common`
@@ -46,12 +67,12 @@ farm8 [os-common] ubuntu-release: DRY-RUN
 실제로 실행(예: `subprocess` 호출)하지 않는다. 서버 상태를 실제로
 확인하려면 관리자가 이 문자열을 복사해서 직접 실행해야 한다.
 
-### 1.3 전체 점검 흐름
+### 2.3 전체 점검 흐름
 
 아래 5단계 중 실제로 서버 상태가 바뀌는 건 5번뿐이고, 그마저도 관리자가
 직접 실행해야만 일어난다.
 
-1. **점검 대상 서버 선택** — 공용 inventory(3절 "공용 inventory와 서버
+1. **점검 대상 서버 선택** — 공용 inventory(4절 "공용 inventory와 서버
    목록" 참고)에서 `--hosts` 조건(`all`, `farm8` 등)에 맞는 서버를
    로컬에서 골라낸다. 서버에 접속하지 않는다.
 2. **점검 항목 생성** — `config/profiles.yml`의 `existing-host-drift`
@@ -94,7 +115,7 @@ cd /home/jy/server_manage
   --profile existing-host-drift
 ```
 
-## 2. 신규 서버 구축 흐름
+## 3. 신규 서버 구축 흐름
 
 새 서버를 운영 서버와 같은 상태로 만드는 것이 `new-host-bootstrap`의
 목적이다. 다만 아무것도 설치되지 않은 장비의 전원 투입부터 전부 처리하는
@@ -140,7 +161,7 @@ Kerberos/NFS의 상세 점검과 복구 순서는
 
 `apply --execute`는 아직 구현되지 않았으며 실행하면 오류로 중단된다.
 
-## 3. 공용 inventory와 서버 목록
+## 4. 공용 inventory와 서버 목록
 
 기본 inventory는 `user-lifecycle/server_info/servers.jsonl`이다. 서버 한
 대당 한 줄(JSON)로 host 이름, `server_id`, domain(FARM/LAB), SSH 접속 정보
@@ -165,7 +186,7 @@ SSH port와 논리 server ID를 두 군데에서 따로 관리하면 서로 달�
 
 selector는 `all`, `farm`, `lab`, 개별 host 이름과 여러 host 조합을 지원한다.
 
-## 4. 공통 설정 추가 방법
+## 5. 공통 설정 추가 방법
 
 1. 설정을 실제로 관리할 모듈을 정한다.
 2. `config/profiles.yml`에 작은 profile을 추가한다.
@@ -177,7 +198,7 @@ selector는 `all`, `farm`, `lab`, 개별 host 이름과 여러 host 조합을 �
    `existing-host-drift`에 모두 추가한다.
 7. profile 순서와 서버별 변수 치환 test를 추가한다.
 
-## 5. 테스트
+## 6. 테스트
 
 ```bash
 cd /home/jy/server_manage/server-state

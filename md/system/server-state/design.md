@@ -17,6 +17,12 @@
 설정이나 차이를 찾는 것을 의미한다. **설정**은 신규 서버를 구축하거나 확인에서
 발견한 차이를 해소하기 위해 필요한 공통 설정을 적용하는 것을 의미한다.
 
+공통 기준은 `profile`이라는 단위로 정의한다. 하나의 profile은 Docker,
+NVIDIA driver, monitoring처럼 하나의 관리 대상을 기준 상태, 점검 명령, 복구
+방법과 담당 모듈까지 묶어 이름 붙인 것이다. 여러 profile을 실행할 순서대로
+묶은 것을 `profile set`이라고 하며, 운영 서버 점검과 신규 서버 구축에 같은
+기준을 적용할 때 사용한다.
+
 즉, 서버마다 설치 방법을 다시 기억해서 수동으로 설정하는 대신 하나의 공통
 기준을 사용하려고 만든 코드다.
 
@@ -56,7 +62,7 @@ NVIDIA와 network 설정은 직접 관리하고, Kerberos/NFS와 monitoring처�
 | 9 | monitoring | 두 exporter service와 metrics/health endpoint | monitoring 모듈의 exporter 배포 playbook 사용 |
 | 10 | 사용자 container 전제조건 | 사용자 DB 환경, server inventory, Docker 접근 | 사용자 생성·삭제는 `user-lifecycle`을 통해 처리 |
 
-### 3.1 NVIDIA version 확인 범위
+### 2.1 NVIDIA version 확인 범위
 
 현재 점검 명령은 `nvidia-smi`를 실행하여 GPU 이름과 실제 driver version이
 출력되는지 확인한다. 따라서 driver가 GPU를 인식하지 못하거나 명령 자체가
@@ -67,7 +73,7 @@ NVIDIA와 network 설정은 직접 관리하고, Kerberos/NFS와 monitoring처�
 driver version을 `580`과 자동 비교하여 불일치 판정을 내리는 규칙은 아직 없다.
 현재는 출력된 version을 관리자가 확인해야 한다.
 
-### 3.2 network 설정 범위
+### 2.2 network 설정 범위
 
 현재 `network-tuning`이 관리하는 대상은 **스토리지 통신에 사용하는 NIC의 RX
 queue 크기**다. inventory에서 서버별 storage interface를 읽고, RX queue가
@@ -78,28 +84,7 @@ IP 주소, gateway, DNS와 netplan 전체를 자동으로 설정하는 기능은
 하는 조건이다. 향후 모든 서버의 netplan까지 통일하려면 별도의 profile과
 검증 규칙을 추가해야 한다.
 
-## 3. 현재 구현 수준
-
-이 모듈은 최종적으로 공통 기준과 실제 서버 상태를 자동 비교하고 필요한
-복구까지 안전하게 실행하는 것을 목표로 한다. 현재 구현 수준은 다음과 같다.
-
-| 기능 | 현재 상태 |
-| --- | --- |
-| 전체 서버가 따라야 할 공통 profile 정의 | 구현됨 |
-| 신규/운영 서버에 같은 profile 순서 사용 | 구현됨 |
-| 서버별 점검 명령 생성 | 구현됨 |
-| 신규 서버 설정용 Ansible task | 구현됨 |
-| `check`가 원격 서버를 순회하고 결과 판정 | 아직 구현되지 않음 |
-| `apply --execute`로 복구 자동 실행 | 아직 구현되지 않음. 명시적으로 거부됨 |
-| 주기적인 전체 서버 drift 검사와 알림 | 아직 구현되지 않음 |
-| IP/DNS/netplan 전체 표준화 | 아직 구현되지 않음 |
-
-따라서 “모든 서버가 같은 설정인지 확인하고 새 서버를 똑같이 설정한다”는
-이해는 맞다. 다만 현재는 **기준, 점검 명령, 복구 playbook을 한곳에 정리한
-단계**이고, 한 명령으로 전체 서버를 자동 검사·복구하는 controller까지 완성된
-상태는 아니다.
-
-## 4. profile 구조
+## 3. profile 구조
 
 `config/profiles.yml`에는 작은 단위의 profile과 이를 순서대로 묶은 profile
 set이 있다.
@@ -123,7 +108,7 @@ set이 있다.
 - 차이가 있을 때 사용할 remediation 명령
 - 자동 실행할 수 없는 작업의 runbook과 safety level
 
-## 5. 모듈별 소유권
+## 4. 모듈별 소유권
 
 | 영역 | 실제 소유자 | `server-state`의 역할 |
 | --- | --- | --- |
@@ -137,7 +122,7 @@ set이 있다.
 소유권을 나눈 이유는 `server-state`에 모든 운영 코드를 복사하지 않고, 실제
 담당 모듈의 rollback과 안전 절차를 그대로 사용하기 위해서다.
 
-## 6. 상태 표시
+## 5. 상태 표시
 
 | 상태 | 의미 |
 | --- | --- |

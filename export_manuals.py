@@ -113,16 +113,6 @@ MANUALS = (
         ),
     ),
     Manual(
-        "user-lifecycle",
-        "user-lifecycle",
-        MD_DIR / "system" / "user-lifecycle" / "index.md",
-        "system/user-lifecycle-manual.pdf",
-        (
-            MD_DIR / "system" / "user-lifecycle" / "design.md",
-            MD_DIR / "system" / "user-lifecycle" / "operations.md",
-        ),
-    ),
-    Manual(
         "admin-be",
         "Backend (Admin BE)",
         MD_DIR / "backend" / "index.md",

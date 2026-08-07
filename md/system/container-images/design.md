@@ -30,12 +30,15 @@ VNC와 공유 홈을 사용할 수 있다.
 포함한다. 실제 사용자 정보와 실행 옵션은 container를 시작할 때 전달되며,
 entrypoint가 이를 검증하고 런타임 환경을 구성한다.
 
-사용자 실행 환경은 container 밖과 안에서 다음과 같이 나누어 준비한다.
+`container-images`는 사용자 identity, group membership, host mount, port와 Kerberos
+ticket을 결정하지 않는다. 이 값들은 container 생성 전에 준비되는 runtime
+입력이다. 이 문서에서는 외부 입력이 만들어지는 과정이 아니라, image와
+`entrypoint.sh`가 그 입력을 받아 container 내부 환경을 구성하는 동작을 설명한다.
 
-| 구분 | 담당하는 작업 |
+| 구분 | 이 문서에서 다루는 범위 |
 | --- | --- |
-| `infra` | 사용자 UID/GID와 그룹 목록을 결정하고, host의 공유 스토리지와 Kerberos credential을 준비한 뒤 Docker mount와 환경 변수를 구성한다. |
-| `entrypoint.sh` | 전달받은 identity를 container 계정과 그룹에 반영하고, mount된 홈과 credential을 사용자 권한으로 검증한 뒤 SSH·Jupyter·VNC를 시작한다. |
+| 외부에서 전달되는 입력 | UID/GID와 그룹 목록, `/home` mount, Kerberos ccache, port mapping과 실행 option |
+| `container-images`가 수행하는 작업 | image에 필요한 프로그램을 포함하고, 전달된 입력을 container 내부 계정·파일·service 설정에 반영한다. |
 
 따라서 image에는 특정 사용자의 계정이나 홈을 미리 넣지 않는다. 같은 image를
 사용하더라도 container를 생성할 때 전달된 identity, mount와 실행 옵션에 따라
@@ -43,12 +46,15 @@ entrypoint가 이를 검증하고 런타임 환경을 구성한다.
 
 ### 2.1 컨테이너 시작 흐름
 
-entrypoint의 전체 시작 순서는 다음과 같다.
+Docker가 외부 입력과 mount를 연결해 container를 시작하면 entrypoint가 동작한다.
+다음 순서는 `container-images` 내부에서 수행하는 작업만 나타낸다.
 
-1. 선택한 이미지 버전, CUDA/TensorFlow version과 host NVIDIA driver를 확인한다.
+1. image에 기록된 CUDA/TensorFlow version을 출력하고 host NVIDIA driver가 최소
+   version을 충족하는지 확인한다.
 2. 전달받은 UID/GID로 사용자, primary group과 supplemental group을 구성한다.
-3. Kerberos ccache를 사용할 수 있도록 사용자 환경을 준비한다.
-4. 홈 디렉터리의 소유권과 쓰기 가능 여부를 확인하고 초기 설정을 보완한다.
+3. 전달받은 Kerberos ccache를 shell과 사용자 process에서 사용할 수 있게 구성한다.
+4. mount되어 있는 홈 디렉터리의 쓰기 가능 여부를 사용자 권한으로 확인하고 초기
+   설정을 보완한다.
 5. SSH 로그인, audit와 login message를 구성하고 SSH service를 시작한다.
 6. 홈을 사용할 수 있으면 Jupyter와 선택적인 VNC/noVNC를 시작한다.
 7. Kerberos ticket이 없어 홈을 쓸 수 없다면 SSH만 먼저 제공하고, 홈이 준비된
@@ -66,44 +72,33 @@ entrypoint의 전체 시작 순서는 다음과 같다.
 
 ### 2.2 계정, 그룹과 권한
 
-container 내부 사용자 이름과 UID/GID는 image가 결정하지 않는다. `infra`가
-DB·AD·NFS와 일치하는 값을 전달하면 entrypoint가 같은 값으로
-사용자와 primary group을 생성하거나 기존 계정을 검증한다. 같은 이름의 사용자나
-그룹이 이미 있는데 UID/GID가 다르면 조용히 덮어쓰지 않고 시작을 중단한다.
+사용자 계정과 group membership은 외부에서 결정되고, 공유 스토리지는 그 결과인
+UID/GID를 기준으로 파일 권한을 판단한다. container 안에서 실행되는 process도 같은
+권한을 사용하려면 Linux 사용자와 그룹이 동일한 UID/GID를 가져야 한다.
 
-그룹은 primary group과 supplemental group으로 나뉜다. primary group은 사용자의
-기본 GID이며 새 파일의 기본 group owner로 사용한다. supplemental group은 연구실이나
-프로젝트 단위로 공유하는 디렉터리에 접근하기 위한 추가 membership이다. `infra`가
-DB에서 membership을 조회해 `group:GID` 목록으로 전달하면 entrypoint는 각 그룹을
-container 안에 같은 GID로 만들고 사용자를 추가한다. 이미 같은 이름의 그룹이 다른
-GID를 사용하고 있으면 NFS 권한을 잘못 해석할 수 있으므로 container 시작을 중단한다.
+따라서 entrypoint는 전달된 값으로 container 내부 사용자와 primary group을 만들고,
+전달된 supplemental group만 같은 GID로 추가한다. 사용자가 어떤 그룹에 속해야
+하는지는 판단하지 않는다. 같은 이름의 사용자나 그룹이 다른 UID/GID로 이미
+존재하면 외부 권한과 다르게 동작할 수 있으므로 container 시작을 중단한다.
 
-예를 들어 사용자의 primary group이 `alice:12001`이고
-`DECS_SUPPLEMENTAL_GROUPS=vision:13001,nlp:13002`가 전달되면, container의
-사용자 프로세스는 GID `12001`을 기본 그룹으로 사용하면서 GID `13001`과 `13002`가
-소유한 공유 파일에도 접근할 수 있다. NFS는 숫자 UID/GID를 기준으로 POSIX 권한을
-판단하므로 host, container와 스토리지에서 이 숫자가 일치해야 한다.
-
-Kerberos 공유 스토리지를 사용하는 container에서 사용자가 자신의 홈 아래에 그룹
-공유 공간을 만들 때는 다음과 같이 `group-dir-share`를 사용한다.
+Kerberos 공유 스토리지에서는 사용자가 자신의 홈 directory를 배정된 그룹과 공유할
+수 있도록 `group-dir-share` 명령을 제공한다. `Dockerfile`은 ACL 도구를 포함하고,
+entrypoint는 Kerberos 환경을 구성할 때 이 명령을 `/usr/local/bin`에 생성한다.
 
 ```bash
 group-dir-share ~/project vision
 ```
 
-helper는 요청한 경로가 사용자 홈 안에 있고 사용자가 해당 그룹의 구성원인지 확인한
-뒤, directory의 group owner를 바꾸고 `2770` 권한을 적용한다. setgid bit 때문에
-그 안에서 새로 만든 파일과 directory는 `vision` group을 이어받는다. ACL을 사용할
-수 있으면 상위 directory에는 접근에 필요한 traverse 권한을, 공유 directory에는
-현재 파일과 새 파일에 적용할 group ACL을 함께 설정한다. 사용자는 자신에게 배정되지
-않은 그룹이나 홈 바깥의 경로를 이 helper로 공유할 수 없다.
+이 명령은 사용자가 해당 그룹에 속하는지와 경로가 사용자 홈 안에 있는지를 확인한
+뒤 group owner, `2770` mode와 ACL을 설정한다. 별도의 권한을 부여하는 명령이 아니라
+실행한 사용자가 이미 가진 group membership 범위에서만 동작한다.
 
 기본 sudo mode인 `restricted`는 package 설치에 필요한 명령은 허용하지만 사용자
 전환, mount, 권한 변경, root shell과 우회 가능한 interpreter 실행은 막는다. 기존
 사용자의 password는 재시작할 때 변경하지 않으며, `USER_PW`는 사용자를 처음 생성할
 때만 적용한다.
 
-`infra`가 전달하는 주요 값은 다음과 같다.
+entrypoint가 입력으로 받는 주요 값은 다음과 같다.
 
 | 값 | 의미 |
 | --- | --- |
@@ -117,69 +112,48 @@ helper는 요청한 경로가 사용자 홈 안에 있고 사용자가 해당 �
 `UID`/`GID`만 사용해야 container, 공유 홈과 DB의 소유권이 서로 달라지는 오류를
 시작 단계에서 찾을 수 있다.
 
-supplemental group 구성은 전달된 그룹을 추가하는 방식이다. 기존 container에서
-membership을 제거하거나 GID를 바꿔야 할 때는 남아 있는 group 정보를 재사용하지
-않도록 새 입력값으로 container를 다시 생성한다.
-
 **관련 코드**
 
-- [`infra`의 그룹 membership 조회](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/script/uid_manager/services/create_container.py%23L207-L208):
-  DB에서 사용자의 supplemental group을 가져온다.
-- [`infra`의 그룹 환경 변수 구성](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/script/uid_manager/services/create_container.py%23L723-L726):
-  조회한 그룹을 `group:GID` 목록으로 만들어 container에 전달한다.
 - [`ensure_group_and_user`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L234-L282):
   primary group과 사용자를 생성·검증하고 sudo mode를 적용한다.
 - [`ensure_supplemental_groups`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L154-L185):
   추가 그룹의 이름과 GID가 전달값과 일치하는지 확인한다.
+- [`Dockerfile`의 ACL package 설치](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/Dockerfile%23L41-L68):
+  `group-dir-share`가 ACL을 구성할 때 사용하는 `setfacl`을 image에 포함한다.
 - [`install_kerberos_share_helper`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L91-L152):
-  Kerberos 환경에서 사용자가 자신의 홈 안에 그룹 공유 디렉터리를 만들 수 있는
-  helper를 설치한다.
+  `/usr/local/bin/group-dir-share` script의 검증과 권한 설정 동작을 정의하고
+  container 시작 시 파일을 생성한다.
+- [`ensure_kerberos_runtime`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L332-L366):
+  Kerberos ccache가 전달된 경우에만 그룹 공유 명령을 생성한다.
 - [`write_restricted_sudoers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L44-L69):
   제한적 sudo에서 허용하지 않을 권한 상승 경로를 정의한다.
 
 ### 2.3 홈 디렉터리와 공유 스토리지
 
-사용자의 작업 파일과 shell 설정은 image layer가 아니라 host에 mount된 공유
-스토리지에 저장한다. container를 새 image로 다시 만들더라도 같은 공유 홈을
-mount하면 기존 작업 파일과 사용자 설정을 이어서 사용할 수 있다.
+공유 스토리지를 host에 mount하고 Docker bind mount로 container에 연결하는 작업은
+container 시작 전에 외부에서 수행한다. `container-images`는 NFS를 mount하거나
+mount source를 선택하지 않는다. entrypoint가 동작할 때는 다음 경로가 이미
+container에 연결되어 있다고 가정한다.
 
-현재 mount 구성은 다음과 같다.
-
-| host에서 준비하는 항목 | container 위치 | 목적 |
+| 전달되는 mount | entrypoint에서 사용하는 위치 | 사용 목적 |
 | --- | --- | --- |
-| 사용자 홈의 상위 공유 경로 | `/home` | `/home/<USER_ID>`를 비롯한 NFS 홈을 container에 제공한다. |
-| 사용자 Kerberos ccache directory | host와 같은 경로 | NFS 요청에 사용할 사용자 ticket을 shell·Jupyter·VNC에 전달한다. |
-| host의 `krb5.conf` | `/etc/krb5.conf` (read-only) | container와 host가 같은 realm과 KDC 설정을 사용하게 한다. |
+| 사용자 홈의 상위 공유 경로 | `/home` | `/home/<USER_ID>`를 사용자 홈으로 사용한다. |
+| 사용자 Kerberos ccache directory | host와 같은 경로 | 사용자 process에 `KRB5CCNAME`으로 전달한다. |
+| `krb5.conf` | `/etc/krb5.conf` (read-only) | Kerberos client 설정으로 사용한다. |
 
-`infra`는 domain과 Kerberos 사용 여부에 맞는 host의 공유 경로를 선택하고, 그
-상위 경로를 container의 `/home`에 bind mount한다. 따라서 container 안의 사용자
-홈은 항상 `/home/<USER_ID>`가 된다. 다른 사용자 홈도 같은 mount namespace에
-경로로는 나타날 수 있지만 실제 접근은 NFS 인증, 숫자 UID/GID, directory mode와
-ACL에 의해 제한된다.
-
-Kerberos를 사용하는 경우에는 ccache directory를 별도로 bind mount하고
-`KRB5CCNAME`으로 정확한 ticket 파일을 지정한다. host의 root 전용 keytab은
-container에 mount하지 않는다. host가 keytab으로 ticket을 갱신하고 container는
-사용자 ccache만 사용하므로 장기 credential과 사용자 runtime credential의 경계를
-유지할 수 있다.
-
-entrypoint는 NFS를 직접 mount하거나 공유 홈 전체의 소유권을 변경하지 않는다.
-`/home/<USER_ID>`가 없으면 생성을 시도하고, 전달받은 UID/GID의 사용자로 파일을
-직접 써 보아 실제 사용 가능 여부를 확인한다. `.profile`, `.bashrc`,
+entrypoint가 담당하는 작업은 mount된 `/home/<USER_ID>`를 실제 사용자 권한으로
+검증하고 container 실행에 필요한 최소 설정을 보완하는 것이다. 홈이 없으면 생성을
+시도하고, 전달받은 UID/GID의 사용자로 파일을 직접 써 보아 사용 가능 여부를
+확인한다. 공유 홈 전체의 소유권을 변경하지 않으며 `.profile`, `.bashrc`,
 `.bash_logout`은 없는 경우에만 추가하며 기존 사용자 파일을 덮어쓰지 않는다.
 
 NFS가 `root_squash`를 사용하면 container root도 홈의 owner를 임의로 바꿀 수
-없다. 따라서 홈은 NAS에서 올바른 UID/GID로 준비되어 있어야 한다. Kerberos
-ccache가 설정된 상태에서 아직 홈을 쓸 수 없다면 container 전체를 종료하지 않고
-SSH를 먼저 제공한다. 이후 ticket이 준비되어 홈에 쓸 수 있게 되면 홈 설정을
-마치고 Jupyter와 VNC를 시작한다.
+없다. 이는 외부 스토리지의 조건이며 entrypoint는 이를 우회하지 않는다. Kerberos
+ccache가 전달되었지만 아직 홈을 쓸 수 없다면 SSH만 먼저 시작하고, 홈이 쓰기
+가능해진 뒤 초기 설정과 Jupyter·VNC 시작을 이어서 수행한다.
 
 **관련 코드**
 
-- [`infra`의 mount 경로 선택](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/script/uid_manager/services/create_container.py%23L188-L216):
-  domain과 Kerberos 사용 여부에 따라 host의 공유 홈 root를 결정한다.
-- [`infra`의 Docker mount 구성](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/user-lifecycle/script/uid_manager/services/create_container.py%23L705-L754):
-  공유 홈을 `/home`에 연결하고 ccache directory와 `krb5.conf`를 별도로 mount한다.
 - [`ensure_user_home`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L284-L330):
   홈 생성, 쓰기 권한, 기본 shell 파일과 history 저장 설정을 처리한다.
 - [`start_kerberos_home_watcher`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L611-L634):
@@ -187,7 +161,11 @@ SSH를 먼저 제공한다. 이후 ticket이 준비되어 홈에 쓸 수 있게 
 
 ### 2.4 SSH, Jupyter와 VNC
 
-SSH는 container가 시작될 때 사용자와 관리 계정만 로그인할 수 있도록
+host port mapping, firewall과 `ENABLE_VNC` 같은 실행 option은 container 시작 전에
+외부에서 정한다. `container-images`는 host port를 할당하거나 network 접근 정책을
+설정하지 않고, container 내부 service만 구성한다.
+
+SSH는 entrypoint가 사용자와 관리 계정만 로그인할 수 있도록
 `AllowUsers`를 구성하고 PAM, command audit와 login message를 적용한 뒤 service를
 재시작한다. 홈이 아직 Kerberos 인증을 기다리는 상태여도 SSH는 먼저 사용할 수
 있으므로 사용자가 로그인하여 ticket 상태를 확인할 수 있다.
@@ -215,10 +193,16 @@ localhost에 bind하고, noVNC가 지정된 web port를 통해 연결한다. 기
 
 ### 2.5 Kerberos 사용자 환경
 
-container에는 Kerberos client가 포함되지만 host의 machine keytab은 전달하지
-않는다. `infra`가 준비한 ccache 경로를 `KRB5CCNAME`으로 받으면
-entrypoint가 사용자만 접근할 수 있는 ccache 디렉터리와 shell 환경 변수를
-구성한다. 사용자는 `decs-kerberos-status`로 현재 ticket을 확인할 수 있다.
+Kerberos principal, ticket 발급·갱신, ccache 생성과 host NFS 인증은
+`container-images` 밖에서 준비한다. host의 machine keytab도 container에 전달하지
+않는다.
+
+`container-images`가 담당하는 작업은 전달받은 ccache를 container의 사용자
+process에서 사용할 수 있게 만드는 것이다. entrypoint는 `KRB5CCNAME`이 있을 때
+ccache directory의 접근 권한, shell 환경 변수와 `decs-kerberos-status` 명령을
+구성하고 Jupyter와 VNC에도 같은 환경 변수를 전달한다. 사용자는
+`decs-kerberos-status`로 ticket 상태를 확인할 수 있지만, entrypoint가 ticket을
+직접 발급하거나 갱신하지는 않는다.
 
 Kerberos keytab과 ccache를 분리하는 이유와 credential 경계는
 [Kerberos/NFS의 keytab과 ccache 모델](../kerberos-nfs/design.md#6-keytab-ccache)을 따른다.

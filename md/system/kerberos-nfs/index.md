@@ -16,11 +16,3 @@ FARM/LAB 설정을 확인한다. 실제 설정 변경과 장애 대응은 [운�
 | [설계](design.md) | Kerberos 핵심 개념, NFS 인증 흐름, FARM/LAB 적용 설정과 선택 이유 |
 | [운영](operations.md) | 계정과 credential 관리, mount 점검, KVNO·NFS 장애 대응 |
 | [디버깅 로그](debugging/index.md) | 재현된 장애의 증상, 실험 조건, 증거와 복구 결과 |
-
-## 다루는 내용
-
-- Kerberos realm, principal, ticket, keytab, ccache와 KVNO
-- NFS가 RPCSEC_GSS를 통해 사용자와 NFS service를 인증하는 과정
-- RFC2307 UID/GID와 filesystem mode·ACL을 사용한 파일 권한 판정
-- FARM의 Synology NFSv4.0 구성과 LAB의 Linux NFSv4.1 구성
-- 사용자 credential 갱신, FQDN 기반 service principal과 `sec=krb5` 설정

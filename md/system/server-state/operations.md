@@ -9,8 +9,8 @@
 
 | 기능 | 현재 상태 |
 | --- | --- |
-| 전체 서버가 따라야 할 공통 profile 정의 | 구현됨 |
-| 신규/운영 서버에 같은 profile 순서 사용 | 구현됨 |
+| 전체 서버가 따라야 할 공통 상태 기준 정의 | 구현됨 |
+| 신규/운영 서버에 같은 상태 기준 순서 사용 | 구현됨 |
 | 서버별 점검 명령 생성 | 구현됨 |
 | 신규 서버 설정용 Ansible task | 구현됨 |
 | `check`가 원격 서버를 순회하고 결과 판정 | 아직 구현되지 않음 |
@@ -189,14 +189,14 @@ selector는 `all`, `farm`, `lab`, 개별 host 이름과 여러 host 조합을 �
 ## 5. 공통 설정 추가 방법
 
 1. 설정을 실제로 관리할 모듈을 정한다.
-2. `config/profiles.yml`에 작은 profile을 추가한다.
+2. `config/profiles.yml`에 작은 상태 기준(profile)을 추가한다.
 3. 부작용 없이 읽을 수 있는 항목만 `checks`에 둔다.
 4. 복구는 가능하면 Ansible `--check --diff` 명령부터 제공한다.
 5. driver, cluster join, keytab과 mount처럼 위험한 작업은 `manual` 또는
    `gated`로 둔다.
 6. 모든 서버에 필요한 설정이면 `new-host-bootstrap`과
    `existing-host-drift`에 모두 추가한다.
-7. profile 순서와 서버별 변수 치환 test를 추가한다.
+7. 상태 기준 순서와 서버별 변수 치환 test를 추가한다.
 
 ## 6. 테스트
 

@@ -17,11 +17,11 @@
 설정이나 차이를 찾는 것을 의미한다. **설정**은 신규 서버를 구축하거나 확인에서
 발견한 차이를 해소하기 위해 필요한 공통 설정을 적용하는 것을 의미한다.
 
-공통 기준은 `profile`이라는 단위로 정의한다. 하나의 profile은 Docker,
-NVIDIA driver, monitoring처럼 하나의 관리 대상을 기준 상태, 점검 명령, 복구
-방법과 담당 모듈까지 묶어 이름 붙인 것이다. 여러 profile을 실행할 순서대로
-묶은 것을 `profile set`이라고 하며, 운영 서버 점검과 신규 서버 구축에 같은
-기준을 적용할 때 사용한다.
+공통 기준은 코드에서 `profile`이라고 부르는 **상태 기준** 단위로 정의한다.
+하나의 상태 기준(profile)은 Docker, NVIDIA driver, monitoring처럼 하나의 관리
+대상을 기준 상태, 점검 명령, 복구 방법과 담당 모듈까지 묶어 이름 붙인 것이다.
+여러 상태 기준을 실행할 순서대로 묶은 것은 **작업 흐름(profile set)**이라고
+하며, 운영 서버 점검과 신규 서버 구축에 같은 기준을 적용할 때 사용한다.
 
 즉, 서버마다 설치 방법을 다시 기억해서 수동으로 설정하는 대신 하나의 공통
 기준을 사용하려고 만든 코드다.
@@ -49,7 +49,7 @@ NVIDIA와 network 설정은 직접 관리하고, Kerberos/NFS와 monitoring처�
 `new-host-bootstrap`과 `existing-host-drift`는 다음 항목을 같은 순서로
 사용한다. 따라서 새로운 공통 설정을 추가할 때 두 흐름에 함께 넣을 수 있다.
 
-| 순서 | 영역 | 운영 서버에서 확인하는 것 | 신규 서버에 설정하는 것 |
+| 순서 | 영역 | 1. 운영 서버 점검에서 확인하는 것 | 2. 신규 서버 구축에서 설정하는 것 |
 | --- | --- | --- | --- |
 | 1 | 기본 접속 조건 | inventory 등록, Ansible 접속, 비대화형 sudo, hostname | 자동 설정 전 SSH, sudo, hostname, IP와 inventory를 확인 |
 | 2 | 공통 OS | Ubuntu 계열 여부, 공통 package 설치 여부 | apt repository, NFS, Kerberos와 network 도구 설치 |
@@ -62,46 +62,52 @@ NVIDIA와 network 설정은 직접 관리하고, Kerberos/NFS와 monitoring처�
 | 9 | monitoring | 두 exporter service와 metrics/health endpoint | monitoring 모듈의 exporter 배포 playbook 사용 |
 | 10 | 사용자 container 전제조건 | 사용자 DB 환경, server inventory, Docker 접근 | 사용자 생성·삭제는 `user-lifecycle`을 통해 처리 |
 
-### 2.1 NVIDIA version 확인 범위
+### 2.1 운영 서버 점검
 
-현재 점검 명령은 `nvidia-smi`를 실행하여 GPU 이름과 실제 driver version이
-출력되는지 확인한다. 따라서 driver가 GPU를 인식하지 못하거나 명령 자체가
-실패하는 상태는 찾을 수 있다.
+`existing-host-drift`는 표의 **확인하는 것** 열에 정의된 항목을 사용해 운영
+서버와 공통 기준의 차이를 찾는다. 현재는 각 항목의 점검 명령을 생성해
+`DRY-RUN`으로 보여주며, 관리자가 명령을 실행하고 결과를 판정한다.
 
-신규 설치 playbook의 기본 package는 현재 `nvidia-driver-580`이며 설치 후
-의도하지 않은 major version 변경을 막기 위해 apt hold한다. 다만 운영 서버의
-driver version을 `580`과 자동 비교하여 불일치 판정을 내리는 규칙은 아직 없다.
-현재는 출력된 version을 관리자가 확인해야 한다.
+NVIDIA 점검은 `nvidia-smi`가 GPU 이름과 실제 driver version을 출력하는지
+확인한다. driver가 GPU를 인식하지 못하거나 명령이 실패하는 상태는 찾을 수
+있지만, 출력된 version을 기준 version과 자동 비교하지는 않는다.
 
-### 2.2 network 설정 범위
+network 점검은 inventory의 storage interface를 기준으로 NIC RX queue가 4096
+이상인지와 `decs-rx-queue.service`가 활성화되어 있는지 확인한다. IP 주소,
+gateway, DNS와 netplan 전체는 현재 점검 범위에 포함하지 않는다.
 
-현재 `network-tuning`이 관리하는 대상은 **스토리지 통신에 사용하는 NIC의 RX
-queue 크기**다. inventory에서 서버별 storage interface를 읽고, RX queue가
-4096 이상인지와 `decs-rx-queue.service`가 활성화되어 있는지 확인한다.
+### 2.2 신규 서버 구축
 
-IP 주소, gateway, DNS와 netplan 전체를 자동으로 설정하는 기능은 아직 없다.
-신규 서버의 IP, hostname, SSH와 sudo는 bootstrap을 시작하기 전에 준비해야
-하는 조건이다. 향후 모든 서버의 netplan까지 통일하려면 별도의 profile과
-검증 규칙을 추가해야 한다.
+`new-host-bootstrap`은 표의 **설정하는 것** 열에 정의된 항목을 위에서 아래
+순서로 적용해 신규 서버를 공통 상태로 만든다. 현재 playbook은 공통 package,
+Docker, NVIDIA, Kubernetes, RX queue와 관련된 설정 task를 제공한다.
 
-## 3. profile 구조
+NVIDIA driver의 기본 package는 `nvidia-driver-580`이며, 설치 후 의도하지 않은
+major version 변경을 막기 위해 apt hold한다. network 설정은 storage NIC의 RX
+queue를 4096으로 유지하는 systemd service까지만 담당한다.
 
-`config/profiles.yml`에는 작은 단위의 profile과 이를 순서대로 묶은 profile
-set이 있다.
+IP, gateway, DNS, netplan, hostname, SSH와 sudo는 bootstrap 전에 준비해야 하는
+조건이다. 이 항목까지 자동화하려면 별도의 상태 기준(profile)과 검증 규칙을
+추가해야 한다.
 
-| profile set | 용도 |
+## 3. 상태 기준 구조
+
+`config/profiles.yml`에는 작은 단위의 상태 기준(profile)과 이를 순서대로 묶은
+작업 흐름(profile set)이 있다.
+
+| 작업 흐름(profile set) | 용도 |
 | --- | --- |
 | `new-host-bootstrap` | 신규 SSH-ready 서버의 표준 구축 순서 |
 | `existing-host-drift` | 운영 서버의 공통 설정 점검·복구 순서 |
 | `managed-host` | 운영 관리 서버용 기본 별칭 |
 | `monitoring-host` | monitoring 항목만 확인할 때 사용 |
 
-새 공통 설정을 모든 서버에 적용하려면 작은 profile로 추가한 뒤
+새 공통 설정을 모든 서버에 적용하려면 작은 상태 기준으로 추가한 뒤
 `new-host-bootstrap`과 `existing-host-drift` 양쪽에 넣는다. 이렇게 해야 새
 서버 설치에는 들어갔지만 운영 서버 점검에서는 빠지거나, 그 반대가 되는
 문제를 줄일 수 있다.
 
-각 profile은 다음 정보를 가진다.
+각 상태 기준은 다음 정보를 가진다.
 
 - 이 설정을 실제로 소유하는 모듈
 - 부작용 없이 상태를 읽는 check

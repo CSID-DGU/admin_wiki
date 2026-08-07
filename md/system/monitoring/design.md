@@ -27,9 +27,9 @@ control plane으로 구성된다.
 | 서버 자원 수집 | `node-exporter` | Prometheus 기본 exporter | CPU, memory, filesystem, disk와 network 상태를 metric으로 제공한다. |
 | GPU 사용량 수집 | `gpu-user-exporter` | 커스텀 Go exporter | GPU process를 container와 사용자 정보에 연결한다. |
 | 운영 상태 수집 | `cluster-monitor-exporter` | 커스텀 Go exporter | Docker, container, GPU와 연결 상태를 수집한다. |
-| Metric 저장·평가 | FARM/LAB Prometheus | `kube-prometheus-stack` | 환경별 metric을 저장하고 FARM에서 공통 service alert rule을 평가한다. |
-| 시각화 | Grafana | `kube-prometheus-stack` | FARM/LAB datasource의 시계열을 dashboard로 표시한다. |
-| Alert 전달 | FARM Alertmanager와 relay | Alertmanager·Python relay | 발생·해제된 공통 service alert를 내부 알림 API 형식으로 전달한다. |
+| Metric 저장·평가 | FARM/LAB Prometheus | `kube-prometheus-stack` | 환경별 metric을 저장하고 alert rule을 평가한다. |
+| 시각화 | Grafana | `kube-prometheus-stack` | 두 Prometheus의 시계열을 하나의 dashboard 환경에서 표시한다. |
+| Alert 처리 | Alertmanager | `kube-prometheus-stack` | 두 Prometheus가 생성한 alert를 한곳에서 묶고 routing한다. |
 
 구성요소 사이의 주요 데이터 흐름은 다음과 같다.
 
@@ -43,20 +43,20 @@ flowchart LR
     CM_L["LAB cluster-monitor-exporter"] --> PF
     PF --> GRAFANA["Grafana"]
     PL --> GRAFANA
-    PF --> ALERT["FARM Alertmanager"]
-    ALERT --> RELAY["알림 relay"]
-    RELAY --> API["내부 알림 API"]
+    PF --> ALERT["Alertmanager"]
+    PL --> ALERT
 ```
 
 FARM Prometheus는 FARM 서버의 자원·GPU metric과 FARM/LAB 전체의
 `cluster-monitor-exporter` metric을 수집한다. 공통 service alert rule은 FARM
-Prometheus가 평가하고 FARM Alertmanager로 전달한다.
+Prometheus가 평가하고 Alertmanager로 전달한다.
 
-LAB Prometheus는 LAB 서버의 node·GPU metric을 별도로 저장하며 Alertmanager를
-실행하지 않는다. 현재 LAB node·GPU metric은 Grafana 조회에 사용되고, LAB의
+LAB Prometheus는 LAB 서버의 node·GPU metric을 별도로 저장한다. 현재 LAB
+node·GPU metric은 Grafana 조회에 사용되고, LAB의
 Docker·container 같은 운영 상태 경보는 FARM Prometheus가
 LAB `cluster-monitor-exporter`를 수집해 처리한다. Grafana는 두 Prometheus를
-datasource로 사용한다.
+datasource로 사용하며, 두 Prometheus는 같은 Alertmanager로 alert를 보낸다.
+Grafana와 Alertmanager는 각각 하나의 인스턴스로 운영한다.
 
 ## 3. 서버 metric 수집
 
@@ -241,14 +241,17 @@ container의 시계열을 결합한다.
 평가한다.
 
 **FARM 구성:** FARM node·GPU metric과 FARM/LAB 전체
-`cluster-monitor-exporter` metric을 수집한다. 공통 service alert rule,
-Alertmanager와 Grafana를 함께 실행한다. Prometheus data는 FARM local PV에
-저장한다.
+`cluster-monitor-exporter` metric을 수집한다. 공통 service alert rule을 평가하고
+Prometheus data를 FARM local PV에 저장한다.
 
 **LAB 구성:** LAB node·GPU metric을 별도 Prometheus에 저장한다. LAB control
-plane과 storage가 FARM과 분리되어 있으며 LAB release의 Grafana와 Alertmanager는
-비활성화되어 있다. LAB node·GPU metric은 FARM Grafana가 LAB datasource를 통해
-조회한다.
+plane과 storage가 FARM과 분리되어 있다. LAB node·GPU metric은 Grafana가 LAB
+datasource를 통해 조회하며, LAB Prometheus가 생성한 alert는 공용 Alertmanager로
+전달한다.
+
+Grafana와 Alertmanager는 FARM control plane에 각각 하나만 배포한다. FARM
+Prometheus는 cluster 내부 Service를 사용하고, LAB Prometheus는 Alertmanager의
+NodePort endpoint를 사용한다.
 
 **주요 설정:** scrape target, label, retention, storage, alert rule과 Helm release
 설정은 환경별 values에서 관리한다. FARM values가 운영 alert rule의 기준 파일이다.
@@ -258,28 +261,26 @@ plane과 storage가 FARM과 분리되어 있으며 LAB release의 Grafana와 Ale
 [`prometheus-lab-values.yaml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Fprometheus-lab-values.yaml),
 [`deploy_prometheus.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Fdeploy_prometheus.yml)
 
-### 4.2 Alertmanager와 relay
+### 4.2 Alertmanager
 
-**역할:** Prometheus가 생성한 alert를 묶고 상태별로 routing한 뒤 내부 알림 API에
-전달한다.
+**역할:** FARM/LAB Prometheus가 생성한 alert를 한곳에서 받아 label과 상태를
+기준으로 묶고 receiver로 routing한다.
 
-**입력:** FARM Prometheus의 공통 service alert rule이 만든 firing·resolved
-alert와 Alertmanager label·annotation을 사용한다. 이 rule에는 FARM/LAB
-`cluster-monitor-exporter` 상태가 함께 포함된다.
+**입력:** 두 Prometheus가 alert rule을 평가해 만든 firing·resolved alert와 각
+alert의 label·annotation을 사용한다.
 
-**처리:** FARM Alertmanager가 native webhook payload를 localhost relay로 보낸다.
-relay는 alert를 내부 notify API contract로 변환하고 전송 실패를 queue와 retry로
-처리한다.
+**처리:** 같은 alert를 group label에 따라 묶고 route의 matcher에 맞는 receiver를
+선택한다. 상태가 resolved로 바뀌면 같은 alert group의 해제 상태도 처리한다.
 
-**출력:** 내부 알림 API로 전달된 운영 메시지와 relay 전송 상태를 제공한다.
+**출력:** receiver별로 정리된 alert와 현재 firing·resolved 상태를 제공한다.
 
-**주요 설정:** route, receiver, inhibit rule, relay endpoint와 Secret 이름은 FARM
-Prometheus values에서 관리한다. Grafana password와 알림 credential은 Kubernetes
-Secret으로 제공한다.
+**주요 설정:** 공용 Alertmanager의 route, receiver, NodePort와 Secret 연결은 FARM
+Prometheus values에서 관리한다. LAB Prometheus의 공용 Alertmanager endpoint는 LAB
+Prometheus values에서 관리한다.
 
 관련 코드:
-[`FARM Alertmanager 설정`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Fprometheus-farm-values.yaml),
-[`alert relay`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Falertmanager-slack-notify-relay-configmap.yaml)
+[`Alertmanager 설정`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Fprometheus-farm-values.yaml),
+[`LAB Prometheus 연결 설정`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fprometheus%2Fconfig%2Fprometheus-lab-values.yaml)
 
 ### 4.3 Grafana
 
@@ -292,7 +293,7 @@ Secret으로 제공한다.
 **처리:** dashboard query가 datasource, cluster, server, instance, GPU와 network
 interface label을 기준으로 시계열을 선택하고 비교한다.
 
-**출력:** FARM Grafana의 GPU usage와 network traffic dashboard를 제공한다.
+**출력:** GPU usage와 network traffic dashboard를 제공한다.
 Grafana service는 NodePort `30080`을 사용한다.
 
 **주요 설정:** datasource와 dashboard ConfigMap은 `monitoring/grafana/`에서,

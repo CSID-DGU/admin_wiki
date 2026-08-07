@@ -176,11 +176,11 @@ FARM에서 필요한 Secret:
 
 - FARM Prometheus는 FARM 자원 metric과 FARM/LAB의
   `cluster-monitor-exporter`를 수집하고 중앙 alert rule을 평가한다.
-- FARM Alertmanager와 relay는 FARM/LAB 서비스 경보를 내부 notify API로 보낸다.
-- LAB Prometheus는 LAB node/GPU metric을 독립 저장한다. LAB release의 Grafana와
-  Alertmanager는 비활성화되어 있다.
-- FARM Grafana는 기본 FARM datasource와 `prometheus-lab` datasource를 함께
-  사용한다.
+- Alertmanager는 하나만 실행하며 FARM/LAB Prometheus가 생성한 alert를 함께
+  처리한다. LAB Prometheus는 `192.168.2.199:30903`으로 연결한다.
+- LAB Prometheus는 LAB node/GPU metric을 독립 저장한다.
+- Grafana는 하나만 실행하며 기본 FARM datasource와 `prometheus-lab` datasource를
+  함께 사용한다.
 
 ## 6. 배포 후 endpoint 확인
 

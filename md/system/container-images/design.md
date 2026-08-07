@@ -205,7 +205,7 @@ ccache directory의 접근 권한, shell 환경 변수와 `decs-kerberos-status`
 직접 발급하거나 갱신하지는 않는다.
 
 Kerberos keytab과 ccache를 분리하는 이유와 credential 경계는
-[Kerberos/NFS의 keytab과 ccache 모델](../kerberos-nfs/design.md#6-keytab-ccache)을 따른다.
+[Kerberos/NFS의 keytab과 ccache 모델](../kerberos-nfs/design.md#keytab-ccache)을 따른다.
 
 **관련 코드**
 

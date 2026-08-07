@@ -1,10 +1,9 @@
 # container-images
 
-> 역할: DECS GPU 컨테이너 이미지의 빌드 입력, 시작 시 런타임 구성, 검증을 소유한다.
-
-이 문서는 container-images 문서의 시작점이다. **설계**는 이미지 variant manifest,
-Dockerfile, entrypoint 구성과 `user-lifecycle`과의 계약을 설명하고, **운영**은
-빌드·배포에 사용하는 명령, 테스트 전략과 변경 절차를 설명한다.
+`container-images`는 DECS GPU 컨테이너 이미지의 빌드 입력, 시작 시 런타임
+구성과 검증을 소유한다. **설계**는 이미지 variant manifest, Dockerfile,
+entrypoint 구성과 `user-lifecycle`과의 계약을 설명하고, **운영**은 빌드·배포에
+사용하는 명령, 테스트 전략과 변경 절차를 설명한다.
 
 ## 문서 구성
 

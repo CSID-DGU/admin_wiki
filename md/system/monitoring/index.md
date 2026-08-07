@@ -1,11 +1,9 @@
 # Monitoring
 
-> 역할: FARM/LAB 서버, NFS, GPU와 사용자 container의 실행 상태를 반복 관측하고,
-> Prometheus·Grafana·Alertmanager를 통해 시각화와 경보를 제공한다.
-
-이 문서는 monitoring 문서의 시작점이다. **설계**는 수집 데이터가 어떤
-구성 요소를 거쳐 metric과 alert가 되는지 설명하고, **운영**은 배포·점검·장애
-대응 명령과 코드 위치를 설명한다.
+`monitoring`은 FARM/LAB 서버, NFS, GPU와 사용자 container의 실행 상태를 반복
+관측하고 Prometheus·Grafana·Alertmanager를 통해 시각화와 경보를 제공한다.
+**설계**는 수집 데이터가 어떤 구성 요소를 거쳐 metric과 alert가 되는지
+설명하고, **운영**은 배포·점검·장애 대응 명령과 코드 위치를 설명한다.
 
 ## 문서 구성
 

@@ -8,14 +8,10 @@
 
 ## 1. 개요
 
-FARM/LAB GPU 서버는 OS 공통 패키지, Docker, NVIDIA driver/runtime,
-Kubernetes, storage network, Kerberos/NFS와 monitoring 설정을 공통으로
-사용한다. 운영 기준과 설정 작업이 여러 playbook에 흩어져 있으면 신규 서버를
-구성할 때 일부 단계가 빠지기 쉽고, 운영 서버가 기준에서 벗어났을 때도 서버마다
-다른 방법으로 점검하게 된다.
-
-`server-state`는 이 문제를 해결하기 위해 다음 정보를 하나의 운영 정책으로
-연결한다.
+`server-state`의 목표는 FARM/LAB GPU 서버의 공통 운영 상태를 하나의 정책으로
+관리하는 것이다. 정책은 OS 공통 패키지, Docker, NVIDIA driver/runtime,
+Kubernetes, storage network, Kerberos/NFS와 monitoring의 목표 상태와 실행
+순서를 정의한다. 이 정책은 다음 두 작업에 공통으로 사용한다.
 
 1. **운영 서버 점검**: 선택한 서버가 각 구성요소의 목표 상태를 만족하는지
    읽기 전용 Ansible 작업으로 점검한다.
@@ -40,11 +36,6 @@ Kubernetes, storage network, Kerberos/NFS와 monitoring 설정을 공통으로
 | Ansible 작업 | `ansible/roles/`와 담당 모듈 playbook | 구성요소별 점검과 서버 설정을 수행한다. |
 | 실행 파일 | `bin/server-state` | 정책 조회, 서버 점검, 변경 계획과 설정 적용 명령을 시작한다. |
 
-관리자가 실행하는 CLI는 [`bin/server-state`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fbin%2Fserver-state)다.
-내부 코드는 모듈 이름과 같은 `server_state/` Python package에 두고,
-`commands.py`, `catalog.py`, `inventory.py`, `planner.py`가 각각 명령 처리,
-정책 로딩, 서버 정보 처리, Ansible 명령 구성을 담당한다.
-
 처리 순서는 다음과 같다.
 
 1. 공용 inventory에서 `--hosts`에 맞는 서버를 선택한다.
@@ -53,10 +44,6 @@ Kubernetes, storage network, Kerberos/NFS와 monitoring 설정을 공통으로
    Kubernetes context 등의 실행값을 만든다.
 4. 각 구성요소 정의에서 `audit` 또는 `converge` playbook과 tag를 선택한다.
 5. 완성된 Ansible 명령을 화면에 보여주거나 실행한다.
-
-정책과 실제 task를 분리했기 때문에 전체 서버가 따라야 할 순서는 한곳에서 읽을
-수 있고, Docker·Kerberos/NFS·monitoring 같은 구현은 각각의 소유 위치에서
-수정할 수 있다. 점검과 설정 명령은 각 모듈의 Ansible task 파일에서 관리한다.
 
 ## 3. 정책 구성과 소유권
 

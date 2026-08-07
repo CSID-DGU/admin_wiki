@@ -20,10 +20,10 @@ cd /home/jy/server_manage
 ```
 
 `--hosts`는 `all`, FARM/LAB domain, host 이름, server ID와 쉼표·공백으로 구분한
-조합을 지원한다. 알 수 없는 대상은 실행 전에 오류로 중단한다.
+조합을 지원한다. 등록된 대상만 실행하며 다른 값은 selector 오류로 표시한다.
 
-전체 정책이나 선택한 구성요소의 목표 상태, owner, audit·converge 종류와 안전
-수준을 확인한다.
+전체 정책이나 선택한 구성요소의 목표 상태, audit·converge 종류와 승인 수준을
+확인한다.
 
 ```bash
 ./server-state/bin/server-state describe
@@ -39,8 +39,8 @@ cd /home/jy/server_manage
 
 ### 2.1 명령만 확인
 
-`--show-command`를 사용하면 서버에 접속하지 않고 실제로 사용할 Ansible 명령,
-inventory, playbook, tag와 extra vars를 출력한다.
+`--show-command`는 실제로 사용할 Ansible 명령, inventory, playbook, tag와 extra
+vars를 로컬 화면에 출력한다.
 
 ```bash
 ./server-state/bin/server-state audit \
@@ -79,7 +79,7 @@ inventory, playbook, tag와 extra vars를 출력한다.
 
 각 구성요소는 별도 Ansible 실행으로 처리되므로 결과에서 어느 서버의 어느
 구성요소가 실패했는지 구분할 수 있다. 하나라도 실패하면 명령 종료 코드는 1이다.
-audit은 구성 role의 `tasks/main.yml`을 실행하지 않는다.
+audit은 구성 role의 `tasks/audit.yml`만 실행한다.
 
 ## 3. 신규 서버 구성
 
@@ -93,7 +93,7 @@ audit은 구성 role의 `tasks/main.yml`을 실행하지 않는다.
 ### 3.1 예상 변경 확인
 
 `plan`은 선택한 구성요소의 구성 진입점을 Ansible `--check --diff`로 실행한다.
-즉, 단순한 명령 문자열 출력이 아니라 대상 서버에 접속하는 Ansible check mode다.
+대상 서버에 접속하는 Ansible check mode에서 예상 변경을 확인한다.
 먼저 명령만 보고 싶으면 `--show-command`를 추가한다.
 
 ```bash
@@ -112,7 +112,7 @@ audit은 구성 role의 `tasks/main.yml`을 실행하지 않는다.
 ```
 
 전체 정책을 계획하면 자동 구성 가능한 항목은 check mode로 실행되고,
-`baseline-access`, `kubernetes-membership`, `user-container`처럼 수동인 항목은
+`baseline-access`, `kubernetes-membership`처럼 수동인 항목은
 `MANUAL`과 reference로 표시된다.
 
 ### 3.2 안전한 구성 적용
@@ -151,20 +151,19 @@ NVIDIA driver는 package 변경과 reboot·GPU workload 조정 가능성이 있�
   --approve-risky
 ```
 
-`--approve-risky`는 `gated` 승인도 포함한다. 하나의 apply 요청에 승인되지 않은
-항목이나 수동 항목이 있으면 실행 가능한 항목까지 포함해 아무것도 적용하지 않고
-종료 코드 2로 중단한다. 전체 정책을 한 번에 apply하기보다 검토가 끝난 구성요소
-그룹을 명시해서 실행한다.
+`--approve-risky`는 `gated` 승인도 포함한다. 하나의 apply 요청에 추가 승인이
+필요한 항목이나 수동 항목이 있으면 Ansible 실행 전 단계에서 종료 코드 2로
+중단한다. 전체 정책을 한 번에 apply하기보다 검토가 끝난 구성요소 그룹을
+명시해서 실행한다.
 
 ### 3.3 수동 구성요소
 
-다음 항목은 CLI가 실제 구성 명령을 만들지 않는다.
+다음 항목은 CLI가 수동 절차 reference를 표시한다.
 
 | 구성요소 | 수동인 이유 |
 | --- | --- |
 | `baseline-access` | SSH, sudo, hostname과 inventory는 Ansible 구성 실행 전에 이미 사용할 수 있어야 한다. |
 | `kubernetes-membership` | cluster 선택과 짧은 수명의 join token, controller 승인이 필요하다. |
-| `user-container` | 사용자 DB와 lifecycle transaction은 `user-lifecycle`의 운영 절차가 소유한다. |
 
 Kerberos/NFS는 playbook으로 구성할 수 있지만 keytab 준비와 즉시 mount 여부에는
 별도 운영 판단이 필요하다. 상세 절차는 [Kerberos/NFS 운영](../kerberos-nfs/operations.md)을
@@ -177,8 +176,8 @@ Kerberos/NFS는 playbook으로 구성할 수 있지만 keytab 준비와 즉시 m
 | `COMMAND` | `--show-command`로 실행 예정 명령만 출력했다. |
 | `OK` | 해당 Ansible 실행이 종료 코드 0으로 끝났다. |
 | `FAILED` | Ansible 실행이 실패했다. `detail`의 stdout·stderr를 확인한다. |
-| `MANUAL` | 자동 실행 진입점이 없으며 표시된 reference를 따라야 한다. |
-| `BLOCKED` | 필요한 `--approve-gated` 또는 `--approve-risky`가 없다. |
+| `MANUAL` | 표시된 수동 운영 절차 reference를 사용한다. |
+| `BLOCKED` | `--approve-gated` 또는 `--approve-risky` 추가가 필요하다. |
 
 자동 처리용 JSON은 전역 옵션인 `--format`을 하위 명령 앞에 둔다.
 
@@ -194,10 +193,8 @@ Kerberos/NFS는 playbook으로 구성할 수 있지만 keytab 준비와 즉시 m
 
 ## 5. inventory와 환경 설정
 
-기본 서버 inventory는
-`user-lifecycle/server_info/servers.jsonl`이다. host, server ID, domain,
-SSH와 network 정보가 없으면 유효한 대상으로 만들지 않는다. FARM/LAB별 realm,
-Kerberos config, NFS source·option, Kubernetes context는
+기본 `servers.jsonl`은 host, server ID, domain, SSH와 network 정보를 제공한다.
+FARM/LAB별 realm, Kerberos config, NFS source·option, Kubernetes context는
 `server-state/config/environments.yml`에서 읽는다.
 
 다른 파일로 검증할 때는 전역 옵션을 하위 명령 앞에 둔다.
@@ -210,22 +207,19 @@ Kerberos config, NFS source·option, Kubernetes context는
 ```
 
 서버 접속·network 정보는 inventory에서, 여러 서버가 공유하는 FARM/LAB 운영값은
-environment 설정에서 수정한다. component 명세나 Python command에 서버별 값을
-직접 넣지 않는다.
+environment 설정에서 수정한다.
 
 ## 6. 구성요소 추가·수정
 
-1. 실제 상태를 관리할 담당 모듈을 정한다.
-2. 담당 모듈에 읽기 전용 audit과 idempotent한 구성 role/playbook을 구현한다.
-3. `server-state/components/<id>.yml`에 목표 상태, owner, 진입점과 안전 수준을
-   기록한다.
-4. 전체 서버에 필요한 항목이면 `policy/standard-gpu-server.yml`의 적절한
+1. 읽기 전용 audit과 idempotent한 설정 role 또는 playbook을 구현한다.
+2. `server-state/components/<id>.yml`에 목표 상태, 진입점과 승인 수준을 기록한다.
+3. 전체 서버에 필요한 항목이면 `policy/standard-gpu-server.yml`의 적절한
    선행 조건 위치에 ID를 추가한다.
-5. catalog 로딩, 정책 순서, playbook 존재 여부와 계획 생성 test를 추가한다.
-6. Ansible syntax check와 `audit/plan --show-command`로 연결을 확인한다.
+4. catalog 로딩, 정책 순서, playbook 존재 여부와 계획 생성 test를 추가한다.
+5. Ansible syntax check와 `audit/plan --show-command`로 연결을 확인한다.
 
-명세에는 긴 shell command를 넣지 않는다. 점검은 담당 role의 `tasks/audit.yml`,
-구성은 `tasks/main.yml` 또는 담당 모듈 playbook에 둔다.
+점검은 구성요소 role의 `tasks/audit.yml`, 설정은 `tasks/main.yml` 또는 연결된
+playbook에 둔다.
 
 ## 7. 테스트
 
@@ -253,7 +247,7 @@ ansible-playbook --syntax-check \
   server-state/ansible/playbooks/converge.yml
 ```
 
-CLI 연결을 실제 서버 접속 없이 확인:
+CLI 연결을 로컬 명령 출력으로 확인:
 
 ```bash
 ./server-state/bin/server-state audit \

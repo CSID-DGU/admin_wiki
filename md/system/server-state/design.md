@@ -3,8 +3,8 @@
 > [개요](index.md) · [운영](operations.md)
 
 > **GitHub 코드 링크:** `admin_infra_server`는 비공개 저장소다. 링크를 누르면
-> GitHub 로그인 화면을 거쳐 해당 파일과 line으로 이동한다. 조직 저장소에 접근
-> 권한이 있는 계정으로 로그인해야 한다.
+> GitHub 로그인 화면을 거쳐 해당 파일로 이동한다. 조직 저장소에 접근 권한이
+> 있는 계정으로 로그인해야 한다.
 
 ## 1. 개요
 
@@ -18,125 +18,266 @@ Kubernetes, storage network, Kerberos/NFS와 monitoring의 목표 상태와 실�
 2. **신규 서버 구성**: 같은 구성요소 순서에 따라 예상 변경을 확인하고, 안전
    수준에 맞는 승인 후 목표 상태를 적용한다.
 
-여기서 **구성요소(component)**는 독립적으로 점검하고 구성할 수 있는 운영
-상태의 단위다. 예를 들어 `docker-engine` 구성요소는
-"Docker가 설치되어 있고, service와 daemon이 정상이며, systemd cgroup driver를
-사용한다"는 하나의 목표 상태를 뜻한다.
+**구성요소(component)**는 독립적으로 점검하고 설정할 수 있는 운영 상태의
+단위다. 예를 들어 `docker-engine`은 Docker 설치, service, daemon과 cgroup
+driver 상태를 하나의 구성요소로 관리한다.
 
 ## 2. 설계 구조
 
-`server-state`는 공통 운영 기준과 실행 코드를 파일 역할에 따라 구분한다.
-
-| 계층 | 저장 위치 | 역할 |
+| 구분 | 저장 위치 | 역할 |
 | --- | --- | --- |
-| 정책 | `policy/standard-gpu-server.yml` | 관리 서버에 필요한 구성요소와 실행 순서를 기록한다. |
-| 구성요소 정의 | `components/*.yml` | 구성요소별 목표 상태, 담당 모듈, 점검·설정 방법과 적용 승인 수준을 기록한다. |
-| 서버·환경 정보 | 공용 `servers.jsonl`, `config/environments.yml` | 서버 접속·network 정보와 FARM/LAB별 Kerberos, NFS, Kubernetes 값을 제공한다. |
-| 명령 구성 | `server_state/` Python package | 대상 서버에 맞는 playbook, tag와 서버별 변수를 조합한다. |
-| Ansible 작업 | `ansible/roles/`와 담당 모듈 playbook | 구성요소별 점검과 서버 설정을 수행한다. |
-| 실행 파일 | `bin/server-state` | 정책 조회, 서버 점검, 변경 계획과 설정 적용 명령을 시작한다. |
+| 정책 | `policy/standard-gpu-server.yml` | 구성요소와 실행 순서를 기록한다. |
+| 구성요소 정의 | `components/*.yml` | 목표 상태, 점검 방법, 설정 방법과 승인 수준을 기록한다. |
+| 서버·환경 정보 | `servers.jsonl`, `config/environments.yml` | 서버 접속·network 정보와 FARM/LAB별 설정값을 제공한다. |
+| 명령 구성 | `server_state/` | 대상 서버에 맞는 playbook, tag와 변수를 조합한다. |
+| Ansible 작업 | `ansible/roles/`와 playbook | 구성요소별 점검과 서버 설정을 수행한다. |
+| 실행 파일 | `bin/server-state` | `describe`, `audit`, `plan`, `apply` 명령을 시작한다. |
 
 처리 순서는 다음과 같다.
 
-1. 공용 inventory에서 `--hosts`에 맞는 서버를 선택한다.
-2. 정책에서 `--component`에 맞는 구성요소를 정책 순서대로 선택한다.
-3. FARM/LAB 설정을 서버 정보와 결합해 Kerberos principal, NFS mount,
-   Kubernetes context 등의 실행값을 만든다.
-4. 각 구성요소 정의에서 `audit` 또는 `converge` playbook과 tag를 선택한다.
-5. 완성된 Ansible 명령을 화면에 보여주거나 실행한다.
+1. `--hosts`로 대상 서버를 선택한다.
+2. `--component`로 구성요소를 선택한다.
+3. 서버 정보와 FARM/LAB 설정을 결합해 실행값을 만든다.
+4. 구성요소에 연결된 audit 또는 converge playbook을 선택한다.
+5. Ansible 명령을 화면에 보여주거나 실행한다.
 
-## 3. 정책 구성과 소유권
+## 3. 구성요소
 
-[`standard-gpu-server.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fpolicy%2Fstandard-gpu-server.yml%23L1-L15)은
-다음 구성요소를 선행 조건에 맞는 순서로 사용한다.
+[`standard-gpu-server.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fpolicy%2Fstandard-gpu-server.yml%23L1-L14)은
+10개 구성요소의 실행 순서를 정의한다. 모든 구성요소는 `server-state` 정책과
+CLI에서 관리한다.
 
-| 순서 | 구성요소 | 담당 모듈 | 서버가 갖춰야 할 상태 | 적용 방식 |
-| ---: | --- | --- | --- | --- |
-| 1 | `baseline-access` | `server-state` | inventory 정보, hostname, SSH와 sudo 접속 조건이 준비되어 있다. | 수동 준비 |
-| 2 | `os-common` | `server-state` | 지원 Ubuntu와 공통 package가 설치되어 있다. | 즉시 적용 가능 |
-| 3 | `docker-engine` | `server-state` | Docker service가 실행되고 daemon이 systemd cgroup driver를 사용한다. | 검토 후 적용 |
-| 4 | `nvidia-driver` | `server-state` | 지정 NVIDIA driver가 설치되어 GPU를 인식하고 package가 hold되어 있다. | 고위험 검토 후 적용 |
-| 5 | `nvidia-runtime` | `server-state` | NVIDIA Container Toolkit이 Docker와 containerd에 연결되어 있다. | 검토 후 적용 |
-| 6 | `kubernetes-packages` | `server-state` | kubeadm, kubelet, kubectl이 설치·hold되고 kubelet service가 활성화되어 있다. | 검토 후 적용 |
-| 7 | `kubernetes-membership` | `server-state` | 서버가 지정 cluster에 join되고 FARM/LAB domain label을 가진다. | 수동 작업 |
-| 8 | `storage-network` | `server-state` | storage NIC의 RX queue가 재부팅 후에도 4096으로 설정된다. | 즉시 적용 가능 |
-| 9 | `kerberos-nfs` | `kerberos-nfs` | host Kerberos 인증과 NFS service 인증이 성공하고 공유 경로가 `sec=krb5`로 mount된다. | 검토 후 적용 |
-| 10 | `monitoring` | `monitoring` | exporter service가 실행되고 metrics·health endpoint가 응답한다. | 즉시 적용 가능 |
-| 11 | `user-container` | `user-lifecycle` | user-lifecycle이 DB와 Docker를 사용해 사용자 container를 관리할 수 있다. | 수동 작업 |
+적용 방식은 다음 네 가지로 구분한다.
 
-담당 모듈은 구성요소의 점검·설정 코드와 운영 절차를 관리하는 책임 주체다.
-공통 host 설정은 `server-state/ansible/roles/`, Kerberos/NFS 점검과 role은
-`kerberos-nfs/`, exporter 점검·배포는 `monitoring/`, 사용자 container
-전제조건은 `user-lifecycle/`에서 관리한다. `server-state`는 각 모듈의 실행
-파일을 연결하여 전체 순서와 책임 범위를 함께 보여준다.
+| 적용 방식 | CLI 동작 |
+| --- | --- |
+| 수동 준비 | `plan`이 준비 절차를 표시하며 관리자가 해당 절차를 수행한다. |
+| 일반 적용 (`safe`) | `plan`으로 예상 변경을 확인하고 `apply --execute`로 적용한다. |
+| 승인 후 적용 (`gated`) | `plan` 확인 후 `apply --execute --approve-gated`로 적용한다. |
+| 고위험 승인 후 적용 (`risky`) | 작업 영향과 운영 일정을 확인하고 `apply --execute --approve-risky`로 적용한다. |
 
-### 3.1 운영 서버 점검
+### 3.1 `baseline-access`
 
-운영 서버 점검은 대상 서버의 현재 상태를 정책의 목표 상태와 비교한다. `audit`은
-각 구성요소의 점검 playbook을 정책 순서대로 실행한다. catalog는 모든 audit의
-안전 수준이 `safe`인지 확인한다.
+**목표 상태:** 서버가 inventory와 Ansible inventory에 등록되어 있고, 설정된
+hostname으로 SSH 접속과 비대화형 sudo를 사용할 수 있다.
 
-`server-state`가 소유하는 구성요소는
-[`ansible/playbooks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Faudit.yml%23L1-L54)이
-해당 role의 `tasks/audit.yml`을 선택한다. 예를 들어 Docker 점검은
-[`docker_engine/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fdocker_engine%2Ftasks%2Faudit.yml%23L1-L13)에서
-service 활성 상태, daemon 응답, cgroup driver를 읽는다. Kerberos/NFS와
-monitoring은 각각
-[`kerberos-nfs/ansible/audit_client.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fkerberos-nfs%2Fansible%2Faudit_client.yml)과
-[`monitoring/ansible_playbook/audit_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Faudit_exporters.yml)을
-직접 사용한다.
+**점검:** Ansible ping으로 접속을 확인하고, `sudo -n true` 실행과 실제
+hostname·inventory hostname 일치 여부를 확인한다.
 
-점검은 실제 서버에 접속해 읽기 전용 task를 수행한다. `--show-command`는 생성된
-명령을 화면에 출력한다. 명령 확인과 점검 실행이 같은 audit 정의를 사용하므로
-동일한 playbook, tag와 서버 변수가 사용된다.
+**설정:** IP, hostname, SSH key, 관리 계정과 sudo 권한을 준비하고 두
+inventory에 서버를 등록한다.
 
-### 3.2 신규 서버 구성
+**적용 방식:** 수동 준비. 이 구성요소는 이후 Ansible 작업을 실행하기 위한
+선행 조건이다.
 
-신규 서버 구성은 Ubuntu 설치, IP·hostname, SSH, 비대화형 sudo와 inventory
-등록이 끝난 서버를 시작점으로 한다. `plan`은 각 구성요소의 `converge` 진입점을
-Ansible `--check --diff`로 실행하여 예상 변경을 확인한다. `apply`는 같은
-진입점을 실제 모드로 실행하되 명세의 안전 수준에 따라 명시적인 승인을 요구한다.
+관련 코드: [`baseline-access.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fbaseline-access.yml),
+[`baseline_access/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fbaseline_access%2Ftasks%2Faudit.yml)
 
-`server-state` 소유 구성요소의 구성 순서는
-[`ansible/playbooks/converge.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Fconverge.yml%23L1-L25)에
-role로 선언되어 있다. 각 role의 `tasks/main.yml`이 실제 설정을 맡는다. 예를
-들어 [`docker_engine/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fdocker_engine%2Ftasks%2Fmain.yml)은
-apt source와 package, `daemon.json`, service 상태를 관리한다.
+### 3.2 `os-common`
 
-Kubernetes join은 짧은 수명의 token, cluster 선택과 controller 승인을 사용한다.
-`kubernetes-membership`은 이 값을 관리자가 확인하는 수동 절차로 진행한다.
-`baseline-access`는 Ansible 실행 전 준비 작업으로 진행하고, `user-container`는
-`user-lifecycle` 운영 절차로 진행한다. 수동 구성요소가 포함된 `apply` 요청은
-Ansible 실행 전 단계에서 종료된다.
+**목표 상태:** 서버가 지원 Ubuntu release를 사용하고, 다른 구성요소에 필요한
+공통 package가 설치되어 있다. 주요 package는 `curl`, `gnupg`, `ethtool`,
+`krb5-user`, `nfs-common`, `keyutils`, `adcli`와 `python3`이다.
 
-## 4. 설정 구조
+**점검:** OS 종류와 version을 확인하고 package facts에서 필수 package를
+하나씩 확인한다.
 
-### 4.1 정책과 구성요소
+**설정:** apt cache를 갱신하고 공통 package 목록을 설치한다.
 
-정책 파일은 구성요소 ID와 실행 순서를 관리한다. 각 구성요소 파일은 목표 상태와
-실행 방법을 관리한다. 이 구분을 통해 전체 순서와 구성요소별 내용을 각각 한
-위치에서 확인할 수 있다.
+**적용 방식:** 일반 적용 (`safe`). `apply --execute`가 package 설치 task를
+실행한다.
 
-`audit`은 현재 서버 상태를 읽고 목표 상태 충족 여부를 확인하는 작업이다.
-`converge`는 package, 설정 파일과 service를 목표 상태에 맞추는 작업이다.
+관련 코드: [`os-common.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fos-common.yml),
+[`os_common/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fos_common%2Ftasks%2Faudit.yml),
+[`os_common/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fos_common%2Ftasks%2Fmain.yml)
 
-각 `components/<id>.yml`은 다음 정보를 가진다.
+### 3.3 `docker-engine`
+
+**목표 상태:** Docker Engine package가 설치되고 service가 활성화·실행되며,
+daemon이 응답하고 `systemd` cgroup driver를 사용한다. `daemon.json`에는
+`overlay2`, `json-file`과 log size 설정이 포함된다.
+
+**점검:** Docker service의 enabled·active 상태, `docker info` 응답과 cgroup
+driver 값을 확인한다.
+
+**설정:** Docker apt key와 repository를 등록하고 Engine package를 설치한다.
+기존 `daemon.json`에 필요한 값을 병합하고 변경된 경우 Docker service를
+재시작한다.
+
+**적용 방식:** 승인 후 적용 (`gated`). package source와 daemon 설정 변경,
+service 재시작 가능성을 확인한 뒤 `--approve-gated`로 승인한다.
+
+관련 코드: [`docker-engine.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fdocker-engine.yml),
+[`docker_engine/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fdocker_engine%2Ftasks%2Faudit.yml),
+[`docker_engine/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fdocker_engine%2Ftasks%2Fmain.yml)
+
+### 3.4 `nvidia-driver`
+
+**목표 상태:** 정책에 지정된 NVIDIA driver package가 설치되고 GPU를 정상
+인식하며, 해당 package가 apt hold 상태로 유지된다.
+
+**점검:** `nvidia-smi`로 GPU 이름과 driver version을 읽고 `apt-mark
+showhold`에서 NVIDIA driver package를 확인한다.
+
+**설정:** 지정 driver package를 설치하고 apt hold를 설정한다.
+
+**적용 방식:** 고위험 승인 후 적용 (`risky`). driver 변경은 GPU workload와
+reboot 일정에 영향을 줄 수 있으므로 `plan` 결과와 서버 운영 일정을 확인한 뒤
+`--approve-risky`로 승인한다.
+
+관련 코드: [`nvidia-driver.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fnvidia-driver.yml),
+[`nvidia_driver/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fnvidia_driver%2Ftasks%2Faudit.yml),
+[`nvidia_driver/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fnvidia_driver%2Ftasks%2Fmain.yml)
+
+### 3.5 `nvidia-runtime`
+
+**목표 상태:** NVIDIA Container Toolkit이 설치되고 Docker와 containerd가
+NVIDIA runtime을 사용할 수 있다.
+
+**점검:** `nvidia-ctk` 설치, Docker runtime 목록과 containerd 설정의 NVIDIA
+runtime 항목을 확인한다.
+
+**설정:** NVIDIA repository와 toolkit package를 설치하고 `nvidia-ctk runtime
+configure`를 Docker와 containerd에 실행한다. 설정 변경 후 관련 service를
+재시작한다.
+
+**적용 방식:** 승인 후 적용 (`gated`). container runtime 설정과 service
+재시작 영향을 확인한 뒤 `--approve-gated`로 승인한다.
+
+관련 코드: [`nvidia-runtime.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fnvidia-runtime.yml),
+[`nvidia_runtime/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fnvidia_runtime%2Ftasks%2Faudit.yml),
+[`nvidia_runtime/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fnvidia_runtime%2Ftasks%2Fmain.yml)
+
+### 3.6 `kubernetes-packages`
+
+**목표 상태:** 정책 version의 `kubeadm`, `kubelet`, `kubectl` package가
+설치·hold되고 kubelet service가 활성화되어 있다.
+
+**점검:** 세 package의 설치 여부와 kubelet enabled 상태를 확인한다.
+
+**설정:** Kubernetes apt key와 repository를 등록하고 세 package를 설치·hold한
+뒤 kubelet을 활성화한다.
+
+**적용 방식:** 승인 후 적용 (`gated`). Kubernetes package version과 kubelet
+영향을 확인한 뒤 `--approve-gated`로 승인한다.
+
+관련 코드: [`kubernetes-packages.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fkubernetes-packages.yml),
+[`kubernetes_packages/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fkubernetes_packages%2Ftasks%2Faudit.yml),
+[`kubernetes_packages/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fkubernetes_packages%2Ftasks%2Fmain.yml)
+
+### 3.7 `kubernetes-membership`
+
+**목표 상태:** 서버가 FARM 또는 LAB의 지정 Kubernetes cluster에 join되고,
+node에 해당 domain label이 설정되어 있다.
+
+**점검:** 서버의 kubelet credential 파일을 확인하고 controller에서 node와
+domain label을 조회한다.
+
+**설정:** 관리자가 cluster, join token과 node 정보를 확인한 뒤 승인된
+`kubeadm join` 명령을 실행한다.
+
+**적용 방식:** 수동 준비. join token의 유효 시간과 cluster 선택을 관리자가
+확인한다.
+
+관련 코드: [`kubernetes-membership.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fkubernetes-membership.yml),
+[`kubernetes_membership/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fkubernetes_membership%2Ftasks%2Faudit.yml),
+[`kubernetes_membership/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fkubernetes_membership%2Ftasks%2Fmain.yml)
+
+### 3.8 `storage-network`
+
+**목표 상태:** inventory에 storage interface가 기록되고, 해당 NIC의 RX queue를
+4096으로 설정하는 systemd service가 활성화되어 있다.
+
+**점검:** storage interface 값, 현재 RX queue 크기와
+`decs-rx-queue.service` enabled 상태를 확인한다.
+
+**설정:** RX queue를 설정하는 oneshot systemd unit을 설치하고 활성화한다.
+
+**적용 방식:** 일반 적용 (`safe`). `apply --execute`가 systemd unit 설치와
+활성화 task를 실행한다.
+
+관련 코드: [`storage-network.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fstorage-network.yml),
+[`storage_network/tasks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fstorage_network%2Ftasks%2Faudit.yml),
+[`storage_network/tasks/main.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Froles%2Fstorage_network%2Ftasks%2Fmain.yml)
+
+### 3.9 `kerberos-nfs`
+
+**목표 상태:** 서버가 FARM/LAB Kerberos 설정과 host keytab을 사용해 machine
+principal 인증과 NFS service ticket 발급에 성공한다. `rpc-gssd`가 실행되고
+공유 경로가 지정 source와 `sec=krb5` option으로 mount된다.
+
+**점검:** `/etc/krb5.conf`, keytab, `kinit -k`, `kvno`, `rpc-gssd`와 mount
+source·option을 순서대로 확인한다.
+
+**설정:** domain Kerberos 설정을 설치하고 keytab과 principal을 검증한다. NFS
+GSS readiness·recovery unit을 설치하고 fstab에 mount를 기록한다.
+
+**적용 방식:** 승인 후 적용 (`gated`). Kerberos 설정, fstab과 mount recovery
+영향을 확인한 뒤 `--approve-gated`로 승인한다. 실제 mount 실행은 별도
+`server_state_mount_now` 값으로 제어한다.
+
+관련 코드: [`kerberos-nfs.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fkerberos-nfs.yml),
+[`audit_client.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fkerberos-nfs%2Fansible%2Faudit_client.yml),
+[`kerberos_nfs_client/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fkerberos-nfs%2Fansible%2Froles%2Fkerberos_nfs_client)
+
+### 3.10 `monitoring`
+
+**목표 상태:** `cluster-monitor-exporter`와 `gpu-user-exporter` service가
+활성화·실행되고, 두 metrics endpoint와 public health endpoint가 HTTP 200으로
+응답한다.
+
+**점검:** 두 exporter service의 enabled·active 상태와 로컬 metrics·health
+endpoint 응답을 확인한다.
+
+**설정:** exporter binary를 build하고 설정 파일과 systemd unit을 설치한다.
+service를 시작한 뒤 metrics 응답을 검증한다.
+
+**적용 방식:** 일반 적용 (`safe`). `apply --execute`가 exporter 배포와 검증
+playbook을 실행한다.
+
+관련 코드: [`monitoring.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fmonitoring.yml),
+[`audit_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Faudit_exporters.yml),
+[`deploy_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Fdeploy_exporters.yml)
+
+## 4. 명령별 동작
+
+### 4.1 `audit`
+
+`audit`은 구성요소의 읽기 전용 점검 playbook을 실행한다. 각 실행 결과는 서버와
+구성요소 단위로 `OK` 또는 `FAILED`로 표시된다. `--show-command`는 같은
+playbook과 변수를 사용한 명령을 화면에 출력한다.
+
+### 4.2 `plan`
+
+`plan`은 구성요소의 설정 playbook을 Ansible `--check --diff`로 실행한다.
+package, 파일과 service의 예상 변경을 확인할 수 있다. 수동 준비 구성요소는
+실행 명령 대신 준비 절차 reference를 표시한다.
+
+### 4.3 `apply`
+
+`apply`는 모든 선택 항목의 적용 방식을 먼저 확인한다. 일반 적용은 `--execute`,
+승인 후 적용은 `--approve-gated`, 고위험 승인은 `--approve-risky`를 사용한다.
+선택 항목 전체가 실행 조건을 충족하면 Ansible 설정 작업을 시작한다.
+
+## 5. 설정 구조
+
+### 5.1 정책과 구성요소 정의
+
+정책 파일은 구성요소 ID와 순서를 기록한다. 각 `components/<id>.yml`은 다음
+정보를 기록한다.
 
 | 필드 | 의미 |
 | --- | --- |
-| `id` | CLI의 `--component`에서 사용하는 이름 |
-| `owner` | 점검·설정 코드와 운영 절차를 관리하는 모듈 |
-| `desired_state` | 점검과 설정이 기준으로 사용하는 서버 상태 |
-| `audit` | 점검에 사용할 playbook과 tag |
-| `converge` | 설정에 사용할 playbook과 tag 또는 수동 절차, 적용 승인 수준 |
+| `id` | `--component`에서 사용하는 이름 |
+| `desired_state` | 점검과 설정의 기준이 되는 서버 상태 |
+| `audit` | 점검 playbook, tag와 `safe` 수준 |
+| `converge` | 설정 playbook 또는 수동 절차와 적용 승인 수준 |
 
-예를 들어
-[`components/docker-engine.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fdocker-engine.yml%23L1-L13)은
-다음처럼 연결된다.
+[`docker-engine.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fcomponents%2Fdocker-engine.yml)은
+다음과 같이 구성된다.
 
 ```yaml
 id: docker-engine
-owner: server-state
 desired_state: Docker Engine is installed, enabled, responsive, and configured with the systemd cgroup driver.
 audit:
   kind: ansible-playbook
@@ -150,79 +291,43 @@ converge:
   safety: gated
 ```
 
-이 정의를 사용하는 흐름은 다음과 같다.
+`audit` 명령은 audit playbook에 `docker-engine` tag를 전달한다. `plan`과
+`apply`는 converge playbook에 `docker-engine,cgroups` tag를 전달한다. 실제
+점검 task는 role의 `tasks/audit.yml`, 설정 task는 `tasks/main.yml`에 있다.
 
-1. `audit`은 `audit.yml`에 `docker-engine` tag를 전달한다.
-2. audit playbook은 `docker_engine/tasks/audit.yml`을 실행해 Docker service,
-   daemon 응답과 cgroup driver를 점검한다.
-3. `plan`과 `apply`는 `converge.yml`에 `docker-engine,cgroups` tag를 전달한다.
-4. converge playbook은 `docker_engine/tasks/main.yml`을 실행해 Docker package,
-   `daemon.json`과 service를 설정한다.
+### 5.2 서버와 FARM/LAB 설정
 
-구성요소 파일은 목표 상태와 실행 위치를 연결하고, role의 task 파일은 점검과
-설정 절차를 구현한다.
+`servers.jsonl`은 host, server ID, domain, SSH 주소·port·계정과
+management/storage interface 정보를 제공한다. `config/environments.yml`은
+FARM/LAB별 realm, Kerberos config, storage host·mount와 Kubernetes context를
+제공한다.
 
-[`catalog.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcatalog.py%23L19-L147)는
-정책과 구성요소를 읽으면서 ID 중복, 구성요소 누락, 실행 종류, 안전 수준과
-audit의 `safe` 설정을 확인한다. 선택된 구성요소는 정책에 기록된 순서로
-정렬된다.
+[`inventory.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Finventory.py)는
+두 정보를 결합해 Kerberos principal, NFS mount target, Kubernetes context와
+public health port를 만든다.
 
-### 4.2 서버와 FARM/LAB 설정
+### 5.3 명령 구성
 
-서버별 사실과 환경별 운영값은 서로 다른 파일에서 관리한다.
+[`planner.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fplanner.py)는
+대상 서버와 구성요소를 결합해 inventory, playbook, host, tag와 extra vars가
+포함된 Ansible 명령을 만든다.
 
-| 출처 | 포함하는 값 |
-| --- | --- |
-| 공용 [`servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fuser-lifecycle%2Fserver_info%2Fservers.jsonl) | host, server ID, domain, SSH 주소·port·계정, management/storage interface와 IP |
-| [`config/environments.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fconfig%2Fenvironments.yml%23L1-L22) | FARM/LAB realm, Kerberos config, storage host와 mount, Kubernetes context, 공통 계산 규칙 |
+[`commands.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcommands.py)는
+`audit`, `plan`, `apply`를 실행하고 결과를 text 또는 JSON으로 출력한다.
 
-[`inventory.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Finventory.py%23L18-L219)는
-inventory의 필수 필드를 검증하고 `all`, FARM/LAB, 개별 host/server ID를
-선택한다. 그런 다음 server ID와 환경 설정을 결합해 machine principal, NFS
-service principal, mount target, public health port 등의 Ansible extra vars를
-만든다. FARM/LAB 규칙은 설정 파일에 모여 있어 각 값의 출처를 바로 확인할 수
-있다.
-
-### 4.3 실행 계획과 안전 수준
-
-[`planner.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fplanner.py%23L15-L120)는
-대상 서버, 구성요소와 FARM/LAB 설정을 결합해 Ansible 명령을 만든다. 명령에는
-inventory 경로, playbook, 대상 host, tag와 서버별 extra vars가 포함된다.
-`plan`에는 `--check --diff`가 추가되고, 수동 구성요소에는 운영 문서 경로가
-표시된다.
-
-구성 안전 수준은 다음과 같다.
-
-| 수준 | 적용 조건 | 예시 |
-| --- | --- | --- |
-| `safe` | `apply --execute` | 공통 package, storage RX queue, exporter 배포 |
-| `gated` | `--approve-gated` 또는 더 강한 `--approve-risky` 추가 | Docker, NVIDIA runtime, Kubernetes package, Kerberos/NFS |
-| `risky` | `--approve-risky` 추가 | NVIDIA driver |
-| 수동 | reference에 표시된 운영 절차 사용 | 초기 접속 조건, Kubernetes join, 사용자 container 전제조건 구성 |
-
-[`commands.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcommands.py%23L150-L230)는
-`audit`, `plan`, `apply`를 동일한 계획 모델로 처리한다. `apply`는 실행 전 모든
-항목의 실행 방식과 승인 수준을 확인한다. 전체 항목이 실행 조건을 충족하면
-Ansible 작업을 시작하고, 수동 작업이나 추가 승인이 필요하면 상태와 안내를
-출력한 뒤 실행 전 단계에서 종료한다.
-
-## 5. 코드 위치
-
-아래 순서로 보면 정책이 실제 Ansible 작업으로 이어지는 경계를 확인할 수 있다.
+## 6. 코드 위치
 
 | 파일·디렉터리 | 역할 |
 | --- | --- |
-| [`policy/standard-gpu-server.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fpolicy%2Fstandard-gpu-server.yml) | 구성요소와 전체 적용 순서 |
-| [`components/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Fcomponents) | 구성요소별 목표 상태, owner, 진입점, 안전 수준 |
-| [`server_state/catalog.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcatalog.py) | 정책·구성요소 로딩, 검증과 순서 선택 |
+| [`policy/standard-gpu-server.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fpolicy%2Fstandard-gpu-server.yml) | 구성요소와 실행 순서 |
+| [`components/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Fcomponents) | 구성요소별 목표 상태, 점검·설정 진입점과 승인 수준 |
+| [`server_state/catalog.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcatalog.py) | 정책과 구성요소 로딩·검증 |
 | [`server_state/inventory.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Finventory.py) | 서버 선택과 FARM/LAB 실행값 생성 |
-| [`server_state/planner.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fplanner.py) | 서버·구성요소별 Ansible 실행 계획 생성 |
-| [`server_state/commands.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcommands.py) | CLI 입력, 안전 승인, subprocess 실행과 결과 출력 |
-| [`ansible/playbooks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Faudit.yml) | `server-state` 소유 role의 읽기 전용 audit 순서 |
-| [`ansible/playbooks/converge.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Fconverge.yml) | `server-state`와 Kerberos/NFS role의 구성 순서 |
-| [`ansible/roles/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Fansible%2Froles) | 공통 host 구성요소별 `audit.yml`과 `main.yml` |
-| [`kerberos-nfs/ansible/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fkerberos-nfs%2Fansible) | Kerberos/NFS 점검과 client role |
-| [`monitoring/ansible_playbook/audit_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Faudit_exporters.yml) | exporter service와 endpoint 점검 |
-| [`monitoring/ansible_playbook/deploy_exporters.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Fdeploy_exporters.yml) | exporter build·배포·검증 |
-| [`user-lifecycle/ansible_playbook/audit_host.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fuser-lifecycle%2Fansible_playbook%2Faudit_host.yml) | 사용자 container 작업의 host 전제조건 점검 |
-| [`tests/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Ftests) | 정책 순서, 설정 검증, server context, 계획과 안전 gate 테스트 |
+| [`server_state/planner.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fplanner.py) | Ansible 명령 생성 |
+| [`server_state/commands.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fserver_state%2Fcommands.py) | CLI 명령과 결과 처리 |
+| [`ansible/playbooks/audit.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Faudit.yml) | 공통 구성요소 audit 순서 |
+| [`ansible/playbooks/converge.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fansible%2Fplaybooks%2Fconverge.yml) | 공통 구성요소 설정 순서 |
+| [`ansible/roles/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Fansible%2Froles) | 구성요소별 점검·설정 task |
+| [`kerberos-nfs/ansible/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fkerberos-nfs%2Fansible) | Kerberos/NFS 점검·설정 task |
+| [`monitoring/ansible_playbook/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fmonitoring%2Fansible_playbook) | exporter 점검·배포 playbook |
+| [`tests/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Ftests) | 정책, 서버 정보, 명령 구성과 승인 test |

@@ -10,13 +10,14 @@
 
 | 작업 | 변경 위치 | 확인 방법 |
 | --- | --- | --- |
-| 서버 추가 | `servers.jsonl`, Ansible inventory | `list-hosts`, `baseline-access` 점검 |
-| FARM/LAB 설정 변경 | `server-state/config/environments.yml` | `plan --show-command`의 extra vars 확인 |
-| 구성요소 추가·수정 | `server-state/components/`, Ansible role·playbook | `describe`, `audit`, `plan` |
-| 실행 형태·안전 수준 변경 | 구성요소 정의와 `server_state/` Python package | 단위 테스트와 승인 동작 확인 |
-| 서버 점검·설정 | `bin/server-state` CLI | 실행 결과와 종료 코드 확인 |
+| [서버 추가](#2-신규-서버-추가) | `servers.jsonl`, Ansible inventory | `list-hosts`, `baseline-access` 점검 |
+| [FARM/LAB 설정 변경](#3-farmlab-환경-설정-변경) | `server-state/config/environments.yml` | `plan --show-command`의 extra vars 확인 |
+| [구성요소 추가·수정](#4-구성요소-추가수정) | `server-state/components/`, Ansible role·playbook | `describe`, `audit`, `plan` |
+| [실행 형태·안전 수준 변경](#5-실행-형태와-안전-수준-변경) | 구성요소 정의와 `server_state/` Python package | 단위 테스트와 승인 동작 확인 |
+| [서버 점검·설정](#7-운영-서버-점검) | `bin/server-state` CLI | 실행 결과와 종료 코드 확인 |
 
-명령은 `admin_infra_server` 저장소 루트에서 실행한다.
+명령은 `admin_infra_server` 저장소를 clone한 루트 디렉터리(예: `/home/jy/server_manage`)에서
+실행한다.
 
 ```bash
 cd /home/jy/server_manage
@@ -40,8 +41,9 @@ cd /home/jy/server_manage
 | management interface·IPv4 | 관리 network 정보 |
 | storage interface·IPv4 | storage network 설정과 점검 |
 
-`host`, `server_id`와 같은 domain의 `server_no`는 기존 서버와 구분되는 값을
-사용한다. IP, hostname, SSH key와 비대화형 sudo도 이 단계에서 준비한다.
+`host`와 `server_id`는 기존 서버와 겹치지 않는 값을 쓰고, `server_no`는 같은
+domain 안에서 기존 서버와 겹치지 않는 값을 쓴다. IP, hostname, SSH key와
+비대화형 sudo도 이 단계에서 준비한다.
 
 ### 2.2 서버 정보 등록
 
@@ -226,7 +228,8 @@ converge:
 | `manual` | CLI가 `reference`에 기록된 운영 절차를 표시한다. |
 
 `manual` 구성요소도 작업 영향을 나타내는 `safety`를 기록한다. `apply`는 해당
-구성요소를 `MANUAL`로 표시하며 관리자가 reference의 절차를 수행한다.
+구성요소를 `MANUAL`로 표시하며(상태값 설명은 9절 참고) 관리자가 reference의
+절차를 수행한다.
 
 ### 5.2 안전 수준
 
@@ -376,9 +379,10 @@ GPU workload와 reboot 일정까지 확인한 뒤 승인한다.
   --approve-risky
 ```
 
-`--approve-risky`는 `gated` 승인도 포함한다. 하나의 요청에 필요한 승인이 빠지거나
-`manual` 구성요소가 포함되면 Ansible 실행 전에 종료 코드 2로 끝난다. 검토가
-끝난 구성요소를 안전 수준별로 선택해 실행한다.
+`--approve-risky`는 `gated` 승인도 포함한다. 필요한 승인이 빠지면 Ansible 실행
+전에 종료 코드 2로 끝난다. `manual` 구성요소는 Ansible로 실행할 수 없으므로
+`apply` 요청에 포함돼도 같은 방식으로 종료 코드 2가 된다. 검토가 끝난
+구성요소를 안전 수준별로 선택해 실행한다.
 
 ### 8.5 설정 후 점검
 

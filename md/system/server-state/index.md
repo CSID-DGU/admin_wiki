@@ -1,4 +1,4 @@
-# server-state
+# server-state 개요
 
 `server-state`는 FARM/LAB GPU 서버의 공통 운영 기준을 정의하고, 각 서버가 해당
 기준에 맞게 설정되어 있는지 점검하는 모듈이다. 구성요소별 설정 작업은 신규

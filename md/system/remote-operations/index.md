@@ -1,4 +1,4 @@
-# remote-operations
+# remote-operations 개요
 
 `remote-operations`는 관리 서버에서 FARM/LAB GPU 서버에 Wake-on-LAN
 패킷을 보내고, 부팅된 서버의 SSH·공유 스토리지·GPU를 확인한 뒤 기존 사용자

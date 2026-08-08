@@ -20,24 +20,51 @@ OS가 부팅되어 SSH가 열리고, 공유 스토리지와 NVIDIA driver가 준
 
 NIC·firmware의 Wake-on-LAN 설정, 네트워크 전달, Ansible inventory, 서버 mount와 GPU
 driver, 사용자 컨테이너 정의는 미리 준비되어 있어야 한다. `remote-operations`는
-이 설정을 새로 만드는 대신 부팅 대상으로 지정된 서버의 상태를 확인하고,
+이러한 설정들이 이미 되어 있다는 전제로, 부팅 대상으로 지정된 서버의 상태를 확인하고,
 안전하게 제한할 수 있는 복구만 수행한다.
 
 ## 2. 실행 구조
 
-전체 작업은 `run_remote_boot.sh`에서 시작한다. 관리 서버가 부팅될 때
-`remote-boot.service`가 한 번 실행하거나, 운영자가 같은 스크립트를 수동으로 실행할
-수 있다.
+`remote-operations`의 모든 로직은 하나의 스크립트 `run_remote_boot.sh`에
+들어 있다. 이 스크립트를 실행하는 경로는 두 가지다.
+
+- **자동**: 관리 서버가 부팅되면 systemd가 `remote-boot.service`를 실행한다.
+  이 service가 하는 일은 `run_remote_boot.sh`를 한 번 호출하는 것뿐이다
+  (service를 만드는 방법은 6절 참고).
+- **수동**: 관리자가 같은 스크립트를 직접 실행한다.
+
+`run_remote_boot.sh`는 실행되면 아래 다섯 단계를 순서대로 진행한다.
+
+```mermaid
+flowchart TD
+    A[관리 서버 부팅] -->|systemd| B[remote-boot.service]
+    C[관리자 수동 실행] --> D[run_remote_boot.sh]
+    B --> D
+    D --> E[1. 대상 서버 결정]
+    E --> F[2. WOL 패킷 전송]
+    F --> G[3. 서버 준비 상태 확인]
+    G -->|모두 준비됨| H[4. 컨테이너 시작]
+    G -->|제한 시간 초과| X[실패 기록·알림]
+    H -->|SSH·GPU 정상| I[성공 종료]
+    H -->|복구 안 된 실패| X
+```
+
+각 단계를 담당하는 스크립트는 다음과 같다.
 
 | 단계 | 담당 스크립트 | 수행하는 작업 |
 | --- | --- | --- |
 | 대상 서버 결정 | `run_remote_boot.sh`, `common.sh` | 설정 또는 명령행 입력을 구체적인 서버 ID 목록으로 변환한다. |
-| 부팅 신호 전송 | `wake_targets.sh` | 각 서버의 MAC과 broadcast IP로 Wake-on-LAN 패킷을 보낸다. |
+| WOL 패킷 전송 | `wake_targets.sh` | 각 서버의 MAC과 broadcast IP로 Wake-on-LAN 패킷을 보낸다. |
 | 서버 준비 상태 확인 | `wait_for_priority_servers.sh`, `check_server_boot_health.sh` | 선택한 모든 서버에서 SSH·공유 스토리지·GPU가 준비될 때까지 다시 확인한다. |
 | 컨테이너 시작 | `restart_all_remote_containers.sh` | 대상 이미지의 기존 컨테이너를 시작하고 내부 SSH·GPU를 확인한다. |
-| 실패 기록 | `common.sh` | 단계별 로그를 남기고 같은 내용의 반복 전송을 억제한 알림을 보낸다. |
+| 실패 기록·알림 | `common.sh` | 단계별 로그를 남기고 같은 내용의 반복 전송을 억제한 알림을 보낸다. |
 
-실행 순서는 다음과 같다.
+`common.sh`는 특정 단계 전용이 아니라 여러 단계가 공통으로 불러 쓰는
+유틸리티 스크립트다. 대상 서버 변환(3절), Ansible 원격 실행과 로그·알림
+(4.5절)에서 반복해서 쓰인다.
+
+위 표가 각 단계의 담당 스크립트를 보여준다면, 아래는 그 단계들이 실행되는
+시간 흐름과 조건이다. 실행 순서는 다음과 같다.
 
 1. 설정된 사전 대기 시간이 지나면 대상 서버 전체에 WOL 패킷을 전송한다.
 2. 서버 준비 상태 확인이 활성화되어 있으면 선택한 모든 서버의 SSH·공유
@@ -70,8 +97,9 @@ driver, 사용자 컨테이너 정의는 미리 준비되어 있어야 한다. `
 | `all` | 설정에 등록된 FARM과 LAB 서버 전체 |
 | 명령행 입력 생략 | `REMOTE_BOOT_TARGETS`에 설정한 기본 대상 |
 
-`common.sh`는 입력된 서버 ID와 그룹 이름을 실제 서버 ID 목록으로 변환하고 중복을
-제거한다. 이후의 부팅 신호 전송과 상태 확인은 이 목록을 기준으로 실행한다.
+`common.sh`는 입력된 서버 ID와 그룹 이름을 실제
+서버 ID 목록으로 변환하고 중복을 제거한다. 이후의 부팅 신호 전송과 상태 확인은
+이 목록을 기준으로 실행한다.
 
 서버 ID는 두 종류의 연결 정보에 사용된다.
 
@@ -239,12 +267,17 @@ systemd 전체 로그와 개별 실패 근거를 나누어 확인할 수 있다.
 
 ## 6. systemd 연동
 
-설치 스크립트는 관리 서버에 `remote-boot.service`와 logrotate 설정을 만든다.
+설치 스크립트는 관리 서버에 `remote-boot.service`(systemd가 관리하는 서비스
+정의 단위, 즉 unit)와 logrotate 설정을 만든다. logrotate는 systemd와 별개인
+리눅스 표준 도구로, 로그 파일이 계속 커지지 않도록 주기적으로 나누고 오래된
+로그를 정리한다.
 service는 `network-online.target` 이후 설치를 실행한 사용자 권한으로
 `run_remote_boot.sh`를 호출하고, 출력은 service 로그에 추가한다.
 
-unit은 `Type=oneshot`이다. 부팅 작업이 완료되면 process가 종료되며 상태를 계속
-관찰하는 daemon으로 남지 않는다. 따라서 제한 시간과 재시도는 이번 부팅 작업을
+이 unit의 `Type`은 `oneshot`이다. `Type`은 systemd가 서비스의 실행 방식을
+구분하는 값이고, `oneshot`은 계속 떠 있는 daemon이 아니라 작업을 한 번
+수행하고 종료되는 타입이다. 부팅 작업이 완료되면 process가 종료되며 상태를 계속
+관찰하지 않는다. 따라서 제한 시간과 재시도는 이번 부팅 작업을
 완료하기 위한 범위로 제한되고, 이후의 지속적인 서버 상태 관측과 알림은
 `monitoring`에서 수행한다.
 

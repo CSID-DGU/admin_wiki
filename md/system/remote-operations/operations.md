@@ -63,6 +63,11 @@ cd /home/jy/server_manage/remote-operations
 
 ### 4.2 모의 실행
 
+`dry_run_remote_boot.sh`의 첫 번째 인자는 어느 단계를 모의 실행할지 고르는
+모드다. 각각 [설계 문서](design.md) 2절의 단계에 대응한다: `wake`는 WOL 패킷 전송,
+`health`는 서버 준비 상태 확인, `containers`는 컨테이너 시작, `full`은 전체
+부팅 흐름이다.
+
 ```bash
 ./test/dry_run_remote_boot.sh wake FARM1 LAB1
 ./test/dry_run_remote_boot.sh health FARM1

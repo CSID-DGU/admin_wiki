@@ -1,4 +1,4 @@
-# container-images
+# container-images 개요
 
 `container-images`는 GPU container가 시작된 뒤 사용자가 바로 작업할 수 있도록
 계정, 공유 홈, SSH, Jupyter, VNC와 Kerberos 환경을 구성하고 CUDA/TensorFlow

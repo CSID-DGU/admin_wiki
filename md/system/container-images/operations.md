@@ -8,17 +8,22 @@
 
 ## 1. 개요
 
-이 문서의 목표는 `container-images`를 변경하고 검증하여 Docker registry에
-배포한 뒤, 운영 container에서 사용할 수 있게 만드는 전체 절차를 제공하는 것이다.
-새 CUDA/TensorFlow 조합을 추가하는 경우뿐 아니라 공통 package, 사용자 실행 환경,
-tag 정책이나 build 도구를 변경할 때 확인해야 할 범위도 함께 다룬다.
+이 문서의 목표는 [container-images 설계](design.md)에서 설명한 image와 `entrypoint.sh`를 실제로
+변경·검증하여 Docker registry에 배포한 뒤, 운영 container에서 사용할 수 있게
+만드는 전체 절차를 제공하는 것이다. 새 CUDA/TensorFlow 조합을 추가하는
+경우뿐 아니라 공통 package, 사용자 실행 환경, tag 정책이나 build 도구를
+변경할 때 확인해야 할 범위도 함께 다룬다.
 
 하나의 변경은 다음 순서로 운영한다.
 
 1. 변경 목적에 맞는 파일을 선택한다.
-2. manifest와 shell 회귀 test로 build 입력과 runtime 계약을 확인한다.
+2. manifest(`image-variants.json`)와 shell 회귀 test(`tests/*.sh`, 이번 변경이
+   기존 동작을 깨지 않았는지 image build 없이 먼저 확인하는 test)로 build
+   입력과 runtime 계약(entrypoint가 특정 입력에 대해 정해진 대로 동작하는지)을
+   확인한다.
 3. 새로운 날짜 tag로 image를 build한다.
-4. CPU smoke test와 대상 GPU host test를 수행한다.
+4. CPU smoke test(핵심 기능만 빠르게 도는지 확인하는 test)와 대상 GPU host
+   test를 수행한다.
 5. 검증한 image를 registry에 push한다.
 6. 날짜 tag를 지정하여 신규 container를 생성하거나 기존 container를 교체한다.
 
@@ -92,7 +97,7 @@ image 구성, 시작 동작과 검증에 함께 영향을 주면 표의 관련 �
 그 alias가 새 image를 가리키므로 별도의 승격 변경으로 검토한다.
 
 정적 목록을 제공하는 `container-images/README.md`의 이미지 표와 alias 표도 함께
-갱신한다. 그다음 manifest가 만드는 matrix와 tag를 확인한다.
+갱신한다. 그다음 `variant_matrix.py`가 manifest에서 만들어내는 matrix와 tag를 확인한다.
 
 ```bash
 cd /home/jy/server_manage/container-images

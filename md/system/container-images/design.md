@@ -12,11 +12,20 @@
 계정과 공유 홈으로 접속하고, 선택한 GPU software 환경에서 바로 작업을 시작할
 수 있게 하는 것이다.
 
-모든 container는 전달받은 UID/GID로 계정과 그룹을 구성하고, 공유 홈의 사용자
-설정과 password 파일을 이어서 사용한다. SSH와 Jupyter를 기본으로 제공하고,
-필요한 경우 VNC와 Kerberos ccache 환경도 함께 구성한다. 이를 통해 container를
-재시작하거나 다른 이미지 버전을 선택해도 같은 사용자 identity와 작업 환경을
-유지한다.
+`container-images`는 GPU container용 image(`Dockerfile`과
+`image-variants.json`)와, 그 image에 담겨 있다가 container가 시작될 때 자동
+실행되는 `entrypoint.sh`를 관리하는 모듈이다. 실제로 container를 만들고
+실행하는 행위(`docker run`)는 `infra`라는 별도 시스템이 수행하며,
+`container-images`의 역할은 그 실행이 시작된 뒤 image에 포함된
+`entrypoint.sh`가 넘겨받은 입력으로 사용자 환경을 구성하는 지점부터다.
+
+모든 container는 전달받은 UID/GID로 계정과 그룹을 구성한다. 홈 디렉터리는 
+컨테이너 밖의 공유 스토리지이므로, 그 안에 이미 있는 `.bashrc` 같은
+사용자 설정 파일이나 `vnc_password.txt` 같은 서비스별 password 파일이 있으면
+새로 만들지 않고 그대로 이어서 사용한다. SSH와 Jupyter를 기본으로 제공하고,
+필요한 경우 VNC와 Kerberos ccache 환경도 함께 구성한다. UID/GID와 홈이 항상
+같은 값으로 전달되므로, container를 재시작하거나 다른 이미지 버전을 선택해도
+같은 사용자(identity)와 작업 환경을 유지한다.
 
 계정, supplemental group, 홈 디렉터리와 Kerberos 정보처럼 사용자와 host마다
 달라지는 값은 공통 `entrypoint.sh`가 시작 시 반영한다. CUDA, TensorFlow,
@@ -27,27 +36,43 @@ VNC와 공유 홈을 사용할 수 있다.
 ## 2. 사용자 실행 환경
 
 `Dockerfile`은 모든 이미지 버전에 필요한 프로그램과 `entrypoint.sh`를 image에
-포함한다. 실제 사용자 정보와 실행 옵션은 container를 시작할 때 전달되며,
-entrypoint가 이를 검증하고 런타임 환경을 구성한다.
+포함한다. 실제 사용자 정보와 실행 옵션은 container를 생성하는 외부 시스템이
+전달하며, entrypoint가 이를 검증하고 런타임 환경을 구성한다.
 
 `container-images`는 사용자 identity, group membership, host mount, port와 Kerberos
-ticket을 결정하지 않는다. 이 값들은 container 생성 전에 준비되는 runtime
-입력이다. 이 문서에서는 외부 입력이 만들어지는 과정이 아니라, image와
-`entrypoint.sh`가 그 입력을 받아 container 내부 환경을 구성하는 동작을 설명한다.
+ticket을 결정하지 않는다. 즉 image에는 특정 사용자의 계정이나 홈을
+미리 넣지 않는다 — 이 값들은 container 생성 전에 외부 시스템이 정해 전달하는
+runtime 입력이다. 이 문서에서는 그 입력이 만들어지는 과정이 아니라, image와
+`entrypoint.sh`가 입력을 받아 container 내부 환경을 구성하는 동작을 설명한다.
 
 | 구분 | 이 문서에서 다루는 범위 |
 | --- | --- |
 | 외부에서 전달되는 입력 | UID/GID와 그룹 목록, `/home` mount, Kerberos ccache, port mapping과 실행 option |
 | `container-images`가 수행하는 작업 | image에 필요한 프로그램을 포함하고, 전달된 입력을 container 내부 계정·파일·service 설정에 반영한다. |
 
-따라서 image에는 특정 사용자의 계정이나 홈을 미리 넣지 않는다. 같은 image를
-사용하더라도 container를 생성할 때 전달된 identity, mount와 실행 옵션에 따라
-각 사용자의 환경이 구성된다.
+같은 image를 사용하더라도, 외부 시스템이 container를 생성할 때 넘겨주는
+identity, mount와 실행 옵션에 따라 entrypoint가 각 사용자의 환경을 구성한다.
 
 ### 2.1 컨테이너 시작 흐름
 
-Docker가 외부 입력과 mount를 연결해 container를 시작하면 entrypoint가 동작한다.
-다음 순서는 `container-images` 내부에서 수행하는 작업만 나타낸다.
+Docker가 `entrypoint.sh`를 container의 시작 프로세스로 실행한다(image에 Docker
+`ENTRYPOINT`로 지정되어 있다). 아래 7단계는 전부 이 하나의 스크립트 안에서
+순서대로 호출되는 함수이며, 별도의 `.py`나 다른 프로세스가 아니다. 다음 순서는
+`container-images` 내부에서 수행하는 작업만 나타낸다.
+
+```mermaid
+flowchart TD
+    A[Docker: container 시작] --> B[entrypoint.sh 실행]
+    B --> C[1. driver version 확인]
+    C --> D[2. 계정·그룹 구성]
+    D --> E[3. Kerberos ccache 구성]
+    E --> F[4. 홈 쓰기 가능 확인·보완]
+    F --> G[5. SSH 시작]
+    G --> H{홈 사용 가능?}
+    H -->|가능| I[6. Jupyter·VNC 시작]
+    H -->|Kerberos ticket 없음| J[7. SSH만 먼저 제공]
+    J -->|홈 준비되면| I
+```
 
 1. image에 기록된 CUDA/TensorFlow version을 출력하고 host NVIDIA driver가 최소
    version을 충족하는지 확인한다.
@@ -81,9 +106,12 @@ UID/GID를 기준으로 파일 권한을 판단한다. container 안에서 실�
 하는지는 판단하지 않는다. 같은 이름의 사용자나 그룹이 다른 UID/GID로 이미
 존재하면 외부 권한과 다르게 동작할 수 있으므로 container 시작을 중단한다.
 
-Kerberos 공유 스토리지에서는 사용자가 자신의 홈 directory를 배정된 그룹과 공유할
-수 있도록 `group-dir-share` 명령을 제공한다. `Dockerfile`은 ACL 도구를 포함하고,
-entrypoint는 Kerberos 환경을 구성할 때 이 명령을 `/usr/local/bin`에 생성한다.
+계정과 그룹을 만드는 것 외에, entrypoint는 사용자가 나중에 직접 쓸 수 있는
+그룹 공유 도구도 하나 설치해 둔다. Kerberos 공유 스토리지에서는 사용자가 자신의
+홈 directory를 배정된 그룹과 공유할 수 있도록 `group-dir-share` 명령을
+제공한다. `Dockerfile`은 ACL 도구를 포함하고, entrypoint는 Kerberos 환경을
+구성할 때 이 명령을 `/usr/local/bin`에 생성해 둔다. 이 명령을 실행하는 주체는
+entrypoint가 아니라 로그인한 사용자다.
 
 ```bash
 group-dir-share ~/project vision
@@ -93,7 +121,8 @@ group-dir-share ~/project vision
 뒤 group owner, `2770` mode와 ACL을 설정한다. 별도의 권한을 부여하는 명령이 아니라
 실행한 사용자가 이미 가진 group membership 범위에서만 동작한다.
 
-기본 sudo mode인 `restricted`는 package 설치에 필요한 명령은 허용하지만 사용자
+계정·그룹 구성과 별개로, entrypoint는 sudo 권한도 함께 제어한다. 기본 sudo
+mode인 `restricted`는 package 설치에 필요한 명령은 허용하지만 사용자
 전환, mount, 권한 변경, root shell과 우회 가능한 interpreter 실행은 막는다. 기존
 사용자의 password는 재시작할 때 변경하지 않으며, `USER_PW`는 사용자를 처음 생성할
 때만 적용한다.
@@ -165,8 +194,8 @@ host port mapping, firewall과 `ENABLE_VNC` 같은 실행 option은 container �
 외부에서 정한다. `container-images`는 host port를 할당하거나 network 접근 정책을
 설정하지 않고, container 내부 service만 구성한다.
 
-SSH는 entrypoint가 사용자와 관리 계정만 로그인할 수 있도록
-`AllowUsers`를 구성하고 PAM, command audit와 login message를 적용한 뒤 service를
+entrypoint는 SSH가 사용자와 관리 계정만 로그인할 수 있도록 `AllowUsers`를
+구성하고, PAM·command audit·login message를 적용한 뒤 SSH service를
 재시작한다. 홈이 아직 Kerberos 인증을 기다리는 상태여도 SSH는 먼저 사용할 수
 있으므로 사용자가 로그인하여 ticket 상태를 확인할 수 있다.
 

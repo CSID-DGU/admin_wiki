@@ -13,9 +13,11 @@
 있게 하는 것이다. 관측 범위에는 CPU, memory, filesystem, network, GPU,
 container, Docker와 외부 연결 상태가 포함된다.
 
-서버에서는 상태를 수집해 Prometheus metric으로 제공한다. Prometheus는 metric을
-주기적으로 저장하고 alert rule을 평가하며, Grafana는 저장된 시계열을 dashboard로
-표시한다.
+`monitoring`은 Prometheus·Grafana·Alertmanager 조합을 쓴다.
+서버에서는 exporter가 상태를 수집해 Prometheus metric으로 제공한다. Prometheus는 이 metric을
+주기적으로 가져와 시계열로 저장하고, alert rule을 주기적으로 계산해 alert를 만든다.
+Alertmanager는 여러 Prometheus가 만든 alert를 모아 중복을 정리하고 전달하며, Grafana는 저장된
+시계열을 그래프로 보여주는 dashboard를 제공한다.
 
 ## 2. 설계 구조
 

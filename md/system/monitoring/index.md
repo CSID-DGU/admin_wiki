@@ -1,4 +1,4 @@
-# monitoring
+# monitoring 개요
 
 `monitoring`은 FARM/LAB 서버의 자원, GPU, container와 주요 service
 상태를 지속적으로 수집하고 metric, dashboard와 alert로 제공한다. 서버에서 수집한

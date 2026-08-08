@@ -5,7 +5,8 @@
 
 ## 운영 원칙
 
-- `up=1`과 실제 collection freshness를 구분한다. HTTP process가 응답해도 마지막
+- `up=1`과 실제 collection freshness를 구분한다(용어는 [설계 문서](design.md)
+  3.3·6.1절 참고). HTTP process가 응답해도 마지막
   성공 collection이 오래됐으면 정상으로 판단하지 않는다.
 - metric 수집, 증거 보존과 상태 변경을 분리한다. exporter는 mount하지 않고,
   forensics는 service restart나 reboot를 수행하지 않는다.
@@ -17,6 +18,13 @@
   script를 운영 entry point로 사용하지 않는다.
 - DB password, Grafana password, webhook과 Kerberos credential은 metric, alert
   label, Git values와 일반 journal에 기록하지 않는다.
+
+  | 용어 | 의미 |
+  | --- | --- |
+  | D-state | 프로세스가 I/O 응답을 기다리며 멈춰서 강제 종료도 안 되는 리눅스 상태 |
+  | forensics | 문제를 직접 고치지 않고 로그·상태 스냅샷 같은 증거를 보존해두는 것 |
+  | canary | 실제 트래픽에 영향 없는 별도 경로로 주기적으로 살아있는지 찔러보는 점검 |
+  | inhibit / backoff | 반복 실패 시 복구 시도를 억제하거나 점점 간격을 늘려 재시도하는 안전장치 |
 
 ## 1. 배포 순서
 
@@ -80,6 +88,9 @@ gpu-user-exporter.service        -> :30072/metrics, :30072/-/healthy
 실제 task는 [deploy_exporters.yml](https://github.com/CSID-DGU/admin_infra_server/blob/main/monitoring/ansible_playbook/deploy_exporters.yml)에서 확인한다.
 
 ## 3. NFS GSS와 forensics 배포
+
+이 절의 canary/GSS 개념은 [Kerberos/NFS 운영](../kerberos-nfs/operations.md)
+문서를 전제로 한다.
 
 NFS GSS readiness/canary/recovery worker:
 
@@ -145,7 +156,8 @@ checker는 drift를 고치지 않는다. KVNO history, repair와 rotation은
 
 ## 5. Prometheus/Alertmanager 배포
 
-먼저 server-side render와 cluster precondition만 검증한다.
+먼저 server-side render(Helm이 실제로 적용하지 않고 렌더링 결과만 검증하는
+것)와 cluster precondition만 검증한다.
 
 ```bash
 ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
@@ -170,7 +182,9 @@ FARM에서 필요한 Secret:
 - `cluster-monitor-slack-webhook-farm`: `url`
 
 값은 Git values에 넣지 않는다. Alertmanager는 Slack webhook으로 직접 보내지
-않고 localhost relay를 거쳐 internal notify API로 보낸다.
+않고, 같은 host에서 도는 작은 중계 프로세스(localhost relay)를 거쳐 다른
+모듈(예: remote-operations)도 함께 쓰는 사내 공용 알림 API(internal notify
+API)로 전달한다.
 
 현재 control plane의 역할은 다음처럼 구분한다.
 

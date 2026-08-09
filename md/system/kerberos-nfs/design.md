@@ -4,9 +4,10 @@
 
 ## 1. 개요
 
-Kerberos/NFS 구성의 목표는 사용자가 자신의 Kerberos identity로 NFS service에
-인증하고, AD에 기록된 UID/GID와 스토리지의 파일 권한에 따라 공유 경로를 사용하는
-것이다. Kerberos는 사용자와 service의 identity를 확인하고, NFS는 인증 결과와
+Kerberos는 비밀번호를 매번 전달하는 대신 중앙 서버가 발급한 암호화된 티켓을
+주고받아 신원을 증명하는 인증 시스템이다. `Kerberos/NFS` 구성의 목표는 사용자가
+자신의 Kerberos identity로 NFS service에 인증하고, AD에 기록된 UID/GID와
+스토리지의 파일 권한에 따라 공유 경로를 사용하는 것이다. Kerberos는 사용자와 service의 identity를 확인하고, NFS는 인증 결과와
 numeric UID/GID, mode, ACL을 함께 사용해 파일 접근 권한을 결정한다.
 
 이 문서는 다음 내용을 설명한다.
@@ -24,7 +25,9 @@ numeric UID/GID, mode, ACL을 함께 사용해 파일 접근 권한을 결정한
 | FARM | [FARM Kerberos 설정 가이드](farm-setup.md) | Samba AD, Synology NAS, NFSv4.0, `sec=krb5` |
 | LAB | [LAB Kerberos 설정 가이드](lab-setup.md) | Samba AD, Linux storage, NFSv4.1, `sec=krb5` |
 
-## 2. Kerberos 핵심 개념
+## 2. 핵심 개념
+
+### 2.1 Kerberos 개념
 
 | 용어 | 의미 | 현재 구성에서의 사용 |
 | --- | --- | --- |
@@ -36,9 +39,21 @@ numeric UID/GID, mode, ACL을 함께 사용해 파일 접근 권한을 결정한
 | SPN | service를 나타내는 principal 이름 | NFS server의 FQDN을 포함한 `nfs/<fqdn>` 등록 |
 | Keytab | principal의 장기 비밀키를 파일로 저장한 credential | 사용자 keytab은 계산 host root가 보관하고 NFS service keytab은 storage가 보관 |
 | Ccache | 발급된 TGT와 service ticket을 저장하는 credential cache | `/run/user/<uid>/krb5cc`를 사용자 process가 사용 |
-| KVNO | principal 비밀키의 version 번호 | AD의 NFS SPN과 storage keytab의 key version 일치 여부 확인 |
+| KVNO | principal 비밀키가 바뀔 때마다 올라가는 version 번호. 티켓을 만들 때 쓴 키 버전과 그걸 확인하는 keytab의 키 버전이 다르면 인증이 실패함. | AD의 NFS SPN과 storage keytab의 key version 일치 여부 확인 |
 | RPCSEC_GSS | Kerberos credential을 NFS RPC 인증에 사용하는 방식 | NFS mount의 `sec=krb5`가 GSS security context를 사용 |
 | RFC2307 | AD에 Unix UID/GID를 저장하는 속성 체계 | 사용자·group을 스토리지와 container에서 같은 숫자로 표현 |
+
+### 2.2 NFS 파일권한 개념
+
+Kerberos가 다루지 않는, NFS 접근 결정에 함께 쓰이는 파일시스템 고유 개념이다.
+
+| 용어 | 의미 |
+| --- | --- |
+| UID/GID | 사용자·그룹을 식별하는 숫자. Linux와 NFS는 이름이 아니라 이 숫자로 파일 권한을 판단한다 |
+| Identity | 이 문서에서 "누가 누구인가"를 나타내는 정보 전체. Kerberos 쪽에서는 principal, 파일시스템 쪽에서는 UID/GID로 표현되며, 같은 사람을 가리키도록 맞추는 것이 이 설계의 핵심이다 |
+| Owner/Group | 파일에 지정된 소유 사용자와 소유 그룹(둘 다 UID/GID로 저장됨) |
+| Mode | 소유자·그룹·기타 사용자별 읽기/쓰기/실행 권한을 나타내는 Unix 표준 권한 비트(예: `0600`) |
+| ACL | mode의 소유자/그룹/기타 3단계보다 세밀하게, 특정 사용자·그룹 여러 개에 개별 권한을 지정할 수 있는 확장 권한 체계 |
 
 Kerberos 인증과 filesystem 권한 판정은 이어지는 두 단계다. Kerberos는 요청자가
 어떤 principal인지 확인하고, NFS server는 그 principal에 대응하는 UID/GID와
@@ -59,19 +74,36 @@ sequenceDiagram
     participant NFS as NAS / Linux NFS server
     participant ID as RFC2307 / filesystem
 
-    U->>K: 사용자 UID로 open/read/write 요청
-    K->>G: RPCSEC_GSS credential 요청
-    G->>G: 사용자 ccache에서 TGT 확인
-    G->>KDC: nfs/storage-fqdn@REALM ticket 요청
-    KDC-->>G: NFS service ticket 발급
-    G-->>K: GSS security context 제공
-    K->>NFS: Kerberos credential을 포함한 NFS RPC
-    NFS->>NFS: service keytab으로 ticket 확인
-    NFS->>ID: principal의 UID/GID와 파일 권한 확인
-    ID-->>NFS: 접근 결과
-    NFS-->>K: NFS 응답
-    K-->>U: 파일 I/O 결과
+    U->>K: 1. 사용자 UID로 open/read/write 요청
+    K->>G: 2. RPCSEC_GSS credential 요청
+    G->>G: 3. 사용자 ccache에서 TGT 확인
+    G->>KDC: 4. nfs/storage-fqdn@REALM ticket 요청
+    KDC-->>G: 5. NFS service ticket 발급
+    G-->>K: 6. GSS security context 제공
+    K->>NFS: 7. Kerberos credential을 포함한 NFS RPC
+    NFS->>NFS: 8. service keytab으로 ticket 확인
+    NFS->>ID: 9. principal의 UID/GID와 파일 권한 확인
+    ID-->>NFS: 10. 접근 결과
+    NFS-->>K: 11. NFS 응답
+    K-->>U: 12. 파일 I/O 결과
 ```
+
+각 단계는 다음과 같다.
+
+1. 사용자 process가 UID로 파일 open/read/write를 요청한다.
+2. Host kernel NFS client가 `rpc.gssd`에 RPCSEC_GSS credential을 요청한다.
+3. `rpc.gssd`가 사용자 ccache에서 TGT를 확인한다.
+4. `rpc.gssd`가 TGT로 KDC에 `nfs/storage-fqdn@REALM` service ticket을 요청한다.
+5. KDC가 NFS service ticket을 발급한다.
+6. `rpc.gssd`가 발급받은 ticket으로 GSS security context를 만들어 kernel에
+   전달한다.
+7. Kernel이 이 credential을 포함한 NFS RPC를 NFS server에 보낸다.
+8. NFS server가 자신의 service keytab으로 ticket을 검증한다.
+9. NFS server가 ticket의 principal을 RFC2307로 UID/GID로 변환해 파일의 owner,
+   group, mode, ACL과 비교한다.
+10. 비교 결과(허용/거부)를 NFS server에 반환한다.
+11. NFS server가 결과를 kernel에 응답한다.
+12. Kernel이 결과를 사용자 process에 반환한다.
 
 이 흐름에서 사용하는 credential은 세 종류다.
 
@@ -166,9 +198,14 @@ AD group이 변경된 사용자는 keytab으로 새 TGT를 발급해 최신 grou
 
 ## 6. NFS service identity
 
+NFS 서비스(NAS / Linux NFS server) 쪽도 Kerberos principal로 자신을 증명해야 한다. 이
+절은 그 principal을 구성하는 이름(FQDN/SPN)과 비밀키 버전(KVNO)을 FARM/LAB이
+어떻게 관리하는지 설명한다.
+
 ### 6.1 FQDN과 service principal
 
-Kerberos NFS service는 host-based principal을 사용한다. Mount source의 hostname과
+Kerberos NFS service는 host-based principal을 사용한다(FQDN은 호스트 이름과
+도메인을 모두 포함한 완전한 이름을 뜻한다). Mount source의 hostname과
 NFS service principal의 hostname을 같은 값으로 유지한다.
 
 ```text

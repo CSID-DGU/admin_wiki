@@ -1,4 +1,4 @@
-# Kerberos/NFS
+# Kerberos/NFS 개요
 
 `kerberos-nfs`는 FARM/LAB 서버에서 Kerberos로 사용자를 인증하고 NFS 공유
 스토리지의 파일 권한을 동일한 UID/GID 기준으로 적용하는 구성을 설명한다.

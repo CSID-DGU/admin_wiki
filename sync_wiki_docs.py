@@ -134,11 +134,16 @@ def sync(output_dir: Path) -> Path:
     pdf_target = output_dir / "pdf"
     pdf_target.mkdir(mode=0o755)
     if PDF_DIR.is_dir():
-        for pdf in sorted(PDF_DIR.rglob("*.pdf")):
-            relative = pdf.relative_to(PDF_DIR)
+        artifacts = [
+            path
+            for path in PDF_DIR.rglob("*")
+            if path.is_file() and path.suffix.lower() in {".pdf", ".zip"}
+        ]
+        for artifact in sorted(artifacts):
+            relative = artifact.relative_to(PDF_DIR)
             target = pdf_target / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(pdf, target)
+            shutil.copy2(artifact, target)
     return output_dir
 
 

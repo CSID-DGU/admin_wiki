@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 
@@ -36,6 +37,10 @@ class Manual:
     @property
     def sources(self) -> tuple[Path, ...]:
         return (self.source, *self.sections)
+
+    @property
+    def output_path(self) -> Path:
+        return Path(self.output)
 
 
 MANUALS = (
@@ -128,6 +133,33 @@ MANUALS = (
             MD_DIR / "backend" / "외부-연동.md",
             MD_DIR / "backend" / "Redis-키-카탈로그.md",
             MD_DIR / "backend" / "에러-코드-카탈로그.md",
+        ),
+    ),
+    Manual(
+        "infra",
+        "infra",
+        MD_DIR / "infra" / "index.md",
+        "infra/infra-manual.pdf",
+        (
+            MD_DIR / "infra" / "개요.md",
+            MD_DIR / "infra" / "design" / "시스템-아키텍처.md",
+            MD_DIR / "infra" / "design" / "기초-개념.md",
+            MD_DIR / "infra" / "design" / "데이터베이스.md",
+            MD_DIR / "infra" / "operations" / "시작.md",
+            MD_DIR / "infra" / "operations" / "운영-매뉴얼.md",
+            MD_DIR / "infra" / "operations" / "API-레퍼런스.md",
+            MD_DIR / "infra" / "operations" / "Helm-차트-레퍼런스.md",
+        ),
+    ),
+    Manual(
+        "kdc-setup",
+        "kdc-setup",
+        MD_DIR / "infra" / "kdc-setup" / "index.md",
+        "infra/kdc-setup-manual.pdf",
+        (
+            MD_DIR / "infra" / "kdc-setup" / "design.md",
+            MD_DIR / "infra" / "kdc-setup" / "operations.md",
+            MD_DIR / "infra" / "kdc-setup" / "config.md",
         ),
     ),
 )
@@ -594,7 +626,7 @@ def combined_body(rendered: list[tuple[Manual, str]]) -> str:
 <section class="cover">
   <h1>Server Manage 운영 위키</h1>
   <p class="subtitle">DECS 서버 관리 코드의 기능, 경계와 설계 의도</p>
-  <p class="meta">문서 기준: 2026-07-17 저장소 상태</p>
+  <p class="meta">문서 기준: {date.today().isoformat()} 저장소 상태</p>
   <p class="meta">소스: {html.escape(str(REPO_ROOT))}</p>
 </section>
 """
@@ -626,10 +658,10 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
             html_path = temp_dir / f"{manual.slug}.html"
             html_path.write_text(document, encoding="utf-8")
             if keep_html:
-                html_output = output_dir / "system" / f"{manual.slug}.html"
+                html_output = output_dir / manual.output_path.with_suffix(".html")
                 html_output.parent.mkdir(parents=True, exist_ok=True)
                 html_output.write_text(document, encoding="utf-8")
-            output_path = output_dir / manual.output
+            output_path = output_dir / manual.output_path
             output_path.parent.mkdir(parents=True, exist_ok=True)
             print_pdf(browser, html_path, output_path)
             outputs.append(output_path)

@@ -29,9 +29,10 @@ user systemd에 의존하지 않는다.
 └── mkdocs.yml
 ```
 
-현재 작성된 문서는 모두 `md/system/`에 있고 대응 PDF는 `pdf/system/`에 있다.
-다른 분류의 문서를 추가할 때 같은 이름의 `md/<분류>/`와 `pdf/<분류>/`를
-사용한다.
+현재 PDF 자동 export는 `md/system/`과 `md/infra/`의 문서 묶음에 맞춰
+설정되어 있고, 산출물은 각각 `pdf/system/`, `pdf/infra/`에 만든다.
+다른 분류의 문서를 추가할 때도 같은 이름의 `md/<분류>/`와 `pdf/<분류>/`를
+기준으로 export 대상을 늘린다.
 
 ## 운영 구조
 
@@ -101,7 +102,7 @@ python3 manage.py publish-local
 
 ```bash
 git pull --ff-only
-# md/system/*.md 등 수정
+# md/system/*.md, md/infra/*.md 등 수정
 git add md
 git commit
 git push
@@ -132,7 +133,7 @@ git push
 ## 컨테이너 내부 스크립트
 
 - `sync_wiki_docs.py`: `md/`를 MkDocs 입력 tree로 변환하고 PDF를 복사한다.
-- `export_manuals.py`: `md/system/`의 현재 문서를 `pdf/system/`에 내보낸다.
+- `export_manuals.py`: 현재 설정된 `md/system/`, `md/infra/` 문서 묶음을 PDF로 내보낸다.
 - `docker/sync-loop.sh`: Git 변경 감지, 위 두 스크립트 실행, 성공한 site 게시.
 
 `wiki-docs/`와 `site/`는 생성물이므로 Git에 포함하지 않는다.

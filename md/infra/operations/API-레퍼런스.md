@@ -1,5 +1,19 @@
 # API 레퍼런스
 
+## 이 문서에서 다루는 내용
+
+- config-server HTTP API의 엔드포인트, 호출 주체, 입력, 응답
+- 어떤 API가 실제 `admin_be`에서 호출되고 어떤 API는 수동 확인용인지
+- Pod·계정 생성과 삭제 요청에서 주의할 오류 형식
+
+## 빠른 이동
+
+| 필요할 때 | 문서 |
+| --- | --- |
+| 승인 뒤 내부 처리 순서를 먼저 본다 | [시스템 아키텍처](../design/시스템-아키텍처.md) |
+| 운영 중 오류 응답을 해석한다 | [운영 매뉴얼](운영-매뉴얼.md) |
+| Kerberos 준비 실패를 본다 | [kdc-setup 운영](../kdc-setup/operations.md) |
+
 config-server의 HTTP API 명세다. `main.py`의 Flask route와 `/accounts` blueprint를 합쳐 총 **12개 엔드포인트**를 제공한다.
 
 현재 배포된 API 목록은 Swagger UI `http://210.94.179.18:30082/apidocs/`에서도 확인할 수 있다.

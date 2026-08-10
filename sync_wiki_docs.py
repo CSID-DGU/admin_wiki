@@ -42,6 +42,12 @@ def build_downloads() -> str:
         "",
         "[전체 통합 매뉴얼](pdf/system/server-manage-manual.pdf){ .md-button .md-button--primary }",
         "",
+        "Backend, Infra, System, User 문서를 모두 합친 PDF입니다.",
+        "",
+        "[ZIP으로 전체 문서 받기](pdf/admin-wiki-manuals.zip){ .md-button }",
+        "",
+        "문서 묶음별 PDF를 압축해 한 번에 내려받을 수 있는 파일입니다.",
+        "",
         "## 문서 묶음별 PDF",
         "",
     ]

@@ -22,6 +22,12 @@ GPU 서버와 컨테이너 실행 환경, 모니터링, 원격 작업, Kerberos/
 | [system](system/index.md) | GPU 서버의 공통 설정, 컨테이너 이미지, 모니터링, 원격 작업과 공유 스토리지 관리 | [PDF 다운로드](pdf/system/system-manual.pdf) |
 | [user](user/index.md) | 학생과 연구원이 GPU 서버 서비스를 사용하는 방법 | [PDF 다운로드](pdf/user/user-manual.pdf) |
 
-신청·승인과 API는 `backend`, 계정과 Pod 생성 과정은 `infra`, GPU 서버와 실행 환경
-운영은 `system`, 서비스 이용 절차는 `user`에서 확인한다. 처음 보는 사람에게는
-`backend` → `infra` → `system` → `user` 순서로 읽는 것을 권장한다.
+`backend`에서는 사용 신청과 승인 처리, 인증·알림, API와 스케줄러 등 서비스 요청이
+처리되는 과정을 확인한다. `infra`에서는 승인 결과를 바탕으로 계정과 홈 디렉터리를
+만들고 Pod와 NodePort를 구성하는 과정을 확인한다. `system`에서는 GPU 서버의 공통
+설정, 컨테이너 이미지, 모니터링, 원격 작업과 Kerberos/NFS 공유 스토리지의 운영
+방법을 확인한다. `user`에서는 서비스 신청부터 서버 접속과 이용, 데이터 백업까지
+사용자에게 제공되는 절차를 확인한다.
+
+처음 보는 사람에게는 `backend` → `infra` → `system` → `user` 순서로 읽는 것을
+권장한다.

@@ -1,5 +1,19 @@
 # Helm 차트 레퍼런스
 
+## 이 문서에서 다루는 내용
+
+- config-server Helm 차트가 어떤 리소스를 만드는지
+- `values.yaml`과 템플릿이 Deployment, Service, RBAC, CronJob에 어떻게 반영되는지
+- 배포 값을 바꾸기 전에 어디를 확인해야 하는지
+
+## 빠른 이동
+
+| 필요할 때 | 문서 |
+| --- | --- |
+| Kubernetes 기본 용어를 먼저 본다 | [기초 개념](../design/기초-개념.md) |
+| 배포와 장애 대응 순서를 본다 | [운영 매뉴얼](운영-매뉴얼.md) |
+| Kerberos 설정 값의 위치를 본다 | [kdc-setup 설정](../kdc-setup/config.md) |
+
 쿠버네티스 기본 용어(Pod, Service, PVC, namespace 등)는 [기초 개념](../design/기초-개념.md)을 참고한다.
 
 ---

@@ -46,6 +46,16 @@ MANUALS = (
         "system/server-manage-index.pdf",
     ),
     Manual(
+        "ansible",
+        "ansible",
+        MD_DIR / "system" / "ansible" / "index.md",
+        "system/ansible-manual.pdf",
+        (
+            MD_DIR / "system" / "ansible" / "basic.md",
+            MD_DIR / "system" / "ansible" / "config.md",
+        ),
+    ),
+    Manual(
         "server-state",
         "server-state",
         MD_DIR / "system" / "server-state" / "index.md",

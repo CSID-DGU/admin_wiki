@@ -93,6 +93,10 @@ nav:
           - 설정: infra/kdc-setup/config.md
   - system:
       - 목차: system/index.md
+      - ansible:
+          - 개요: system/ansible/index.md
+          - 기초 개념: system/ansible/basic.md
+          - 설정: system/ansible/config.md
       - server-state:
           - 개요: system/server-state/index.md
           - 설계: system/server-state/design.md

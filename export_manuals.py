@@ -51,6 +51,16 @@ MANUALS = (
         "system/server-manage-index.pdf",
     ),
     Manual(
+        "server-state",
+        "server-state",
+        MD_DIR / "system" / "server-state" / "index.md",
+        "system/server-state-manual.pdf",
+        (
+            MD_DIR / "system" / "server-state" / "design.md",
+            MD_DIR / "system" / "server-state" / "operations.md",
+        ),
+    ),
+    Manual(
         "container-images",
         "container-images",
         MD_DIR / "system" / "container-images" / "index.md",
@@ -58,27 +68,6 @@ MANUALS = (
         (
             MD_DIR / "system" / "container-images" / "design.md",
             MD_DIR / "system" / "container-images" / "operations.md",
-        ),
-    ),
-    Manual(
-        "kerberos-nfs",
-        "kerberos-nfs",
-        MD_DIR / "system" / "kerberos-nfs" / "index.md",
-        "system/kerberos-nfs-manual.pdf",
-        (
-            MD_DIR / "system" / "kerberos-nfs" / "design.md",
-            MD_DIR / "system" / "kerberos-nfs" / "operations.md",
-            MD_DIR / "system" / "kerberos-nfs" / "debugging" / "index.md",
-            MD_DIR
-            / "system"
-            / "kerberos-nfs"
-            / "debugging"
-            / "lab9-why-sec-krb5.md",
-            MD_DIR
-            / "system"
-            / "kerberos-nfs"
-            / "debugging"
-            / "nfs-v41-session-slot-stuck.md",
         ),
     ),
     Manual(
@@ -103,13 +92,47 @@ MANUALS = (
         ),
     ),
     Manual(
-        "server-state",
-        "server-state",
-        MD_DIR / "system" / "server-state" / "index.md",
-        "system/server-state-manual.pdf",
+        "kerberos-nfs",
+        "kerberos-nfs",
+        MD_DIR / "system" / "kerberos-nfs" / "index.md",
+        "system/kerberos-nfs-manual.pdf",
         (
-            MD_DIR / "system" / "server-state" / "design.md",
-            MD_DIR / "system" / "server-state" / "operations.md",
+            MD_DIR / "system" / "kerberos-nfs" / "design.md",
+            MD_DIR / "system" / "kerberos-nfs" / "operations.md",
+            MD_DIR / "system" / "kerberos-nfs" / "debugging" / "index.md",
+            MD_DIR
+            / "system"
+            / "kerberos-nfs"
+            / "debugging"
+            / "lab9-why-sec-krb5.md",
+            MD_DIR
+            / "system"
+            / "kerberos-nfs"
+            / "debugging"
+            / "nfs-v41-session-slot-stuck.md",
+            MD_DIR
+            / "system"
+            / "kerberos-nfs"
+            / "debugging"
+            / "nfs-v41-session-slot-stuck-remediation.md",
+        ),
+    ),
+    Manual(
+        "admin-be",
+        "Backend (Admin BE)",
+        MD_DIR / "backend" / "index.md",
+        "backend/admin-be-manual.pdf",
+        (
+            MD_DIR / "backend" / "시작.md",
+            MD_DIR / "backend" / "개요.md",
+            MD_DIR / "backend" / "시스템-아키텍처.md",
+            MD_DIR / "backend" / "도메인-설명.md",
+            MD_DIR / "backend" / "코드-컨벤션.md",
+            MD_DIR / "backend" / "핵심-설계-패턴.md",
+            MD_DIR / "backend" / "인증-보안.md",
+            MD_DIR / "backend" / "외부-연동.md",
+            MD_DIR / "backend" / "Redis-키-카탈로그.md",
+            MD_DIR / "backend" / "에러-코드-카탈로그.md",
         ),
     ),
     Manual(
@@ -228,6 +251,19 @@ pre code {
   max-height: 230mm;
   margin: 0 auto;
 }
+.doc-image {
+  margin: 3mm 0 5mm;
+  page-break-inside: avoid;
+  break-inside: avoid-page;
+  text-align: center;
+}
+.doc-image img {
+  max-width: 100%;
+  max-height: 200mm;
+  height: auto;
+  border: 1px solid #d7e0e8;
+  border-radius: 4px;
+}
 ul, ol { margin: 1.5mm 0 4mm; padding-left: 6.5mm; }
 li { margin: 0 0 1.2mm; }
 table {
@@ -279,6 +315,7 @@ TABLE_DELIMITER = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 UL_ITEM = re.compile(r"^\s*[-*+]\s+(.*)$")
 OL_ITEM = re.compile(r"^\s*\d+[.)]\s+(.*)$")
+IMG_TAG = re.compile(r"^<img\b[^>]*>$", re.IGNORECASE)
 
 
 def render_inline(value: str) -> str:
@@ -321,6 +358,8 @@ def is_special(lines: list[str], index: int) -> bool:
     if UL_ITEM.match(line) or OL_ITEM.match(line) or line.startswith(">"):
         return True
     if re.match(r"^\s*(?:---+|___+|\*\*\*+)\s*$", line):
+        return True
+    if IMG_TAG.match(line.strip()):
         return True
     if index + 1 < len(lines) and "|" in line and TABLE_DELIMITER.match(lines[index + 1]):
         return True
@@ -503,6 +542,11 @@ def markdown_to_html(markdown: str, browser: str) -> str:
             index += 1
             continue
 
+        if IMG_TAG.match(stripped):
+            out.append(f'<figure class="doc-image">{stripped}</figure>')
+            index += 1
+            continue
+
         paragraph = [stripped]
         index += 1
         while index < len(lines) and not is_special(lines, index):
@@ -636,15 +680,61 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
     return outputs
 
 
+def export_single_source(browser: str, source: Path, title: str, output_path: Path) -> Path:
+    """Export one Markdown source as a standalone PDF.
+
+    This is used for canonical runbooks that are maintained outside this wiki
+    repository but are published here as versioned PDF snapshots.
+    """
+    source = source.resolve()
+    if not source.is_file():
+        raise FileNotFoundError(f"Markdown source not found: {source}")
+
+    markdown = source.read_text(encoding="utf-8")
+    # Canonical runbook filenames can make the first heading too wide for A4.
+    # Keep the source body intact, but use the requested PDF title as its
+    # visible heading so the heading and the following status block do not
+    # overlap when printed.
+    markdown = re.sub(r"^# .+$", f"# {title}", markdown, count=1, flags=re.MULTILINE)
+    body = markdown_to_html(markdown, browser)
+    document = html_document(title, body)
+    output_path = output_path.resolve()
+
+    with tempfile.TemporaryDirectory(prefix="server-manual-single-") as temp_name:
+        html_path = Path(temp_name) / "manual.html"
+        html_path.write_text(document, encoding="utf-8")
+        print_pdf(browser, html_path, output_path)
+
+    return output_path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--browser", help="Chrome/Chromium executable or path")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--keep-html", action="store_true", help="Keep intermediate HTML beside PDFs")
+    parser.add_argument("--single-source", type=Path, help="Markdown source for one standalone PDF")
+    parser.add_argument("--single-title", help="Title for --single-source PDF")
+    parser.add_argument("--single-output", type=Path, help="Output path for --single-source PDF")
     args = parser.parse_args()
 
     browser = find_browser(args.browser)
-    outputs = export(browser, args.output_dir.resolve(), args.keep_html)
+    single_options = (args.single_source, args.single_title, args.single_output)
+    if any(single_options):
+        if not all(single_options):
+            parser.error(
+                "--single-source, --single-title, and --single-output must be used together"
+            )
+        outputs = [
+            export_single_source(
+                browser,
+                args.single_source,
+                args.single_title,
+                args.single_output,
+            )
+        ]
+    else:
+        outputs = export(browser, args.output_dir.resolve(), args.keep_html)
     for output in outputs:
         print(output)
     return 0

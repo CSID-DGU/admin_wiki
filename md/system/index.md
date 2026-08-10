@@ -1,36 +1,34 @@
 # System
 
-## 개요
+System 영역은 FARM/LAB GPU 서버를 일관된 기준으로 운영하기 위한 관리
+기능을 제공한다. 서버의 공통 상태와 구축 기준, 사용자 GPU 컨테이너 이미지,
+상태 관측, 원격 부팅, AD Kerberos 기반 NFS 접근을 다섯 모듈로 나누어 관리한다.
+운영 관리자는 이 페이지에서 필요한 기능의 담당 모듈과 세부 문서를 확인할 수
+있다.
 
-System 영역은 **DECS GPU 서버와 사용자 container를 일관된 상태로 운영하기
-위한 시스템 관리 코드**를 담당한다. 새로운 서버를 기존 서버와 같은 설정으로
-구축하고, 사용자가 사용할 container와 image를 관리하며, 서버 전원부터
-monitoring과 공유 storage 접근까지 운영에 필요한 전체 흐름을 유지하는 것이
-목적이다.
+## 전체 구조
 
-주요 담당 범위는 다음과 같다.
+`server-state`는 전체 서버 운영 기준을 확인하는 시작점이고, 나머지 네 모듈은
+이미지, 관측, 원격 기동, 인증·스토리지라는 개별 기능을 소유한다. 아래 순서는
+문서를 이해하기 위한 배치이며 모듈 간 실행 순서나 의존 순서를 뜻하지 않는다.
+각 모듈의 역할과 담당 범위는 다음과 같다.
 
-- 모든 GPU 서버의 Docker, NVIDIA, Kubernetes와 network 공통 설정을 점검하고
-  신규 서버에도 같은 기준을 적용한다.
-- 사용자 container의 생성·수정·삭제와 공통 container image를 관리한다.
-- 서버 원격 부팅과 부팅 순서를 관리하여 사용자 관리 DB와 GPU 서버가 올바른
-  순서로 준비되도록 한다.
-- 서버, GPU, container와 사용자 상태를 수집하여 장애와 이상 상태를 관측한다.
-- AD/Kerberos 인증을 사용해 사용자가 NAS/NFS 공유 storage에 안전하게
-  접근하도록 한다.
+| 구성요소 | 핵심 역할 | 담당 범위 |
+| --- | --- | --- |
+| [`server-state`](server-state/index.md) | FARM/LAB 서버의 공통 상태와 구축·점검 기준 정의 | 서버 profile, Docker/NVIDIA/Kubernetes/network/NFS 전제조건, 신규 서버 bootstrap 순서, 기존 서버 drift 점검과 remediation 계획 |
+| [`container-images`](container-images/index.md) | 사용자 GPU 컨테이너 이미지와 시작 환경 관리 | CUDA/TensorFlow image variant, Dockerfile, entrypoint, UID/GID·VNC·Kerberos ccache 런타임 계약, 이미지 테스트·배포 |
+| [`monitoring`](monitoring/index.md) | 서버와 서비스의 현재 상태를 지속적으로 관측 | exporter, Prometheus, Grafana, Alertmanager, GPU/container/NFS 상태, 경보, forensics와 제한된 안전 복구 |
+| [`remote-operations`](remote-operations/index.md) | 서버 원격 부팅과 부팅 시점의 일회성 준비 작업 수행 | Wake-on-LAN, 부팅 시 1회 health gate, 필수 mount·GPU·SSH 확인, 기존 stopped container 시작과 사후 점검 |
+| [`kerberos-nfs`](kerberos-nfs/index.md) | AD Kerberos 인증과 NFS 공유 스토리지 접근 기준 관리 | AD Kerberos, UID/GID 일치, keytab·ccache, RPCSEC_GSS, FARM/LAB NFS 기준 문서, 명시적 repair·rotation·mount 절차 |
 
-즉, Backend나 Frontend 애플리케이션 기능이 아니라 **GPU 서버에서 사용자
-작업 환경이 실제로 생성되고, 실행되고, 관측되고, storage에 연결되는 운영
-기반**을 관리하는 영역이다.
+## PDF와 세부 문서
 
-## 목차
-
-| 구성요소 | 상세 문서 | PDF |
+| 문서 | 상세 문서 | PDF |
 | --- | --- | --- |
 | 전체 통합 매뉴얼 | - | [PDF 열기](../../pdf/system/server-manage-manual.pdf) |
 | 전체 구조 | 현재 페이지 | [PDF 열기](../../pdf/system/server-manage-index.pdf) |
-| `container-images/` | [문서 열기](container-images/index.md) | [PDF 열기](../../pdf/system/container-images-manual.pdf) |
 | `server-state/` | [문서 열기](server-state/index.md) | [PDF 열기](../../pdf/system/server-state-manual.pdf) |
-| `remote-operations/` | [문서 열기](remote-operations/index.md) | [PDF 열기](../../pdf/system/remote-operations-manual.pdf) |
+| `container-images/` | [문서 열기](container-images/index.md) | [PDF 열기](../../pdf/system/container-images-manual.pdf) |
 | `monitoring/` | [문서 열기](monitoring/index.md) | [PDF 열기](../../pdf/system/monitoring-manual.pdf) |
+| `remote-operations/` | [문서 열기](remote-operations/index.md) | [PDF 열기](../../pdf/system/remote-operations-manual.pdf) |
 | `kerberos-nfs/` | [문서 열기](kerberos-nfs/index.md) | [PDF 열기](../../pdf/system/kerberos-nfs-manual.pdf) |

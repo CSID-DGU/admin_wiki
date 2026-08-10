@@ -1,6 +1,6 @@
 # Redis 키 카탈로그
 
-BE가 사용하는 모든 Redis 키를 역할별로 분류합니다. 장애 대응·디버깅·신규 키 추가 시 이 문서를 기준으로 삼으세요.
+Redis는 코드를 안 보면 지금 이 키가 왜 이 값을 갖고 있는지 짐작하기 어렵습니다. 장애 상황에서 코드를 뒤질 필요 없이 "이 키가 뭘 의미하고 지워도 되는지, 왜 이 TTL인지"를 아래 표만 보고 판단할 수 있게 정리했습니다. 장애 대응·디버깅은 물론 새 캐시나 중복 방지 키를 설계할 때도 여기를 기준으로 삼습니다.
 
 ---
 
@@ -55,7 +55,7 @@ BE가 사용하는 모든 Redis 키를 역할별로 분류합니다. 장애 대�
 | 값 형태 | `"true"` |
 | TTL | 10분 |
 
-**TTL 설계 이유**: 인증번호 확인(5분)과 회원가입 폼 제출(10분)을 단계별로 분리한 이유는, 사용자가 인증 직후 바로 가입 폼을 제출하지 않을 수 있기 때문입니다. 더 짧은 TTL을 가진 `email:verify` 키를 먼저 삭제하고, `VERIFIED` 키에는 약간 더 긴 시간을 줍니다.
+**TTL 설계 이유**: 인증번호 확인(5분)과 회원가입 폼 제출(10분)을 단계별로 분리한 이유는, 사용자가 인증 직후 바로 가입 폼을 제출하지 않을 수 있기 때문입니다. 더 짧은 TTL을 가진 `email:verify` 키를 먼저 삭제하고, `VERIFIED` 키에는 5분 더 긴 TTL(10분)을 줍니다.
 
 **흐름 요약**
 
@@ -124,7 +124,7 @@ KEYS RT:*
 | 항목 | 값 |
 |------|----|
 | 값 형태 | `"sent"` |
-| TTL | 25시간 (하루 주기보다 약간 길게 — 스케줄러 실행 시각 편차 흡수) |
+| TTL | 25시간 (24시간 주기보다 1시간 길게 — 스케줄러 실행 시각 편차 흡수) |
 | `{dayLabel}` | `7일`, `3일`, `1일` (만료까지 남은 날 수) |
 | `{date}` | 만료 목표 날짜 `yyyy-MM-dd` (today+7/3/1 중 해당일, 발송 당일이 아님) |
 
@@ -150,13 +150,15 @@ Slack Webhook API는 채널당 초당 1건의 rate limit이 있습니다. 비즈
 
 ```
 알림 발생 시 → RPUSH (오른쪽 삽입, FIFO)
-SlackNotificationWorker → LPOP (왼쪽 꺼내기, 1초 간격)
+전용 Worker → LPOP (왼쪽 꺼내기, 1초 간격)
 발송 실패 → RPUSH로 재삽입 (최대 3회, 3회 초과 시 폐기)
 ```
 
+두 큐는 소비하는 Worker 클래스도 분리되어 있습니다. `slack:notification:queue`는 `SlackNotificationWorker`가, `slack:infra:notification:queue`는 `InfraSlackNotificationWorker`가 각각 전담합니다. 서로 완전히 독립 운영되므로 한쪽 큐가 밀려도 다른 쪽 발송에는 영향이 없습니다.
+
 ### `slack:notification:queue`
 
-일반 비즈니스 알림 큐입니다 (신청 접수, 승인, 삭제 등).
+일반 비즈니스 알림 큐입니다 (신청 접수, 승인, 거절, 삭제 등). `SlackNotificationWorker`가 소비합니다.
 
 | 항목 | 값 |
 |------|----|
@@ -165,7 +167,7 @@ SlackNotificationWorker → LPOP (왼쪽 꺼내기, 1초 간격)
 
 ### `slack:infra:notification:queue`
 
-Infra 서버 관련 알림 전용 큐입니다. `slack:notification:queue`와 별도로 운영해 우선순위나 처리 경로를 분리합니다.
+Infra 서버 관련 알림 전용 큐입니다. `slack:notification:queue`와 별도로 운영해 우선순위나 처리 경로를 분리합니다. `InfraSlackNotificationWorker`가 소비합니다.
 
 | 항목 | 값 |
 |------|----|
@@ -184,6 +186,20 @@ LRANGE slack:infra:notification:queue 0 -1
 ```
 
 큐 길이가 계속 늘어난다면 `SlackNotificationWorker`가 멈췄거나 Slack API 장애를 의심합니다. 자세한 대응은 [운영 가이드](운영-가이드.md) 11절을 참고합니다.
+
+**동작을 직접 확인하고 싶을 때**
+
+메시지를 수동으로 넣어보고 Worker가 가져가는 과정을 실시간으로 볼 수 있습니다. DTO 필드는 실제 `SlackNotificationDTO`와 맞춰야 역직렬화 에러가 나지 않습니다.
+
+```bash
+# 큐에 테스트 메시지 하나 삽입 (RPUSH는 오른쪽 끝에 추가)
+RPUSH slack:notification:queue '{"type":"DM","username":"test_user","email":"test@test.com","message":"테스트"}'
+# 결과가 (integer) 1이면 큐에 1건 쌓인 것
+
+# 별도 터미널에서 실시간 명령 로그 확인
+MONITOR
+# 이 상태에서 스케줄러나 알림을 트리거하면 RPUSH → LPOP이 순서대로 찍히는 것을 볼 수 있음
+```
 
 ---
 

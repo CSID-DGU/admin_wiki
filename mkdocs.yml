@@ -63,16 +63,17 @@ nav:
   - 목차: index.md
   - backend:
       - 목차: backend/index.md
+      - 시작 가이드: backend/시작.md
       - 개요: backend/개요.md
       - 시스템 아키텍처: backend/시스템-아키텍처.md
-      - 코드 컨벤션: backend/코드-컨벤션.md
-      - 운영 가이드: backend/운영-가이드.md
-      - 시작 가이드: backend/시작.md
       - 도메인 설명: backend/도메인-설명.md
+      - 코드 컨벤션: backend/코드-컨벤션.md
       - 핵심 설계 패턴: backend/핵심-설계-패턴.md
       - 인증·보안: backend/인증-보안.md
       - 외부 연동: backend/외부-연동.md
       - Redis 키 카탈로그: backend/Redis-키-카탈로그.md
+      - 에러 코드 카탈로그: backend/에러-코드-카탈로그.md
+      - 운영 가이드: backend/운영-가이드.md
   - infra:
       - 목차: infra/index.md
       - 개요: infra/개요.md
@@ -92,31 +93,34 @@ nav:
           - 설정: infra/kdc-setup/config.md
   - system:
       - 목차: system/index.md
-      - container-images:
-          - 개요: system/container-images/index.md
-          - 설계: system/container-images/design.md
-          - 운영: system/container-images/operations.md
       - server-state:
           - 개요: system/server-state/index.md
           - 설계: system/server-state/design.md
           - 운영: system/server-state/operations.md
+      - container-images:
+          - 개요: system/container-images/index.md
+          - 설계: system/container-images/design.md
+          - 운영: system/container-images/operations.md
+      - monitoring:
+          - 개요: system/monitoring/index.md
+          - 설계: system/monitoring/design.md
+          - 운영: system/monitoring/operations.md
       - remote-operations:
           - 개요: system/remote-operations/index.md
           - 설계: system/remote-operations/design.md
           - 운영: system/remote-operations/operations.md
           - 설정: system/remote-operations/config.md
-      - monitoring:
-          - 개요: system/monitoring/index.md
-          - 설계: system/monitoring/design.md
-          - 운영: system/monitoring/operations.md
       - kerberos-nfs:
           - 개요: system/kerberos-nfs/index.md
           - 설계: system/kerberos-nfs/design.md
+          - FARM Kerberos 설정 가이드: system/kerberos-nfs/farm-setup.md
+          - LAB Kerberos 설정 가이드: system/kerberos-nfs/lab-setup.md
           - 운영: system/kerberos-nfs/operations.md
           - 디버깅 로그:
               - 개요: system/kerberos-nfs/debugging/index.md
               - LAB9에서 krb5를 사용하는 이유: system/kerberos-nfs/debugging/lab9-why-sec-krb5.md
               - NFSv4.1 session slot 고착: system/kerberos-nfs/debugging/nfs-v41-session-slot-stuck.md
+              - NFSv4.1 session slot 고착 해결 및 운영 적용: system/kerberos-nfs/debugging/nfs-v41-session-slot-stuck-remediation.md
   - user:
       - 목차: user/index.md
       - LAB & FARM 유저 매뉴얼: user/LAB-FARM-유저-매뉴얼.md

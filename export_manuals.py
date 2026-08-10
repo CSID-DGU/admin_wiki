@@ -16,7 +16,9 @@ import re
 import shutil
 import subprocess
 import tempfile
+import zipfile
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 
@@ -37,11 +39,15 @@ class Manual:
     def sources(self) -> tuple[Path, ...]:
         return (self.source, *self.sections)
 
+    @property
+    def output_path(self) -> Path:
+        return Path(self.output)
+
 
 MANUALS = (
     Manual(
         "server-manage",
-        "전체 구조",
+        "System 전체 구조",
         MD_DIR / "system" / "index.md",
         "system/server-manage-index.pdf",
     ),
@@ -57,7 +63,7 @@ MANUALS = (
     ),
     Manual(
         "server-state",
-        "server-state",
+        "System: server-state",
         MD_DIR / "system" / "server-state" / "index.md",
         "system/server-state-manual.pdf",
         (
@@ -67,7 +73,7 @@ MANUALS = (
     ),
     Manual(
         "container-images",
-        "container-images",
+        "System: container-images",
         MD_DIR / "system" / "container-images" / "index.md",
         "system/container-images-manual.pdf",
         (
@@ -77,7 +83,7 @@ MANUALS = (
     ),
     Manual(
         "monitoring",
-        "monitoring",
+        "System: monitoring",
         MD_DIR / "system" / "monitoring" / "index.md",
         "system/monitoring-manual.pdf",
         (
@@ -87,7 +93,7 @@ MANUALS = (
     ),
     Manual(
         "remote-operations",
-        "remote-operations",
+        "System: remote-operations",
         MD_DIR / "system" / "remote-operations" / "index.md",
         "system/remote-operations-manual.pdf",
         (
@@ -98,7 +104,7 @@ MANUALS = (
     ),
     Manual(
         "kerberos-nfs",
-        "kerberos-nfs",
+        "System: kerberos-nfs",
         MD_DIR / "system" / "kerberos-nfs" / "index.md",
         "system/kerberos-nfs-manual.pdf",
         (
@@ -138,8 +144,68 @@ MANUALS = (
             MD_DIR / "backend" / "외부-연동.md",
             MD_DIR / "backend" / "Redis-키-카탈로그.md",
             MD_DIR / "backend" / "에러-코드-카탈로그.md",
+            MD_DIR / "backend" / "운영-가이드.md",
         ),
     ),
+    Manual(
+        "infra",
+        "Infra",
+        MD_DIR / "infra" / "index.md",
+        "infra/infra-manual.pdf",
+        (
+            MD_DIR / "infra" / "개요.md",
+            MD_DIR / "infra" / "design" / "시스템-아키텍처.md",
+            MD_DIR / "infra" / "design" / "기초-개념.md",
+            MD_DIR / "infra" / "design" / "데이터베이스.md",
+            MD_DIR / "infra" / "operations" / "시작.md",
+            MD_DIR / "infra" / "operations" / "운영-매뉴얼.md",
+            MD_DIR / "infra" / "operations" / "API-레퍼런스.md",
+            MD_DIR / "infra" / "operations" / "Helm-차트-레퍼런스.md",
+        ),
+    ),
+    Manual(
+        "kdc-setup",
+        "Infra: kdc-setup",
+        MD_DIR / "infra" / "kdc-setup" / "index.md",
+        "infra/kdc-setup-manual.pdf",
+        (
+            MD_DIR / "infra" / "kdc-setup" / "design.md",
+            MD_DIR / "infra" / "kdc-setup" / "operations.md",
+            MD_DIR / "infra" / "kdc-setup" / "config.md",
+        ),
+    ),
+    Manual(
+        "user-manual",
+        "사용자 매뉴얼",
+        MD_DIR / "user" / "index.md",
+        "user/user-manual.pdf",
+        (
+            MD_DIR / "user" / "LAB-FARM-유저-매뉴얼.md",
+            MD_DIR / "user" / "AI-LAB-홈페이지-이용-방법.md",
+            MD_DIR / "user" / "서버-내-파일-백업하기.md",
+        ),
+    ),
+)
+
+MANUAL_BY_SLUG = {manual.slug: manual for manual in MANUALS}
+
+COMBINED_MANUALS = (
+    Manual(
+        "wiki-guide",
+        "문서 안내와 읽는 순서",
+        MD_DIR / "index.md",
+        "_combined/wiki-guide.pdf",
+    ),
+    MANUAL_BY_SLUG["admin-be"],
+    MANUAL_BY_SLUG["infra"],
+    MANUAL_BY_SLUG["kdc-setup"],
+    MANUAL_BY_SLUG["server-manage"],
+    MANUAL_BY_SLUG["server-state"],
+    MANUAL_BY_SLUG["container-images"],
+    MANUAL_BY_SLUG["monitoring"],
+    MANUAL_BY_SLUG["remote-operations"],
+    MANUAL_BY_SLUG["kerberos-nfs"],
+    MANUAL_BY_SLUG["user-manual"],
 )
 
 
@@ -294,6 +360,84 @@ HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 UL_ITEM = re.compile(r"^\s*[-*+]\s+(.*)$")
 OL_ITEM = re.compile(r"^\s*\d+[.)]\s+(.*)$")
 IMG_TAG = re.compile(r"^<img\b[^>]*>$", re.IGNORECASE)
+MARKDOWN_IMAGE = re.compile(r"^\s*!\[([^\]]*)\]\(([^)]+)\)\s*$", re.MULTILINE)
+HTML_IMAGE_SRC = re.compile(r'(<img\b[^>]*\bsrc=")([^"]+)(")', re.IGNORECASE)
+MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+DOC_HEADING = re.compile(r"^#\s+(.+)$", re.MULTILINE)
+
+
+def slugify_heading(title: str) -> str:
+    return re.sub(r"[^a-z0-9가-힣]+", "-", title.strip().lower()).strip("-")
+
+
+def build_heading_registry(manuals: tuple[Manual, ...]) -> dict[Path, tuple[str, str]]:
+    """Map each Markdown source file to (owning manual slug, its H1 anchor).
+
+    Used to rewrite [text](다른-문서.md) links into in-document PDF anchors
+    (#slug-anchor) instead of leaving a relative file path that does not
+    exist once the Markdown is exported to a single PDF.
+    """
+    registry: dict[Path, tuple[str, str]] = {}
+    for manual in manuals:
+        for source in manual.sources:
+            if not source.is_file():
+                continue
+            match = DOC_HEADING.search(source.read_text(encoding="utf-8"))
+            if not match:
+                continue
+            resolved = source.resolve()
+            registry.setdefault(resolved, (manual.slug, slugify_heading(match.group(1))))
+    return registry
+
+
+def resolve_asset_uri(source: Path, target: str) -> str:
+    if re.match(r"^(?:[a-z]+:)?//", target) or target.startswith(("data:", "#")):
+        return target
+    candidate = (source.parent / target).resolve()
+    return candidate.as_uri()
+
+
+def rewrite_internal_link(source: Path, target: str, registry: dict[Path, tuple[str, str]]) -> str | None:
+    """Return an in-PDF anchor for a relative .md link, or None to leave it as-is."""
+    if re.match(r"^(?:[a-z]+:)?//", target) or target.startswith(("data:", "#", "mailto:")):
+        return None
+    path_part = target.split("#", 1)[0]
+    if not path_part.endswith(".md"):
+        return None
+    resolved = (source.parent / path_part).resolve()
+    hit = registry.get(resolved)
+    if not hit:
+        return None
+    slug, anchor = hit
+    return f"#{slug}-{anchor}"
+
+
+def preprocess_markdown(source: Path, registry: dict[Path, tuple[str, str]] | None = None) -> str:
+    markdown = source.read_text(encoding="utf-8")
+    markdown = MARKDOWN_IMAGE.sub(
+        lambda match: (
+            f'<img alt="{html.escape(match.group(1), quote=True)}" '
+            f'src="{html.escape(resolve_asset_uri(source, match.group(2)), quote=True)}">'
+        ),
+        markdown,
+    )
+    markdown = HTML_IMAGE_SRC.sub(
+        lambda match: (
+            f'{match.group(1)}'
+            f'{html.escape(resolve_asset_uri(source, match.group(2)), quote=True)}'
+            f'{match.group(3)}'
+        ),
+        markdown,
+    )
+    if registry:
+        def rewrite_link(match: re.Match[str]) -> str:
+            anchor = rewrite_internal_link(source, match.group(2), registry)
+            if anchor is None:
+                return match.group(0)
+            return f"[{match.group(1)}]({anchor})"
+
+        markdown = MARKDOWN_LINK.sub(rewrite_link, markdown)
+    return markdown
 
 
 def render_inline(value: str) -> str:
@@ -399,7 +543,7 @@ def render_mermaid_svg(source: str, browser: str) -> str:
         return f'<figure class="mermaid-diagram">{svg.strip()}</figure>'
 
 
-def markdown_to_html(markdown: str, browser: str) -> str:
+def markdown_to_html(markdown: str, browser: str, id_prefix: str = "") -> str:
     lines = markdown.replace("\r\n", "\n").split("\n")
     out: list[str] = []
     index = 0
@@ -436,8 +580,9 @@ def markdown_to_html(markdown: str, browser: str) -> str:
         if heading:
             level = len(heading.group(1))
             title = heading.group(2).strip()
-            anchor = re.sub(r"[^a-z0-9가-힣]+", "-", title.lower()).strip("-")
-            out.append(f'<h{level} id="{html.escape(anchor, quote=True)}">{render_inline(title)}</h{level}>')
+            anchor = slugify_heading(title)
+            full_id = f"{id_prefix}-{anchor}" if id_prefix else anchor
+            out.append(f'<h{level} id="{html.escape(full_id, quote=True)}">{render_inline(title)}</h{level}>')
             index += 1
             continue
 
@@ -584,9 +729,10 @@ def print_pdf(browser: str, html_path: Path, output_path: Path) -> None:
 
 
 def validate_sources() -> None:
+    combined_only = [manual for manual in COMBINED_MANUALS if manual not in MANUALS]
     missing = [
         str(source)
-        for manual in MANUALS
+        for manual in (*MANUALS, *combined_only)
         for source in manual.sources
         if not source.is_file()
     ]
@@ -594,17 +740,19 @@ def validate_sources() -> None:
         raise FileNotFoundError("missing manual source(s): " + ", ".join(missing))
 
 
-def render_manual(manual: Manual, browser: str) -> str:
-    markdown = "\n\n".join(source.read_text(encoding="utf-8") for source in manual.sources)
-    return markdown_to_html(markdown, browser)
+def render_manual(
+    manual: Manual, browser: str, registry: dict[Path, tuple[str, str]] | None = None
+) -> str:
+    markdown = "\n\n".join(preprocess_markdown(source, registry) for source in manual.sources)
+    return markdown_to_html(markdown, browser, id_prefix=manual.slug)
 
 
 def combined_body(rendered: list[tuple[Manual, str]]) -> str:
     cover = f"""
 <section class="cover">
-  <h1>Server Manage 운영 위키</h1>
-  <p class="subtitle">DECS 서버 관리 코드의 기능, 경계와 설계 의도</p>
-  <p class="meta">문서 기준: 2026-07-17 저장소 상태</p>
+  <h1>AI LAB 운영 위키 통합 매뉴얼</h1>
+  <p class="subtitle">처음 읽는 사람이 Backend, Infra, System, User 순서로 전체 흐름을 따라갈 수 있게 묶은 문서</p>
+  <p class="meta">문서 기준: {date.today().isoformat()} 저장소 상태</p>
   <p class="meta">소스: {html.escape(str(REPO_ROOT))}</p>
 </section>
 """
@@ -626,7 +774,15 @@ def combined_body(rendered: list[tuple[Manual, str]]) -> str:
 def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
     validate_sources()
     output_dir.mkdir(parents=True, exist_ok=True)
-    rendered = [(manual, render_manual(manual, browser)) for manual in MANUALS]
+    combined_only = [manual for manual in COMBINED_MANUALS if manual not in MANUALS]
+    all_manuals = (*MANUALS, *combined_only)
+    registry = build_heading_registry(all_manuals)
+    rendered_map = {
+        manual.slug: render_manual(manual, browser, registry)
+        for manual in all_manuals
+    }
+    rendered = [(manual, rendered_map[manual.slug]) for manual in MANUALS]
+    combined_rendered = [(manual, rendered_map[manual.slug]) for manual in COMBINED_MANUALS]
     outputs: list[Path] = []
 
     with tempfile.TemporaryDirectory(prefix="server-manual-") as temp_name:
@@ -636,15 +792,15 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
             html_path = temp_dir / f"{manual.slug}.html"
             html_path.write_text(document, encoding="utf-8")
             if keep_html:
-                html_output = output_dir / "system" / f"{manual.slug}.html"
+                html_output = output_dir / manual.output_path.with_suffix(".html")
                 html_output.parent.mkdir(parents=True, exist_ok=True)
                 html_output.write_text(document, encoding="utf-8")
-            output_path = output_dir / manual.output
+            output_path = output_dir / manual.output_path
             output_path.parent.mkdir(parents=True, exist_ok=True)
             print_pdf(browser, html_path, output_path)
             outputs.append(output_path)
 
-        combined = html_document("Server Manage 운영 위키", combined_body(rendered))
+        combined = html_document("AI LAB 운영 위키 통합 매뉴얼", combined_body(combined_rendered))
         combined_html = temp_dir / "server-manage-manual.html"
         combined_html.write_text(combined, encoding="utf-8")
         if keep_html:
@@ -655,7 +811,20 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
         print_pdf(browser, combined_html, combined_pdf)
         outputs.append(combined_pdf)
 
+    zip_path = build_manuals_zip(output_dir, outputs)
+    outputs.append(zip_path)
+
     return outputs
+
+
+def build_manuals_zip(output_dir: Path, pdf_paths: list[Path]) -> Path:
+    """Bundle every generated PDF into a single ZIP for offline/bulk download."""
+    zip_path = output_dir / "admin-wiki-manuals.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for pdf_path in pdf_paths:
+            archive.write(pdf_path, arcname=pdf_path.relative_to(output_dir))
+    zip_path.chmod(0o644)
+    return zip_path
 
 
 def export_single_source(browser: str, source: Path, title: str, output_path: Path) -> Path:

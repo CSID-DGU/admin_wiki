@@ -26,3 +26,15 @@ System 영역은 FARM/LAB GPU 서버를 일관된 기준으로 운영하기 위�
 | [`monitoring`](monitoring/index.md) | 서버와 서비스의 현재 상태를 지속적으로 관측 | exporter, Prometheus, Grafana, Alertmanager, GPU/container/NFS 상태, 경보, forensics와 제한된 안전 복구 |
 | [`remote-operations`](remote-operations/index.md) | 서버 원격 부팅과 부팅 시점의 일회성 준비 작업 수행 | Wake-on-LAN, 부팅 시 1회 health gate, 필수 mount·GPU·SSH 확인, 기존 stopped container 시작과 사후 점검 |
 | [`kerberos-nfs`](kerberos-nfs/index.md) | AD Kerberos 인증과 NFS 공유 스토리지 접근 기준 관리 | AD Kerberos, UID/GID 일치, keytab·ccache, RPCSEC_GSS, FARM/LAB NFS 기준 문서, 명시적 repair·rotation·mount 절차 |
+
+## PDF와 세부 문서
+
+| 문서 | 상세 문서 | PDF |
+| --- | --- | --- |
+| 전체 통합 매뉴얼 | - | [PDF 열기](../../pdf/system/server-manage-manual.pdf) |
+| 전체 구조 | 현재 페이지 | [PDF 열기](../../pdf/system/server-manage-index.pdf) |
+| `server-state/` | [문서 열기](server-state/index.md) | [PDF 열기](../../pdf/system/server-state-manual.pdf) |
+| `container-images/` | [문서 열기](container-images/index.md) | [PDF 열기](../../pdf/system/container-images-manual.pdf) |
+| `monitoring/` | [문서 열기](monitoring/index.md) | [PDF 열기](../../pdf/system/monitoring-manual.pdf) |
+| `remote-operations/` | [문서 열기](remote-operations/index.md) | [PDF 열기](../../pdf/system/remote-operations-manual.pdf) |
+| `kerberos-nfs/` | [문서 열기](kerberos-nfs/index.md) | [PDF 열기](../../pdf/system/kerberos-nfs-manual.pdf) |

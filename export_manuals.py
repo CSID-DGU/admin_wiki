@@ -192,7 +192,7 @@ MANUAL_BY_SLUG = {manual.slug: manual for manual in MANUALS}
 COMBINED_MANUALS = (
     Manual(
         "wiki-guide",
-        "문서 안내와 읽는 순서",
+        "자동화 시스템 개요",
         MD_DIR / "index.md",
         "_combined/wiki-guide.pdf",
     ),
@@ -206,6 +206,57 @@ COMBINED_MANUALS = (
     MANUAL_BY_SLUG["remote-operations"],
     MANUAL_BY_SLUG["kerberos-nfs"],
     MANUAL_BY_SLUG["user-manual"],
+)
+
+AREA_BUNDLES = (
+    (
+        "Infra 전체 매뉴얼",
+        "Infra와 kdc-setup 문서를 묶은 매뉴얼",
+        "infra/infra-all-manual.pdf",
+        (
+            MANUAL_BY_SLUG["infra"],
+            MANUAL_BY_SLUG["kdc-setup"],
+        ),
+    ),
+    (
+        "System 전체 매뉴얼",
+        "GPU 서버 운영을 담당하는 System 영역의 문서를 묶은 매뉴얼",
+        "system/system-manual.pdf",
+        (
+            MANUAL_BY_SLUG["server-manage"],
+            MANUAL_BY_SLUG["ansible"],
+            MANUAL_BY_SLUG["server-state"],
+            MANUAL_BY_SLUG["container-images"],
+            MANUAL_BY_SLUG["monitoring"],
+            MANUAL_BY_SLUG["remote-operations"],
+            MANUAL_BY_SLUG["kerberos-nfs"],
+        ),
+    ),
+)
+
+COMBINED_TOC_GROUPS = (
+    ("자동화 시스템 개요", (COMBINED_MANUALS[0],)),
+    ("Backend", (MANUAL_BY_SLUG["admin-be"],)),
+    (
+        "Infra",
+        (
+            MANUAL_BY_SLUG["infra"],
+            MANUAL_BY_SLUG["kdc-setup"],
+        ),
+    ),
+    (
+        "System",
+        (
+            MANUAL_BY_SLUG["server-manage"],
+            MANUAL_BY_SLUG["ansible"],
+            MANUAL_BY_SLUG["server-state"],
+            MANUAL_BY_SLUG["container-images"],
+            MANUAL_BY_SLUG["monitoring"],
+            MANUAL_BY_SLUG["remote-operations"],
+            MANUAL_BY_SLUG["kerberos-nfs"],
+        ),
+    ),
+    ("사용자 매뉴얼", (MANUAL_BY_SLUG["user-manual"],)),
 )
 
 
@@ -346,7 +397,24 @@ hr { border: 0; border-top: 1px solid #b9c8d4; margin: 8mm 0; }
   break-after: page;
   page-break-after: always;
 }
-.toc ol { font-size: 12pt; line-height: 1.8; }
+.toc ol {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: 12pt;
+  line-height: 1.8;
+}
+.toc ol ol {
+  margin: 1mm 0 3mm 11mm;
+  font-size: 10pt;
+  line-height: 1.55;
+}
+.toc-number {
+  display: inline-block;
+  min-width: 10mm;
+  color: #18212b;
+}
+.toc ol ol .toc-number { min-width: 13mm; }
 .source-note {
   margin: -6mm 0 8mm;
   color: #647786;
@@ -747,17 +815,49 @@ def render_manual(
     return markdown_to_html(markdown, browser, id_prefix=manual.slug)
 
 
-def combined_body(rendered: list[tuple[Manual, str]]) -> str:
+def combined_body(
+    rendered: list[tuple[Manual, str]],
+    *,
+    title: str = "관리자용 자동화 시스템 전체 매뉴얼",
+    subtitle: str = "Backend, Infra, System과 사용자 매뉴얼을 한 파일로 묶은 문서",
+    toc_groups: tuple[tuple[str, tuple[Manual, ...]], ...] | None = None,
+) -> str:
     cover = f"""
 <section class="cover">
-  <h1>AI LAB 운영 위키 통합 매뉴얼</h1>
-  <p class="subtitle">처음 읽는 사람이 Backend, Infra, System, User 순서로 전체 흐름을 따라갈 수 있게 묶은 문서</p>
+  <h1>{html.escape(title)}</h1>
+  <p class="subtitle">{html.escape(subtitle)}</p>
   <p class="meta">문서 기준: {date.today().isoformat()} 저장소 상태</p>
   <p class="meta">소스: {html.escape(str(REPO_ROOT))}</p>
 </section>
 """
+    if toc_groups is None:
+        toc_groups = tuple((manual.label, (manual,)) for manual, _ in rendered)
+
     toc = ["<section class=\"toc\"><h1>목차</h1><ol>"]
-    toc.extend(f'<li><a href="#{manual.slug}">{html.escape(manual.label)}</a></li>' for manual, _ in rendered)
+    for group_number, (group_title, manuals) in enumerate(toc_groups, start=1):
+        toc.append(
+            f'<li><a href="#{manuals[0].slug}">'
+            f'<span class="toc-number">{group_number}.</span>'
+            f'{html.escape(group_title)}</a>'
+        )
+        child_sources = [
+            (manual, source)
+            for manual_index, manual in enumerate(manuals)
+            for source in manual.sources[(1 if manual_index == 0 else 0) :]
+        ]
+        if child_sources:
+            toc.append("<ol>")
+            for child_number, (manual, source) in enumerate(child_sources, start=1):
+                match = DOC_HEADING.search(source.read_text(encoding="utf-8"))
+                source_title = match.group(1).strip() if match else source.stem
+                anchor = f"{manual.slug}-{slugify_heading(source_title)}"
+                toc.append(
+                    f'<li><a href="#{html.escape(anchor, quote=True)}">'
+                    f'<span class="toc-number">{group_number}.{child_number}</span>'
+                    f'{html.escape(source_title)}</a></li>'
+                )
+            toc.append("</ol>")
+        toc.append("</li>")
     toc.append("</ol></section>")
     sections: list[str] = []
     for manual, content in rendered:
@@ -800,7 +900,10 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
             print_pdf(browser, html_path, output_path)
             outputs.append(output_path)
 
-        combined = html_document("AI LAB 운영 위키 통합 매뉴얼", combined_body(combined_rendered))
+        combined = html_document(
+            "관리자용 자동화 시스템 전체 매뉴얼",
+            combined_body(combined_rendered, toc_groups=COMBINED_TOC_GROUPS),
+        )
         combined_html = temp_dir / "server-manage-manual.html"
         combined_html.write_text(combined, encoding="utf-8")
         if keep_html:
@@ -810,6 +913,26 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
         combined_pdf = output_dir / "system" / "server-manage-manual.pdf"
         print_pdf(browser, combined_html, combined_pdf)
         outputs.append(combined_pdf)
+
+        for title, subtitle, relative_output, manuals in AREA_BUNDLES:
+            area_rendered = [
+                (manual, rendered_map[manual.slug]) for manual in manuals
+            ]
+            area_document = html_document(
+                title,
+                combined_body(
+                    area_rendered,
+                    title=title,
+                    subtitle=subtitle,
+                    toc_groups=((title.removesuffix(" 전체 매뉴얼"), manuals),),
+                ),
+            )
+            area_html = temp_dir / Path(relative_output).with_suffix(".html").name
+            area_html.write_text(area_document, encoding="utf-8")
+            area_output = output_dir / relative_output
+            area_output.parent.mkdir(parents=True, exist_ok=True)
+            print_pdf(browser, area_html, area_output)
+            outputs.append(area_output)
 
     zip_path = build_manuals_zip(output_dir, outputs)
     outputs.append(zip_path)

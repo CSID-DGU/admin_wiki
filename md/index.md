@@ -13,9 +13,11 @@ GPU 서버와 컨테이너 실행 환경, 모니터링, 원격 작업, Kerberos/
 
 ## 문서 목차
 
-| 영역 | 설명 | 바로가기 |
+모든 영역의 문서를 한 파일로 보려면 [전체 매뉴얼 PDF를 다운로드](pdf/system/server-manage-manual.pdf)한다.
+
+| 영역 | 설명 | PDF 다운로드 |
 | --- | --- | --- |
-| `backend` | 사용 신청과 승인, 인증, 알림 등 서비스 요청을 처리하는 Admin BE | [backend 개요](backend/개요.md) |
-| `infra` | 승인된 사용자의 계정, 홈 디렉터리, Pod와 NodePort를 생성하는 Infra Server | [infra 개요](infra/개요.md) |
-| `system` | GPU 서버의 공통 설정, 컨테이너 이미지, 모니터링, 원격 작업과 공유 스토리지 관리 | [system 개요](system/index.md) |
-| `user` | 학생과 연구원이 GPU 서버 서비스를 사용하는 방법 | [사용자 매뉴얼](user/index.md) |
+| [backend](backend/개요.md) | 사용 신청과 승인, 인증, 알림 등 서비스 요청을 처리하는 Admin BE | [PDF 다운로드](pdf/backend/admin-be-manual.pdf) |
+| [infra](infra/개요.md) | 승인된 사용자의 계정, 홈 디렉터리, Pod와 NodePort를 생성하는 Infra Server | [PDF 다운로드](pdf/infra/infra-all-manual.pdf) |
+| [system](system/index.md) | GPU 서버의 공통 설정, 컨테이너 이미지, 모니터링, 원격 작업과 공유 스토리지 관리 | [PDF 다운로드](pdf/system/system-manual.pdf) |
+| [user](user/index.md) | 학생과 연구원이 GPU 서버 서비스를 사용하는 방법 | [PDF 다운로드](pdf/user/user-manual.pdf) |

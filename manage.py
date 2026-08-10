@@ -38,6 +38,10 @@ def publish_local() -> None:
     )
 
 
+def stop_sync() -> None:
+    compose("stop", "sync")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -70,6 +74,7 @@ def main() -> int:
         compose("restart", "sync")
     elif args.command == "publish-local":
         publish_local()
+        stop_sync()
     elif args.command == "export":
         run([sys.executable, str(EXPORTER)])
     elif args.command == "config":

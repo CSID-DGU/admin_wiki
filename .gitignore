@@ -1,6 +1,7 @@
 # Generated documentation site
 .env
 .venv/
+wiki/
 wiki-docs/
 site/
 __pycache__/

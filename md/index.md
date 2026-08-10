@@ -21,3 +21,7 @@ GPU 서버와 컨테이너 실행 환경, 모니터링, 원격 작업, Kerberos/
 | [infra](infra/개요.md) | 승인된 사용자의 계정, 홈 디렉터리, Pod와 NodePort를 생성하는 Infra Server | [PDF 다운로드](pdf/infra/infra-all-manual.pdf) |
 | [system](system/index.md) | GPU 서버의 공통 설정, 컨테이너 이미지, 모니터링, 원격 작업과 공유 스토리지 관리 | [PDF 다운로드](pdf/system/system-manual.pdf) |
 | [user](user/index.md) | 학생과 연구원이 GPU 서버 서비스를 사용하는 방법 | [PDF 다운로드](pdf/user/user-manual.pdf) |
+
+신청·승인과 API는 `backend`, 계정과 Pod 생성 과정은 `infra`, GPU 서버와 실행 환경
+운영은 `system`, 서비스 이용 절차는 `user`에서 확인한다. 처음 보는 사람에게는
+`backend` → `infra` → `system` → `user` 순서로 읽는 것을 권장한다.

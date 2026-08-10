@@ -46,13 +46,13 @@ class Manual:
 MANUALS = (
     Manual(
         "server-manage",
-        "전체 구조",
+        "System 전체 구조",
         MD_DIR / "system" / "index.md",
         "system/server-manage-index.pdf",
     ),
     Manual(
         "server-state",
-        "server-state",
+        "System: server-state",
         MD_DIR / "system" / "server-state" / "index.md",
         "system/server-state-manual.pdf",
         (
@@ -62,7 +62,7 @@ MANUALS = (
     ),
     Manual(
         "container-images",
-        "container-images",
+        "System: container-images",
         MD_DIR / "system" / "container-images" / "index.md",
         "system/container-images-manual.pdf",
         (
@@ -72,7 +72,7 @@ MANUALS = (
     ),
     Manual(
         "monitoring",
-        "monitoring",
+        "System: monitoring",
         MD_DIR / "system" / "monitoring" / "index.md",
         "system/monitoring-manual.pdf",
         (
@@ -82,7 +82,7 @@ MANUALS = (
     ),
     Manual(
         "remote-operations",
-        "remote-operations",
+        "System: remote-operations",
         MD_DIR / "system" / "remote-operations" / "index.md",
         "system/remote-operations-manual.pdf",
         (
@@ -93,7 +93,7 @@ MANUALS = (
     ),
     Manual(
         "kerberos-nfs",
-        "kerberos-nfs",
+        "System: kerberos-nfs",
         MD_DIR / "system" / "kerberos-nfs" / "index.md",
         "system/kerberos-nfs-manual.pdf",
         (
@@ -137,7 +137,7 @@ MANUALS = (
     ),
     Manual(
         "infra",
-        "infra",
+        "Infra",
         MD_DIR / "infra" / "index.md",
         "infra/infra-manual.pdf",
         (
@@ -153,7 +153,7 @@ MANUALS = (
     ),
     Manual(
         "kdc-setup",
-        "kdc-setup",
+        "Infra: kdc-setup",
         MD_DIR / "infra" / "kdc-setup" / "index.md",
         "infra/kdc-setup-manual.pdf",
         (
@@ -162,6 +162,37 @@ MANUALS = (
             MD_DIR / "infra" / "kdc-setup" / "config.md",
         ),
     ),
+    Manual(
+        "user-manual",
+        "사용자 매뉴얼",
+        MD_DIR / "user" / "index.md",
+        "user/user-manual.pdf",
+        (
+            MD_DIR / "user" / "LAB-FARM-유저-매뉴얼.md",
+            MD_DIR / "user" / "AI-LAB-홈페이지-이용-방법.md",
+            MD_DIR / "user" / "서버-내-파일-백업하기.md",
+        ),
+    ),
+)
+
+MANUAL_BY_SLUG = {manual.slug: manual for manual in MANUALS}
+
+COMBINED_MANUALS = (
+    Manual(
+        "wiki-guide",
+        "문서 안내와 읽는 순서",
+        MD_DIR / "index.md",
+        "_combined/wiki-guide.pdf",
+    ),
+    MANUAL_BY_SLUG["admin-be"],
+    MANUAL_BY_SLUG["infra"],
+    MANUAL_BY_SLUG["kdc-setup"],
+    MANUAL_BY_SLUG["server-manage"],
+    MANUAL_BY_SLUG["server-state"],
+    MANUAL_BY_SLUG["container-images"],
+    MANUAL_BY_SLUG["monitoring"],
+    MANUAL_BY_SLUG["remote-operations"],
+    MANUAL_BY_SLUG["kerberos-nfs"],
 )
 
 
@@ -316,6 +347,35 @@ HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 UL_ITEM = re.compile(r"^\s*[-*+]\s+(.*)$")
 OL_ITEM = re.compile(r"^\s*\d+[.)]\s+(.*)$")
 IMG_TAG = re.compile(r"^<img\b[^>]*>$", re.IGNORECASE)
+MARKDOWN_IMAGE = re.compile(r"^\s*!\[([^\]]*)\]\(([^)]+)\)\s*$", re.MULTILINE)
+HTML_IMAGE_SRC = re.compile(r'(<img\b[^>]*\bsrc=")([^"]+)(")', re.IGNORECASE)
+
+
+def resolve_asset_uri(source: Path, target: str) -> str:
+    if re.match(r"^(?:[a-z]+:)?//", target) or target.startswith(("data:", "#")):
+        return target
+    candidate = (source.parent / target).resolve()
+    return candidate.as_uri()
+
+
+def preprocess_markdown(source: Path) -> str:
+    markdown = source.read_text(encoding="utf-8")
+    markdown = MARKDOWN_IMAGE.sub(
+        lambda match: (
+            f'<img alt="{html.escape(match.group(1), quote=True)}" '
+            f'src="{html.escape(resolve_asset_uri(source, match.group(2)), quote=True)}">'
+        ),
+        markdown,
+    )
+    markdown = HTML_IMAGE_SRC.sub(
+        lambda match: (
+            f'{match.group(1)}'
+            f'{html.escape(resolve_asset_uri(source, match.group(2)), quote=True)}'
+            f'{match.group(3)}'
+        ),
+        markdown,
+    )
+    return markdown
 
 
 def render_inline(value: str) -> str:
@@ -606,9 +666,10 @@ def print_pdf(browser: str, html_path: Path, output_path: Path) -> None:
 
 
 def validate_sources() -> None:
+    combined_only = [manual for manual in COMBINED_MANUALS if manual not in MANUALS]
     missing = [
         str(source)
-        for manual in MANUALS
+        for manual in (*MANUALS, *combined_only)
         for source in manual.sources
         if not source.is_file()
     ]
@@ -617,15 +678,15 @@ def validate_sources() -> None:
 
 
 def render_manual(manual: Manual, browser: str) -> str:
-    markdown = "\n\n".join(source.read_text(encoding="utf-8") for source in manual.sources)
+    markdown = "\n\n".join(preprocess_markdown(source) for source in manual.sources)
     return markdown_to_html(markdown, browser)
 
 
 def combined_body(rendered: list[tuple[Manual, str]]) -> str:
     cover = f"""
 <section class="cover">
-  <h1>Server Manage 운영 위키</h1>
-  <p class="subtitle">DECS 서버 관리 코드의 기능, 경계와 설계 의도</p>
+  <h1>Server Manage 운영 위키 통합 매뉴얼</h1>
+  <p class="subtitle">처음 읽는 사람이 Backend, Infra, System 순서로 전체 흐름을 따라갈 수 있게 묶은 문서</p>
   <p class="meta">문서 기준: {date.today().isoformat()} 저장소 상태</p>
   <p class="meta">소스: {html.escape(str(REPO_ROOT))}</p>
 </section>
@@ -648,7 +709,13 @@ def combined_body(rendered: list[tuple[Manual, str]]) -> str:
 def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
     validate_sources()
     output_dir.mkdir(parents=True, exist_ok=True)
-    rendered = [(manual, render_manual(manual, browser)) for manual in MANUALS]
+    combined_only = [manual for manual in COMBINED_MANUALS if manual not in MANUALS]
+    rendered_map = {
+        manual.slug: render_manual(manual, browser)
+        for manual in (*MANUALS, *combined_only)
+    }
+    rendered = [(manual, rendered_map[manual.slug]) for manual in MANUALS]
+    combined_rendered = [(manual, rendered_map[manual.slug]) for manual in COMBINED_MANUALS]
     outputs: list[Path] = []
 
     with tempfile.TemporaryDirectory(prefix="server-manual-") as temp_name:
@@ -666,7 +733,7 @@ def export(browser: str, output_dir: Path, keep_html: bool) -> list[Path]:
             print_pdf(browser, html_path, output_path)
             outputs.append(output_path)
 
-        combined = html_document("Server Manage 운영 위키", combined_body(rendered))
+        combined = html_document("Server Manage 운영 위키", combined_body(combined_rendered))
         combined_html = temp_dir / "server-manage-manual.html"
         combined_html.write_text(combined, encoding="utf-8")
         if keep_html:

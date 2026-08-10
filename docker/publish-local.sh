@@ -11,7 +11,12 @@ rm -rf "$work_dir" "$next_site"
 mkdir -p "$work_dir"
 cp -R "$source_dir"/. "$work_dir"/
 
-python3 "$work_dir/export_manuals.py"
+# publish-local is for previewing the current checkout. Reuse host-generated
+# PDFs when they are already present so the container does not need to rerun
+# the browser-heavy export step.
+if [ ! -f "$work_dir/pdf/system/server-manage-manual.pdf" ]; then
+  python3 "$work_dir/export_manuals.py"
+fi
 python3 "$work_dir/sync_wiki_docs.py"
 mkdocs build \
   --clean \

@@ -30,7 +30,8 @@ Ansible playbook은 서버에서 실행할 작업 순서를 YAML로 정의한 �
 | --- | --- | --- |
 | 정책 | `policy/standard-gpu-server.yml` | 구성요소와 실행 순서를 기록한다. |
 | 구성요소 정의 | `components/*.yml` | 목표 상태, 점검 방법, 설정 방법과 승인 수준을 기록한다. |
-| 서버·환경 정보 | `servers.jsonl`, `config/environments.yml` | 서버 접속·network 정보와 FARM/LAB별 설정값을 제공한다. |
+| 서버·환경 정보 | `user-lifecycle/server_info/servers.jsonl`, `config/environments.yml` | 서버 접속·network 정보와 FARM/LAB별 설정값을 제공한다. `servers.jsonl`은 `user-lifecycle`이 소유한다. |
+| Ansible 접속 설정 | 공용 `ansible/inventory.ini`, 관리자별 `~/.ansible.cfg` | 대상 서버 목록과 접속 계정을 제공한다. [Ansible 설정](../ansible/config.md) 참고. |
 | 명령 구성 | `server_state/` | 대상 서버에 맞는 playbook, tag와 변수를 조합한다. |
 | Ansible 작업 | `ansible/roles/`와 playbook | 구성요소별 점검과 서버 설정을 수행한다. |
 | 실행 파일 | `bin/server-state` | `describe`, `audit`, `plan`, `apply` 명령을 시작한다. |
@@ -81,15 +82,20 @@ CLI에서 관리한다.
 
 ### 3.1 `baseline-access`
 
-**목표 상태:** 서버가 inventory(`servers.jsonl`)와 Ansible inventory(`monitoring/ansible_playbook/inventory.ini`)에 등록되어 있고, 설정된
-hostname으로 SSH 접속과 비대화형 sudo를 사용할 수 있다.
+**목표 상태:** 서버가 `user-lifecycle/server_info/servers.jsonl`과 공용
+`ansible/inventory.ini`에 등록되어 있고, 설정된 hostname으로 SSH 접속과
+비대화형 sudo를 사용할 수 있다.
 
 **점검:** Ansible ping으로 접속을 확인하고, `sudo -n true` 실행과 실제
 hostname·inventory hostname 일치 여부를 확인한다.
 
-**설정:** IP, hostname, SSH key, 관리 계정과 sudo 권한을 준비하고 두
-inventory에 서버를 등록한다. 등록 절차는 [운영 문서](operations.md)의
-"2. 신규 서버 추가"를 참고한다.
+**설정:** IP, hostname, SSH key와 sudo 권한을 준비하고 두 파일에 서버를 등록한다.
+등록 절차는 [운영 문서](operations.md)의 "2. 신규 서버 추가"를 참고한다.
+
+비대화형 sudo는 **명령을 실행하는 관리자 각자의 계정**에 필요하다. 다른 관리자에게
+설정되어 있어도 본인 계정에 없으면 점검조차 실행되지 않는다. 준비 절차는
+[Ansible 설정](../ansible/config.md)에 있다. 접속 계정은 어느 inventory에도 기록하지
+않으며 각자의 `~/.ansible.cfg`가 정한다.
 
 **설정 실행:** 실행 형태 `manual`, 안전 수준 `gated`. 관리자가 준비 절차를 수행한다. 이 구성요소는 이후 Ansible 작업을 실행하기 위한 선행 조건이다.
 
@@ -328,8 +334,8 @@ converge:
 
 ### 5.2 서버와 FARM/LAB 설정
 
-`servers.jsonl`은 host, server ID, domain, SSH 주소·port·계정과
-management/storage interface 정보를 제공한다. `config/environments.yml`은
+`servers.jsonl`은 host, server ID, domain, SSH 주소·port와
+management/storage interface 정보를 제공한다. 접속 계정은 담지 않는다. `config/environments.yml`은
 FARM/LAB별 realm, Kerberos config, storage host·mount와 Kubernetes context를
 제공한다.
 
@@ -361,4 +367,6 @@ public health port를 만든다.
 | [`ansible/roles/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Fansible%2Froles) | 구성요소별 점검·설정 task |
 | [`kerberos-nfs/ansible/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fkerberos-nfs%2Fansible) | Kerberos/NFS 점검·설정 task |
 | [`monitoring/ansible_playbook/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fmonitoring%2Fansible_playbook) | exporter 점검·배포 playbook |
+| `ansible/inventory.ini` | 관리자 전원이 공유하는 Ansible 접속 대상 목록 (접속 계정은 포함하지 않는다) |
+| `user-lifecycle/server_info/servers.jsonl` | 서버 상세 정보 (`user-lifecycle` 소유) |
 | [`tests/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Ftests) | 정책, 서버 정보, 명령 구성과 승인 test |

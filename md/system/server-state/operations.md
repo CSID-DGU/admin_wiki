@@ -10,22 +10,28 @@
 
 | 작업 | 변경 위치 | 확인 방법 |
 | --- | --- | --- |
-| [서버 추가](#2-신규-서버-추가) | `servers.jsonl`, Ansible inventory | `list-hosts`, `baseline-access` 점검 |
-| [FARM/LAB 설정 변경](#3-farmlab-환경-설정-변경) | `server-state/config/environments.yml` | `plan --show-command`의 extra vars 확인 |
-| [구성요소 추가·수정](#4-구성요소-추가수정) | `server-state/components/`, Ansible role·playbook | `describe`, `audit`, `plan` |
-| [실행 형태·안전 수준 변경](#5-실행-형태와-안전-수준-변경) | 구성요소 정의와 `server_state/` Python package | 단위 테스트와 승인 동작 확인 |
-| [서버 점검·설정](#7-운영-서버-점검) | `bin/server-state` CLI | 실행 결과와 종료 코드 확인 |
+| 서버 추가 | `servers.jsonl`, 공용 `ansible/inventory.ini` | `list-hosts`, `baseline-access` 점검 |
+| FARM/LAB 설정 변경 | `server-state/config/environments.yml` | `plan --show-command`의 extra vars 확인 |
+| 구성요소 추가·수정 | `server-state/components/`, Ansible role·playbook | `describe`, `audit`, `plan` |
+| 실행 형태·안전 수준 변경 | 구성요소 정의와 `server_state/` Python package | 단위 테스트와 승인 동작 확인 |
+| 서버 점검·설정 | `bin/server-state` CLI | 실행 결과와 종료 코드 확인 |
 
-명령은 `admin_infra_server` 저장소를 clone한 루트 디렉터리(예: `/home/jy/server_manage`)에서
-실행한다.
+### 사전 조건
+
+`server-state`의 모든 명령은 Ansible로 대상 서버에 접속한다. 실행 전에
+**[Ansible 설정](../ansible/config.md)을 마쳐야 한다.** 접속 계정, inventory,
+비대화형 sudo 준비는 그 문서가 담당하며 이 문서에서는 다시 설명하지 않는다.
+Ansible 자체가 익숙하지 않다면 [Ansible 기초 개념](../ansible/basic.md)을 먼저 읽는다.
+
+명령은 `admin_infra_server` 저장소를 clone한 루트 디렉터리에서 실행한다. 이 문서에서
+`<저장소>`는 그 경로를 뜻하며, clone 위치는 관리자마다 다를 수 있다.
 
 ```bash
-cd /home/jy/server_manage
+cd <저장소>
 ./server-state/bin/server-state --help
 ```
 
 ## 2. 신규 서버 추가
-
 신규 서버 추가는 서버 정보 등록, Ansible 접속 대상 등록, 접속 점검, 표준 구성
 순서로 진행한다.
 
@@ -37,35 +43,44 @@ cd /home/jy/server_manage
 | `server_id` | Kerberos principal과 서버 식별에 사용하는 대문자 ID |
 | `domain` | FARM 또는 LAB 환경 선택 |
 | `server_no` | 공유 경로와 public health port 계산 |
-| `ansible_host`, `ansible_port`, `ansible_user` | SSH 접속 |
+| `ansible_host`, `ansible_port` | SSH 접속 주소와 port |
 | management interface·IPv4 | 관리 network 정보 |
 | storage interface·IPv4 | storage network 설정과 점검 |
 
 `host`와 `server_id`는 기존 서버와 겹치지 않는 값을 쓰고, `server_no`는 같은
-domain 안에서 기존 서버와 겹치지 않는 값을 쓴다. IP, hostname, SSH key와
-비대화형 sudo도 이 단계에서 준비한다.
+domain 안에서 기존 서버와 겹치지 않는 값을 쓴다.
+
+**접속 계정은 등록 정보에 넣지 않는다.** 관리자마다 계정이 다르므로 각자의
+`~/.ansible.cfg`가 담당한다. 새 서버에 대한 SSH key 등록과 비대화형 sudo 준비
+절차는 [Ansible 설정](../ansible/config.md)에 있다.
 
 ### 2.2 서버 정보 등록
 
-공용 `servers.jsonl`에 서버 한 대를 한 줄의 JSON으로 추가한다. 다음 예시는
+서버 한 대를 두 곳에 등록한다. 두 파일은 같은 서버 집합을 나타내야 한다.
+
+| 파일 | 역할 |
+| --- | --- |
+| `user-lifecycle/server_info/servers.jsonl` | 서버 상세 정보. `user-lifecycle`이 소유하며 `generate_servers_jsonl.py`로 생성한다 |
+| `ansible/inventory.ini` | Ansible 접속 대상 목록. 관리자 전원이 공유한다 |
+
+`servers.jsonl`에 서버 한 대를 한 줄의 JSON으로 추가한다. 다음 예시는
 `server-state`가 사용하는 핵심 필드를 보여준다.
 
 ```json
-{"host":"farm10","server_id":"FARM10","domain":"FARM","server_no":10,"inventory":{"group":"FARM","ansible_host":"192.168.2.20","ansible_port":8090,"ansible_user":"jy"},"networks":{"management":{"name":"eno1","ipv4":"192.168.2.20"},"storage":{"name":"eno2","ipv4":"100.100.100.110"}}}
+{"host":"farm10","server_id":"FARM10","domain":"FARM","server_no":10,"inventory":{"group":"FARM","ansible_host":"192.168.2.20","ansible_port":8090},"networks":{"management":{"name":"eno1","ipv4":"192.168.2.20"},"storage":{"name":"eno2","ipv4":"100.100.100.110"}}}
 ```
 
-같은 서버를
-[`monitoring/ansible_playbook/inventory.ini`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fmonitoring%2Fansible_playbook%2Finventory.ini)의
-FARM 또는 LAB group에도 등록한다. host 이름과 SSH 주소·port는
-`servers.jsonl`의 값과 맞춘다.
+같은 서버를 `ansible/inventory.ini`의 FARM 또는 LAB group에도 등록한다. host
+이름과 SSH 주소·port는 `servers.jsonl`의 값과 맞춘다.
 
 ```ini
 [FARM]
 farm10 ansible_host=192.168.2.20 ansible_port=8090
 ```
 
-group과 다른 SSH 계정을 사용하는 서버는 해당 host 행에 `ansible_user`를 함께
-지정한다.
+**두 파일 모두 접속 계정(`ansible_user`)을 쓰지 않는다.** 계정은 각 관리자의
+`~/.ansible.cfg`가 정한다. 이유와 설정 방법은
+[Ansible 설정](../ansible/config.md)을 참고한다.
 
 ### 2.3 등록 결과 확인
 
@@ -98,7 +113,6 @@ Ansible 접속, hostname과 sudo 조건은 `baseline-access` 점검으로 확인
 옵션은 아래의 **서버 설정** 절에서 설명한다.
 
 ## 3. FARM/LAB 환경 설정 변경
-
 [`server-state/config/environments.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fconfig%2Fenvironments.yml)은
 여러 서버가 공유하는 환경 값을 관리한다.
 
@@ -132,7 +146,6 @@ public health port 계산값은 다음 명령으로 확인한다.
 ```
 
 ## 4. 구성요소 추가·수정
-
 구성요소는 하나의 목표 상태와 그 상태를 확인하는 점검 작업, 목표 상태를 만드는
 설정 작업을 묶는다.
 
@@ -217,7 +230,6 @@ converge:
 ```
 
 ## 5. 실행 형태와 안전 수준 변경
-
 설정 작업의 실행 제어는 `converge.kind`와 `converge.safety`로 나뉜다.
 
 ### 5.1 실행 형태
@@ -267,6 +279,12 @@ converge:
 5. 한 서버에서 차단·승인·실행·재점검 흐름을 확인한다.
 
 ## 6. 대상과 정책 확인
+기존 서버를 점검할 때는 2절(신규 서버 추가)이 아니라 이 절부터 시작한다.
+
+> **선행 조건**: [Ansible 설정](../ansible/config.md)이 끝나 있어야 한다. 특히
+> 대상 서버에 **본인 계정의 비대화형 sudo(NOPASSWD)** 가 없으면 읽기 전용 점검조차
+> `Missing sudo password`로 실패한다. `ansible <host> -m command -a 'sudo -n true'`로
+> 미리 확인할 수 있다.
 
 관리 대상과 파생된 public health port를 확인한다.
 
@@ -293,6 +311,8 @@ converge:
 있으며, 실행 순서는 정책의 구성요소 순서를 따른다.
 
 ## 7. 운영 서버 점검
+점검은 대상 서버를 변경하지 않는다. 실행 전에 6절의 선행
+조건을 확인한다.
 
 ### 7.1 실행 명령 확인
 
@@ -405,6 +425,21 @@ GPU workload와 reboot 일정까지 확인한 뒤 승인한다.
 | `MANUAL` | 표시된 운영 절차 reference를 사용한다. |
 | `BLOCKED` | 선택한 안전 수준에 필요한 승인을 추가한다. |
 
+### 9.1 `FAILED`의 세 가지 성격
+
+`FAILED`는 원인이 서로 다른 세 경우를 함께 나타내며 대응 방법이 다르다. `detail`에서
+`fatal:` 또는 `failed:` 줄의 `"msg"` 값을 보고 구분한다.
+
+| 성격 | `msg` 예시 | 의미와 대응 |
+| --- | --- | --- |
+| 서버 상태 불일치 | `required package is missing: ethtool` | 실제로 기준과 다르다. `plan`으로 예상 변경을 확인하고 설정 작업을 진행한다. |
+| 실행 환경 오류 | `Missing sudo password`, `No space left on device` | 점검 자체가 성립하지 않았다. 권한이나 서버 자원 문제를 먼저 해결하고 다시 점검한다. |
+| 판정 불가 | `ethtool: not found` (점검에 쓸 명령이 없음) | 결과를 알 수 없다. 선행 항목을 먼저 해결한 뒤 다시 점검한다. |
+
+같은 서버에서 세 성격이 동시에 나올 수 있다. 예를 들어 `os-common`이 `ethtool` 누락으로
+실패하면 그 도구를 쓰는 `storage-network`는 판정 불가가 된다. 이 경우 선행 항목을
+먼저 처리한 뒤 다시 점검해야 실제 상태를 알 수 있다.
+
 자동 처리용 JSON은 전역 옵션인 `--format`을 하위 명령 앞에 둔다.
 
 ```bash
@@ -421,26 +456,24 @@ GPU workload와 reboot 일정까지 확인한 뒤 승인한다.
 Python 단위 테스트:
 
 ```bash
-cd /home/jy/server_manage/server-state
+cd <저장소>/server-state
 python3 -m unittest discover -s tests -v
 ```
 
 주요 Ansible 구문 검사:
 
 ```bash
-cd /home/jy/server_manage
-ANSIBLE_CONFIG="$PWD/monitoring/ansible_playbook/ansible.cfg" \
+cd <저장소>
 ANSIBLE_ROLES_PATH="$PWD/server-state/ansible/roles:$PWD/kerberos-nfs/ansible/roles" \
-ansible-playbook --syntax-check \
-  -i monitoring/ansible_playbook/inventory.ini \
-  server-state/ansible/playbooks/audit.yml
+ansible-playbook --syntax-check server-state/ansible/playbooks/audit.yml
 
-ANSIBLE_CONFIG="$PWD/monitoring/ansible_playbook/ansible.cfg" \
 ANSIBLE_ROLES_PATH="$PWD/server-state/ansible/roles:$PWD/kerberos-nfs/ansible/roles" \
-ansible-playbook --syntax-check \
-  -i monitoring/ansible_playbook/inventory.ini \
-  server-state/ansible/playbooks/converge.yml
+ansible-playbook --syntax-check server-state/ansible/playbooks/converge.yml
 ```
+
+inventory와 설정 파일은 지정하지 않는다. `~/.ansible.cfg`가 담당한다
+([Ansible 설정](../ansible/config.md)). `ANSIBLE_ROLES_PATH`만 지정하는 이유는
+role이 저장소 안에 있고 clone 경로가 관리자마다 다르기 때문이다.
 
 CLI 연결 확인:
 

@@ -345,7 +345,7 @@ kernel 비교 기준은 다음과 같다.
 준비와 격리는 VM lab README의 절차를 따른다.
 
 ```bash
-cd /home/jy/server_manage/kerberos-nfs/test/lab-kerberos-poc/vm-slot-regression
+cd <저장소>/kerberos-nfs/test/lab-kerberos-poc/vm-slot-regression
 
 sudo ./bin/provision_lab8_vms.sh "$PWD"
 ./bin/configure_vm_stack.sh

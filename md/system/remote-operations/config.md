@@ -12,7 +12,7 @@
 로컬 설정 파일을 만든다.
 
 ```bash
-cd /home/jy/server_manage/remote-operations
+cd <저장소>/remote-operations
 cp config/remote_boot.example.env config/remote_boot.local.env
 chmod 600 config/remote_boot.local.env
 ```
@@ -59,32 +59,30 @@ broadcast 전달 설정은 별도로 준비되어 있어야 한다.
 `remote-operations`는 서버 ID를 소문자 Ansible 별칭으로 바꾸어 사용한다. 예를
 들어 `FARM1`은 inventory의 `farm1`, `LAB10`은 `lab10`에 연결된다.
 
-기본 Ansible 설정을 사용하지 않을 경우 로컬 설정에 개인 inventory를 지정한다.
+inventory는 **저장소의 공용 `ansible/inventory.ini`**를 사용한다. 개인 사본을
+만들지 않는다. clone 경로가 관리자마다 다르므로 자신의 경로로 적는다.
 
 ```bash
-REMOTE_BOOT_ANSIBLE_INVENTORY="/home/<관리자계정>/ansible/inventory.ini"
+REMOTE_BOOT_ANSIBLE_INVENTORY="<저장소>/ansible/inventory.ini"
 ```
 
-inventory 예시는 다음과 같다.
+**접속 계정(`ansible_user`)은 inventory에 적지 않는다.** 공용 파일이라 계정을
+적으면 다른 관리자가 자기 계정으로 접속할 수 없다. 계정은 각 관리자의
+`~/.ansible.cfg`에 있는 `remote_user`가 담당한다. inventory 형식과 우선순위
+규칙은 [Ansible 기초 개념](../ansible/basic.md#inventory)과
+[Ansible 설정](../ansible/config.md#3-공용-inventory)에 있다.
 
-```ini
-[farm]
-farm1 ansible_host=<FARM1 address> ansible_user=<관리자계정>
+inventory는 접속 주소를 정할 뿐 SSH 권한을 부여하지 않는다. 이 서비스를 실행하는
+계정의 SSH key가 원격 계정의 `authorized_keys`에 등록되어 있어야 한다. mount와
+GPU 복구에는 대상 서버에서 password 입력 없이 실행할 수 있는 `sudo -n` 권한도
+필요하다. 두 준비 절차는 [Ansible 설정](../ansible/config.md#22-ssh-키-등록)에 있다.
 
-[lab]
-lab10 ansible_host=<LAB10 address> ansible_user=<관리자계정>
-```
-
-inventory는 접속 주소와 사용자를 정할 뿐 SSH 권한을 부여하지 않는다. 관리
-서버의 해당 service 사용자 SSH key가 원격 계정의 `authorized_keys`에 등록되어
-있어야 한다. mount와 GPU 복구에는 대상 서버에서 password 입력 없이 실행할
-수 있는 `sudo -n` 권한도 필요하다.
-
-다음 명령으로 각 alias를 먼저 확인한다.
+다음 명령으로 각 alias를 먼저 확인한다. inventory와 계정은 `~/.ansible.cfg`가
+정하므로 옵션으로 지정하지 않는다.
 
 ```bash
-ansible farm1 -i /home/<관리자계정>/ansible/inventory.ini -m ping
-ansible lab10 -i /home/<관리자계정>/ansible/inventory.ini -m ping
+ansible farm1 -m ping
+ansible lab10 -m ping
 ```
 
 ## 5. 서버 준비 상태 확인과 제한 시간

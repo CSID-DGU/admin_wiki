@@ -15,8 +15,7 @@
 
 ---
 
-## 1. Ansible이 하는 일 {#1-ansible}
-
+## 1. Ansible이 하는 일
 관리자가 서버 16대에 같은 작업을 해야 한다고 하자. 서버마다 SSH로 접속해서
 같은 명령을 반복하면 시간이 오래 걸리고, 중간에 한 대를 빠뜨리거나 명령을 잘못
 입력하기 쉽다.
@@ -30,7 +29,7 @@ Ansible은 이 과정을 대신한다. 관리 데스크탑에서 명령을 한 �
 ```mermaid
 flowchart LR
     subgraph DESK["관리 데스크탑"]
-        A["Ansible<br/>여기에만 설치한다"]
+        A["Ansible<br/>관리 서버에만 설치한다"]
         C["~/.ansible.cfg<br/>inventory.ini<br/>playbook · role"]
     end
     subgraph TARGET["대상 서버 (Ansible 설치하지 않는다)"]
@@ -50,7 +49,7 @@ flowchart LR
 
 Ansible 작업은 같은 작업을 여러 번 실행해도 결과가 달라지지 않는다.
 
-예를 들어 "서버에 패키지 `ethtool`이 설치되어 있어야 한다"는 작업을 실행하면, 없을 때는
+예를 들어 "대상 서버에 패키지 `ethtool`이 설치되어 있어야 한다"는 작업을 실행하면, 없을 때는
 설치하고 이미 있으면 아무것도 하지 않는다. 그래서 실행 결과에 `changed`(바꿈)와
 `ok`(이미 맞음)가 구분되어 표시된다.
 
@@ -62,35 +61,31 @@ Ansible 명령 하나를 실행하려면 다음 세 가지가 필요하다.
 
 | 필요한 것 | 내용 | 기록하는 곳 |
 | --- | --- | --- |
-| 어느 서버에 | host 이름, IP, SSH port | `inventory.ini` |
-| 무슨 작업을 | 설치·점검·설정 내용 | `playbook.yml`과 `role` |
-| 누구로 접속할지 | 접속 계정, SSH 키 | `inventory.ini` 또는 `ansible.cfg` |
+| 어느 서버에 | host 이름, IP, SSH port | [`inventory.ini`](#inventory) |
+| 무슨 작업을 | 설치·점검·설정 내용 | [`playbook`과 `role`](#playbook-role) |
+| 누구로 접속할지 | 접속 계정, SSH 키 | [`ansible.cfg`](#ansible-cfg) (또는 [`inventory.ini`](#inventory)) |
 
-`admin_infra_server`에서 관리자가 직접 준비하는 것은 첫 번째와 세 번째다. 두 번째는
-각 모듈에 이미 정의되어 있다.
+Ansible 설정을 위해 관리자가 직접 준비하는 것은 첫 번째와 세 번째다. 두 번째는 `admin_infra_server`의 
+각 모듈에 정의되어 있다.
+
+접속 계정은 `ansible.cfg`와 `inventory.ini` 어느 쪽에도 적을 수 있지만,
+admin_infra_server에서는 **`ansible.cfg`에만 적는다.** 그렇게 정한 이유는 [6장(설정 파일과 우선순위)](#config-priority)에서 확인할 수 있다.
 
 이 세 가지가 실제 실행에서 어떤 순서로 쓰이는지는 뒤의
-[7. 전체 흐름 정리](#run-order)에 정리되어 있다.
+[8장(전체 흐름 정리)](#overall-flow)에 정리되어 있다.
 
 ---
 
-## 3. inventory {#3-inventory}
-
-inventory는 대상 서버 목록이다. Ansible은 여기에 없는 서버에는 접속하지 않는다.
+## 3. inventory <a id="inventory"></a>
+inventory는 관리 서버에서 접속하고자 하는 대상 서버 목록이다. Ansible은 여기에 없는 서버에는 접속하지 않는다.
 
 ### 파일 위치
 
 admin_infra_server에서는 저장소의 `ansible/inventory.ini` 하나를 관리자 전원이
-공유한다. 관리자는 이 파일을 직접 지정하는 대신, 자신의 `~/.ansible.cfg`에 경로를
-적어 두고 Ansible이 알아서 읽게 한다.
+공유한다. 서버가 추가되면 이 파일만 갱신하고 나머지 관리자는 `git pull`로 받는다.
 
-```ini
-# ~/.ansible.cfg
-[defaults]
-inventory = /home/suhyeon/CSID-DGU/admin_infra_server/ansible/inventory.ini
-```
-
-경로가 관리자마다 다른 이유는 저장소를 내려받은 위치가 다르기 때문이다.
+관리자가 이 파일을 실행할 때마다 지정할 필요는 없다. 경로를 한 번 적어 두면
+Ansible이 알아서 읽는데, 어디에 적는지는 [4장](#ansible-cfg)에서 다룬다.
 
 ### 파일 형식
 
@@ -112,6 +107,9 @@ lab1 ansible_host=192.168.1.11 ansible_port=8081
 | `ansible_host` | 실제 접속할 IP 주소 |
 | `ansible_port` | SSH port |
 
+위는 형식을 보이기 위해 일부만 옮긴 것이다. FARM·LAB 전체 서버가 담긴 실제 파일은
+`ansible/inventory.ini`에서 확인할 수 있다.
+
 ### group 변수
 
 group 전체에 같은 값을 적용할 때는 `[group이름:vars]` 절을 쓴다.
@@ -121,9 +119,11 @@ group 전체에 같은 값을 적용할 때는 `[group이름:vars]` 절을 쓴�
 ansible_user=someone
 ```
 
-`ansible_user`는 접속 계정을 지정하는 변수다. admin_infra_server의 공용
+`ansible_user`는 접속 계정을 지정하는 변수다.
+
+하지만 admin_infra_server의 공용
 inventory에는 **이 변수를 쓰지 않는다.** 관리자마다 접속 계정이 다르기 때문이며,
-이유는 [5. 설정 우선순위](#5)에서 설명한다.
+이유는 [6장(설정 파일과 우선순위)](#config-priority)에서 설명한다.
 
 ### 대상 지정
 
@@ -148,23 +148,77 @@ farm8 | SUCCESS => {
 
 ---
 
-## 4. playbook과 role
+## 4. ansible.cfg <a id="ansible-cfg"></a>
 
-### YAML 형식 {#yaml}
+`ansible.cfg`는 **Ansible을 실행할 때마다 쓰이는 기본값을 적어 두는 파일**이다.
+3장에서 inventory 경로를 적었던 그 파일이다.
 
-playbook은 **YAML** 형식으로 쓴다. 들여쓰기로 구조를 나타내는 텍스트 형식이며,
-읽는 데 필요한 규칙은 세 가지다.
+### 왜 필요한가
 
-| 표기 | 의미 |
+이 파일이 없으면 실행할 때마다 필요한 값을 옵션으로 직접 넘겨야 한다.
+
+```bash
+# 설정 파일이 없을 때: 매번 inventory와 계정을 지정해야 한다
+ansible farm8 -i /home/suhyeon/CSID-DGU/admin_infra_server/ansible/inventory.ini -u suhyeon -m ping
+```
+
+같은 값을 파일에 한 번 적어 두면 옵션 없이 실행할 수 있다.
+
+```ini
+# ~/.ansible.cfg
+[defaults]
+inventory   = /home/suhyeon/CSID-DGU/admin_infra_server/ansible/inventory.ini
+remote_user = suhyeon
+```
+
+```bash
+# 설정 파일이 있을 때
+ansible farm8 -m ping
+```
+
+### 파일 위치와 이름
+
+Ansible이 이 파일을 찾는 곳은 정해져 있다. admin_infra_server에서는 **홈 디렉터리의
+`~/.ansible.cfg`** 를 쓴다.
+
+| 항목 | 내용 |
 | --- | --- |
-| `키: 값` | 항목 하나를 나타낸다 |
-| `-` (하이픈) | 목록의 항목 하나를 나타낸다 |
-| 들여쓰기 | 위 항목에 속한다는 뜻이다. 공백만 사용하고 탭은 쓰지 않는다 |
+| 위치 | 홈 디렉터리 (`/home/<관리자계정>/`) |
+| 이름 | 반드시 `.ansible.cfg` (앞의 점 포함) |
+| 관리 | 관리자마다 각자 작성한다. 저장소에 넣지 않는다 |
 
-자세한 문법은 [Ansible 공식 YAML 문서](https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html)에 있다.
+`~/ansible/ansible.cfg`처럼 **폴더를 만들어 그 안에 두면 무시된다.** 정확한 탐색
+순서와 이 규칙은 [6장](#config-priority)에서 다룬다.
 
-### playbook {#playbook}
+### 무엇을 적는가
 
+핵심은 두 줄이다. 나머지 값은 [6.3 자주 쓰는 설정값](#config-values)에 있다.
+
+| 설정 | 의미 | 관리자마다 다른가 |
+| --- | --- | --- |
+| `inventory` | 사용할 서버 목록 파일 경로 | 다르다 (clone 위치가 다르므로) |
+| `remote_user` | 대상 서버에 접속할 계정 | 다르다 |
+
+### 왜 개인 파일인가
+
+두 값 모두 **관리자마다 다르기 때문**이다. 접속 계정을 공용 파일에 적으면 그 계정
+하나로만 접속하게 되어 다른 관리자가 자기 계정을 쓸 수 없다.
+
+그래서 admin_infra_server는 설정을 두 갈래로 나눈다.
+
+| 파일 | 담는 내용 | 공유 여부 |
+| --- | --- | --- |
+| `<저장소>/ansible/inventory.ini` | 서버 목록 (모두 같다) | 저장소에서 공유 |
+| `~/.ansible.cfg` | 접속 계정, inventory 경로 (각자 다르다) | 개인이 각자 작성 |
+
+기준은 "이 값이 관리자마다 다른가"이다. 실제 작성 절차는
+[설정](config.md#4-개인-설정-파일-작성)에 있다.
+
+---
+
+## 5. playbook과 role <a id="playbook-role"></a>
+
+### playbook
 **playbook**은 수행할 작업을 순서대로 적어 둔 YAML 파일이다. 다음은
 `server-state`의 점검 playbook 앞부분이다.
 
@@ -185,9 +239,15 @@ playbook은 **YAML** 형식으로 쓴다. 들여쓰기로 구조를 나타내는
 | --- | --- |
 | `name` | 사람이 읽기 위한 이름이다. 실행 결과에 그대로 표시된다 |
 | `hosts` | 이 playbook을 실행할 대상. inventory의 group 이름이나 host 이름을 쓴다 |
-| `become` | 대상 서버에서 root 권한으로 실행할지 여부. [6. become과 sudo](#6-become-sudo) 참고 |
+| `become` | 대상 서버에서 root 권한으로 실행할지 여부. [7장(become과 sudo)](#become-sudo) 참고 |
 | `gather_facts` | 시작할 때 대상 서버의 OS·네트워크·패키지 정보를 수집할지 여부 |
 | `tasks` | 실제로 수행할 작업 목록 |
+
+위는 앞부분만 옮긴 것이고, 실제로는 같은 형태의 `tasks` 항목이 구성요소 수만큼
+이어진다. 전체 내용은
+[`server-state/ansible/playbooks/audit.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/ansible/playbooks/audit.yml)에서
+볼 수 있다. 설정용 playbook은
+[`converge.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/ansible/playbooks/converge.yml)이다.
 
 ### hosts에 쓰인 변수 표기
 
@@ -206,48 +266,116 @@ hosts: "{{ server_state_hosts | default('all') }}"
 정리하면 "대상이 지정되면 그 서버에만, 지정되지 않으면 전체에" 실행하라는 뜻이다.
 playbook 파일을 고치지 않고도 실행할 때마다 대상을 바꿀 수 있게 하는 방식이다.
 
-### role {#role}
+### role <a id="role"></a>
 
-playbook에는 "무엇을 어떤 순서로 할지"만 적고, **실제 작업 내용은 role로 나눠서**
-보관한다. role은 관련된 작업들을 모아 둔 디렉터리다.
+앞의 playbook을 다시 보면 이상한 점이 있다. "baseline access를 점검한다"고만 적혀
+있을 뿐, **무엇을 어떻게 점검하는지가 없다.**
+
+```yaml
+    - name: Audit baseline access
+      ansible.builtin.import_role:
+        name: baseline_access
+        tasks_from: audit
+```
+
+실제 점검 내용은 `baseline_access`라는 **role**에 들어 있다. 위 세 줄은 "그 내용을
+여기로 가져와서 실행하라"는 뜻이다.
+
+즉 **playbook은 목차이고, role은 본문이다.**
+
+| | 담는 것 | 예 |
+| --- | --- | --- |
+| playbook | 어떤 작업을 어떤 순서로 할지 | "① 기본 접속 점검 → ② OS 점검 → ③ Docker 점검" |
+| role | 각 작업의 실제 내용 | "ping을 보낸다, `sudo -n true`를 실행한다, hostname을 비교한다" |
+
+#### role 안에는 무엇이 있나
+
+위 playbook 세 줄이 실제로 실행하는 파일은
+[`roles/baseline_access/tasks/audit.yml`](https://github.com/CSID-DGU/admin_infra_server/blob/main/server-state/ansible/roles/baseline_access/tasks/audit.yml)이고,
+내용은 다음과 같다.
+
+```yaml
+- name: Verify Ansible can reach the host
+  ansible.builtin.ping:
+
+- name: Verify non-interactive sudo
+  ansible.builtin.command:
+    argv: [sudo, -n, "true"]
+  changed_when: false
+
+- name: Verify the host name matches inventory
+  ansible.builtin.assert:
+    that:
+      - ansible_hostname | lower == inventory_hostname | lower
+    fail_msg: "hostname does not match inventory: ..."
+```
+
+여기서 비로소 구체적인 작업이 나온다. 접속이 되는지 `ping`으로 확인하고,
+`sudo -n true`로 비밀번호 없는 sudo가 되는지 확인하고, 서버의 실제 hostname이
+inventory에 적힌 이름과 같은지 비교한다.
+
+**"실제 작업 내용을 role로 나눠서 보관한다"는 말은 이 뜻이다.** 이 세 개의 task를
+playbook에 직접 쓰지 않고 별도 디렉터리에 두었다는 것이다.
+
+#### 디렉터리 구조
+
+role은 파일 하나가 아니라 **정해진 형태의 디렉터리**다.
 
 ```
 server-state/ansible/
 ├── playbooks/
-│   └── audit.yml                     ← playbook: 점검 순서만 적혀 있다
+│   └── audit.yml                     ← playbook: 순서만 적혀 있다 (목차)
 └── roles/
-    ├── baseline_access/
+    ├── baseline_access/              ← role 이름 = 디렉터리 이름
     │   └── tasks/
-    │       ├── main.yml              ← 설정할 때 쓰는 작업
-    │       └── audit.yml             ← 점검할 때 쓰는 작업
+    │       ├── main.yml              ← 설정할 때 실행할 task들
+    │       └── audit.yml             ← 점검할 때 실행할 task들
     ├── docker_engine/
     │   └── tasks/ ...
     └── nvidia_driver/
         └── tasks/ ...
 ```
 
-playbook의 다음 부분이 role을 불러오는 표기다.
+**playbook의 `import_role`에 적은 두 줄이 위 디렉터리 구조의 어느 파일을 가리키는지**는
+다음 규칙으로 정해진다.
 
-```yaml
-    - name: Audit baseline access
-      ansible.builtin.import_role:
-        name: baseline_access      # 이 role의 작업을
-        tasks_from: audit          # audit.yml 파일에서 가져와 실행한다
-```
+| playbook에 적은 표기 | 가리키는 대상 |
+| --- | --- |
+| `name: baseline_access` | `roles/` 아래의 `baseline_access/` **디렉터리** |
+| `tasks_from: audit` | 그 디렉터리 안의 `tasks/audit.yml` **파일**. 생략하면 `tasks/main.yml`이 실행된다 |
 
-role로 나누는 이유는 세 가지다.
+즉 `name`은 디렉터리 이름, `tasks_from`은 그 안의 파일 이름이며, 둘 다 `.yml`
+확장자와 `tasks/` 경로는 Ansible이 알아서 붙인다.
 
-- 같은 작업을 여러 playbook에서 다시 쓸 수 있다. 점검용 playbook과 설정용 playbook이
-  같은 role을 공유한다.
-- 구성요소 단위로 골라 실행할 수 있다. Docker만 점검하고 싶으면 해당 role만 실행한다.
-- 구성요소별로 파일이 나뉘어 있어 내용을 찾기 쉽다.
+`server-state`가 role 하나당 파일을 둘로 나눈 이유는, 같은 구성요소에 대해
+**점검(`audit.yml`)과 설정(`main.yml`)이 하는 일이 다르기** 때문이다. 점검은 상태를
+읽어서 기준과 비교만 하고, 설정은 실제로 서버를 바꾼다.
 
-실행 결과에 나오는 다음 줄에서 `baseline_access`가 role 이름이고 뒤가 개별 작업
-이름이다. 어떤 role의 어떤 작업인지 여기서 확인할 수 있다.
+#### 나누지 않으면 어떻게 되나
+
+role 없이 playbook 하나에 전부 적으면, 구성요소 8개의 점검 task가 한 파일에
+쭉 이어진다. 그러면 다음 문제가 생긴다.
+
+- **설정용 playbook을 만들 때 같은 내용을 다시 써야 한다.** 점검과 설정이 같은
+  구성요소를 다루는데 파일이 따로 놀아서, 한쪽만 고치면 두 파일이 어긋난다.
+- **Docker만 점검하고 싶어도 파일 전체를 실행하게 된다.**
+- **파일이 길어져서 어디를 고쳐야 할지 찾기 어렵다.**
+
+role로 나누면 세 문제가 모두 해결된다. `audit.yml`과 `converge.yml`이 **같은 role을
+공유**하므로 내용이 한 곳에만 있고, 구성요소 단위로 골라 실행할 수 있으며,
+`nvidia_driver` 문제는 `roles/nvidia_driver/`만 보면 된다.
+
+#### 실행 결과에서 role 확인하기
+
+실행 결과의 `TASK` 줄은 `[role 이름 : task 이름]` 형태다.
 
 ```
 TASK [baseline_access : Verify non-interactive sudo] ***************************
 ```
+
+`baseline_access` role의 `Verify non-interactive sudo` task라는 뜻이며, 위에서 본
+`audit.yml`의 두 번째 항목이 바로 이것이다. **오류가 났을 때 이 줄만 보면 어느
+파일의 어느 부분인지 바로 찾을 수 있다.**
 
 playbook과 role은 **저장소에서 관리하는 작업 내용**이므로 관리자가 개인적으로
 수정하거나 옮기지 않는다. 관리자가 준비하는 것은 inventory와 접속 계정뿐이다.
@@ -317,15 +445,15 @@ failed: [farm8] (item=ethtool) => {
 | 실행 환경 문제 | `Missing sudo password`, `No space left on device` | 권한이나 서버 자원 문제를 먼저 해결한다 |
 | 점검 자체가 불가능 | `ethtool: not found` (점검에 쓸 명령이 없음) | 선행 항목을 먼저 해결한 뒤 다시 점검한다 |
 
+가운데 "실행 환경 문제"는 서버가 아니라 **내 설정이 원인**인 경우가 많다. 구체적인
+오류 메시지별 해결 절차는 [설정](config.md#8-문제-해결)에 정리되어 있다.
+
 ---
 
-## 5. 설정 파일과 우선순위 {#5}
-
-### 5.1 설정 파일을 찾는 순서 {#51}
-
-Ansible은 실행될 때마다 **설정 파일(`ansible.cfg`)을 찾는다.** 이 파일에는 접속
-계정, 사용할 inventory 경로, 임시 디렉터리 위치처럼 매번 입력하기 번거로운 기본값이
-들어 있다. 설정 파일이 없으면 Ansible은 내장된 기본값으로 동작한다.
+## 6. 설정 파일과 우선순위 <a id="config-priority"></a>
+### 6.1 설정 파일을 찾는 순서
+[4장](#ansible-cfg)에서 본 `ansible.cfg`를 Ansible은 **실행될 때마다 찾는다.**
+설정 파일이 없으면 내장된 기본값으로 동작한다.
 
 설정 파일을 둘 수 있는 곳은 네 곳이고, Ansible은 이 순서대로 확인한다.
 
@@ -335,18 +463,6 @@ Ansible은 실행될 때마다 **설정 파일(`ansible.cfg`)을 찾는다.** �
 | 2 | 현재 작업 디렉터리의 `ansible.cfg` | 프로젝트 폴더마다 다른 설정을 쓸 때 |
 | 3 | 홈 디렉터리의 `~/.ansible.cfg` | 관리자 개인의 기본 설정 |
 | 4 | `/etc/ansible/ansible.cfg` | 시스템 전체 공통 기본 설정 |
-
-```mermaid
-flowchart LR
-    S["Ansible 실행"] --> Q1{"1. ANSIBLE_CONFIG<br/>환경변수가 있는가?"}
-    Q1 -->|없다| Q2{"2. 현재 작업 디렉터리에<br/>ansible.cfg가 있는가?"}
-    Q2 -->|없다| Q3{"3. 홈 디렉터리에<br/>.ansible.cfg가 있는가?"}
-    Q3 -->|없다| D["4. /etc/ansible/ansible.cfg"]
-    Q1 -->|있다| U["찾은 파일 하나만 사용한다<br/>나머지는 읽지 않는다"]
-    Q2 -->|있다| U
-    Q3 -->|있다| U
-    D --> U
-```
 
 중요한 점이 두 가지 있다.
 
@@ -369,11 +485,12 @@ flowchart LR
 ansible --version | grep "config file"
 ```
 
-```
-config file = /home/suhyeon/.ansible.cfg
+```bash
+# 실행 결과
+config file = /home/<관리자계정>/.ansible.cfg
 ```
 
-### 5.2 같은 값을 여러 곳에서 지정했을 때
+### 6.2 같은 값을 여러 곳에서 지정했을 때
 
 Ansible에서는 하나의 값을 **여러 방법으로 지정할 수 있다.** 예를 들어 사용할 서버
 목록은 명령줄 옵션으로도, 환경변수로도, 설정 파일로도 지정할 수 있다.
@@ -401,13 +518,39 @@ Ansible에서는 하나의 값을 **여러 방법으로 지정할 수 있다.** 
 
 #### 접속 계정
 
-| 순위 | 지정 방법 | 예 |
-| --- | --- | --- |
-| 1 | inventory의 `ansible_user` | `[FARM:vars]` 아래 `ansible_user=jy` |
-| 2 | `ansible.cfg`의 `remote_user` | `remote_user = suhyeon` |
+접속 계정은 설정 이름이 파일마다 다르다. **이름은 달라도 지정하는 값은 같다.**
 
-**inventory에 적은 계정이 설정 파일보다 우선한다.** 위 예시처럼 두 곳에 다르게
-적혀 있으면 `jy` 계정으로 접속을 시도한다.
+| 파일 | 설정 이름 |
+| --- | --- |
+| `inventory.ini` | `ansible_user` |
+| `ansible.cfg` | `remote_user` |
+
+이름이 다르다고 서로 다른 값이 아니다. 둘 다 "대상 서버에 어느 계정으로 접속할지"
+하나를 정하는 것이므로, 두 파일에 다른 계정이 적혀 있으면 **충돌**한다. 이때 적용
+순위는 다음과 같다.
+
+| 순위 | 지정 방법 |
+| --- | --- |
+| 1 | inventory의 `ansible_user` |
+| 2 | `ansible.cfg`의 `remote_user` |
+
+**inventory에 적은 계정이 설정 파일보다 우선한다.** 예를 들어 `suhyeon` 관리자가
+자신의 `~/.ansible.cfg`에 자기 계정을 적어 두었더라도, 공용 inventory에 예전
+관리자의 계정이 남아 있으면 그쪽이 이긴다.
+
+```ini
+# 공용 inventory.ini  ← 1순위
+[FARM:vars]
+ansible_user=jy
+```
+
+```ini
+# ~/.ansible.cfg  ← 2순위, 무시된다
+[defaults]
+remote_user = suhyeon
+```
+
+이 상태로 실행하면 `suhyeon`이 아니라 `jy` 계정으로 접속을 시도한다.
 
 공용 inventory는 관리자 전원이 함께 쓰는 파일이므로, 여기에 `ansible_user`가 남아
 있으면 어떤 관리자도 자신의 계정으로 접속할 수 없다. admin_infra_server의 공용
@@ -420,14 +563,15 @@ inventory에서 `ansible_user`를 쓰지 않고, 계정은 각자의 `~/.ansible
 ansible-config dump --only-changed
 ```
 
-```
+```bash
+# 실행 결과
 DEFAULT_HOST_LIST(/home/suhyeon/.ansible.cfg) = ['/home/suhyeon/CSID-DGU/admin_infra_server/ansible/inventory.ini']
 DEFAULT_REMOTE_USER(/home/suhyeon/.ansible.cfg) = suhyeon
 ```
 
 괄호 안에 그 값이 **어느 파일에서 왔는지**가 함께 표시된다.
 
-### 5.3 자주 쓰는 설정값
+### 6.3 자주 쓰는 설정값 <a id="config-values"></a>
 
 ```ini
 [defaults]
@@ -455,14 +599,14 @@ pipelining = True
 | `control_path_dir` | SSH 연결을 재사용하기 위한 소켓 디렉터리 |
 | `pipelining` | 대상 서버에 임시 파일을 덜 만들어 실행을 빠르게 한다 |
 
-임시 디렉터리 경로에 계정 이름을 넣는 이유는 [설정](config.md)에 있다. 요약하면
+임시 디렉터리 경로에 계정 이름을 넣는 이유는
+[설정](config.md#임시-디렉터리-설정이-세-개인-이유)에 있다. 요약하면
 Ansible이 이 디렉터리를 소유자만 접근 가능한 권한으로 만들기 때문에, 여러 관리자가
 같은 경로를 쓰면 먼저 만든 사람 외에는 사용할 수 없게 된다.
 
 ---
 
-## 6. become과 sudo {#6-become-sudo}
-
+## 7. become과 sudo <a id="become-sudo"></a>
 `become: true`는 "이 작업을 대상 서버에서 root 권한으로 실행한다"는 뜻이다.
 내부적으로 `sudo`를 사용한다.
 
@@ -483,7 +627,8 @@ fatal: [farm8]: FAILED! => {"msg": "Missing sudo password"}
 작업이라도 NOPASSWD sudo가 있어야 한다.
 
 권한은 **명령을 실행하는 관리자 각자의 계정**에 필요하다. 다른 관리자에게 설정되어
-있어도 본인 계정에 없으면 실행할 수 없다. 설정 방법은 [설정](config.md)에 있다.
+있어도 본인 계정에 없으면 실행할 수 없다. 설정 방법은
+[설정](config.md#5-sudo-권한-준비)에 있다.
 
 `ansible` 명령을 직접 쓸 때는 `-K` 옵션으로 sudo 비밀번호를 한 번 입력해 진행할 수
 있다. 다만 모듈이 제공하는 명령(`server-state` 등)에는 이 옵션이 없으므로 NOPASSWD
@@ -491,30 +636,29 @@ fatal: [farm8]: FAILED! => {"msg": "Missing sudo password"}
 
 ---
 
-## 7. 전체 흐름 정리 {#run-order}
-
+## 8. 전체 흐름 정리 <a id="overall-flow"></a>
 앞에서 본 요소들이 실제 실행에서 어떤 순서로 쓰이는지 정리하면 다음과 같다.
 괄호 안은 그 단계를 설명한 장이다.
 
 ```mermaid
 flowchart TD
     S["관리자가 명령을 실행한다"]
-    S --> C1["1. 설정 파일을 찾는다<br/>~/.ansible.cfg (5장)"]
+    S --> C1["1. 설정 파일을 찾는다<br/>~/.ansible.cfg (4·6장)"]
     C1 --> C2["2. 서버 목록을 읽는다<br/>inventory.ini (3장)"]
-    C2 --> C3["3. 접속 계정을 정한다<br/>remote_user (5장)"]
+    C2 --> C3["3. 접속 계정을 정한다<br/>remote_user (4·6장)"]
     C3 --> C4["4. 대상 서버에<br/>SSH로 접속한다"]
-    C4 --> C5["5. root 권한으로 전환한다<br/>become · sudo (6장)"]
-    C5 --> C6["6. 서버 정보를 수집하고<br/>작업을 순서대로 실행한다<br/>playbook · role (4장)"]
-    C6 --> C7["7. 결과를 모아서 출력한다<br/>PLAY RECAP (4장)"]
+    C4 --> C5["5. root 권한으로 전환한다<br/>become · sudo (7장)"]
+    C5 --> C6["6. 서버 정보를 수집하고<br/>작업을 순서대로 실행한다<br/>playbook · role (5장)"]
+    C6 --> C7["7. 결과를 모아서 출력한다<br/>PLAY RECAP (5장)"]
 ```
 
 1~3번은 관리 데스크탑에서만 일어나고, 4번부터 대상 서버가 관여한다. 실행이 실패했을
 때 어느 단계에서 멈췄는지 알면 원인을 좁힐 수 있다. 단계별 오류와 대응 방법은
-[설정](config.md)의 "문제 해결"에 정리되어 있다.
+[설정](config.md#8-문제-해결)에 정리되어 있다.
 
 ---
 
-## 8. 자주 쓰는 명령
+## 9. 자주 쓰는 명령
 
 ```bash
 # 접속 확인
@@ -546,19 +690,22 @@ ansible-playbook --check --diff <playbook>
 
 ---
 
-## 9. 용어 정리
+## 10. 용어 정리
+
+용어를 누르면 그 용어를 설명하는 장으로 이동한다.
 
 | 용어 | 의미 | 설명 위치 |
 | --- | --- | --- |
-| agentless | 대상 서버에 별도 프로그램을 설치하지 않는 방식 | [1장](#1-ansible) |
-| inventory | 대상 서버 목록 파일 | [3장](#3-inventory) |
-| group | inventory에서 서버들을 묶은 이름 | [3장](#3-inventory) |
-| host | inventory에 등록된 개별 서버 | [3장](#3-inventory) |
-| YAML | 들여쓰기로 구조를 나타내는 텍스트 형식. playbook을 쓸 때 사용한다 | [4장](#yaml) |
-| playbook | 수행할 작업을 순서대로 적은 YAML 파일 | [4장](#playbook) |
-| task | playbook 안의 개별 작업 하나 | [4장](#playbook) |
-| role | 관련된 task들을 재사용할 수 있게 묶은 디렉터리 | [4장](#role) |
-| facts | 실행 시작할 때 대상 서버에서 수집하는 OS·네트워크·패키지 정보 | [4장](#playbook) |
-| `ansible.cfg` | 접속 계정과 inventory 경로 등 실행 기본값을 적어 두는 설정 파일 | [5장](#51) |
-| become | 대상 서버에서 root 권한으로 실행하는 것 | [6장](#6-become-sudo) |
-| NOPASSWD sudo | 비밀번호 없이 sudo를 쓸 수 있게 해 둔 설정. 비대화형 sudo라고도 한다 | [6장](#6-become-sudo) |
+| agentless | 대상 서버에 별도 프로그램을 설치하지 않는 방식 | 1장 |
+| [inventory](#inventory) | 대상 서버 목록 파일 | 3장 |
+| [group](#inventory) | inventory에서 서버들을 묶은 이름 | 3장 |
+| [host](#inventory) | inventory에 등록된 개별 서버 | 3장 |
+| [`ansible.cfg`](#ansible-cfg) | 접속 계정과 inventory 경로 등 실행 기본값을 적어 두는 설정 파일 | 4장, 6장 |
+| [`remote_user`](#ansible-cfg) | `ansible.cfg`에서 접속 계정을 지정하는 설정 | 4장, 6장 |
+| YAML | 들여쓰기로 구조를 나타내는 텍스트 형식. playbook을 쓸 때 사용한다 | 5장 |
+| [playbook](#playbook-role) | 수행할 작업을 순서대로 적은 YAML 파일. 어떤 작업을 어떤 순서로 할지만 적는다 | 5장 |
+| [task](#playbook-role) | playbook이나 role 안의 개별 작업 하나 | 5장 |
+| [role](#role) | 실제 작업 내용(task)을 구성요소별로 모아 둔 디렉터리. playbook이 불러다 쓴다 | 5장 |
+| [facts](#playbook-role) | 실행 시작할 때 대상 서버에서 수집하는 OS·네트워크·패키지 정보 | 5장 |
+| [become](#become-sudo) | 대상 서버에서 root 권한으로 실행하는 것 | 7장 |
+| [NOPASSWD sudo](#become-sudo) | 비밀번호 없이 sudo를 쓸 수 있게 해 둔 설정. 비대화형 sudo라고도 한다 | 7장 |

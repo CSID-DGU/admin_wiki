@@ -18,7 +18,8 @@ OS가 부팅되어 SSH가 열리고, 공유 스토리지와 NVIDIA driver가 준
 과정을 하나의 제한 시간 안에서 순서대로 수행하고, 복구되지 않은 실패를 로그와
 알림으로 남긴다.
 
-NIC·firmware의 Wake-on-LAN 설정, 네트워크 전달, Ansible inventory, 서버 mount와 GPU
+NIC·firmware의 Wake-on-LAN 설정, 네트워크 전달, Ansible 접속 설정
+([Ansible 설정](../ansible/config.md)), 서버 mount와 GPU
 driver, 사용자 컨테이너 정의는 미리 준비되어 있어야 한다. `remote-operations`는
 이러한 설정들이 이미 되어 있다는 전제로, 부팅 대상으로 지정된 서버의 상태를 확인하고,
 안전하게 제한할 수 있는 복구만 수행한다.

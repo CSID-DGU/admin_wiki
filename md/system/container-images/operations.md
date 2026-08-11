@@ -100,7 +100,7 @@ image 구성, 시작 동작과 검증에 함께 영향을 주면 표의 관련 �
 갱신한다. 그다음 `variant_matrix.py`가 manifest에서 만들어내는 matrix와 tag를 확인한다.
 
 ```bash
-cd /home/jy/server_manage/container-images
+cd <저장소>/container-images
 python3 scripts/variant_matrix.py \
   --variant cudaX.Y-tfA.B-ubuntu22.04 \
   --date-tag YYMMDD
@@ -161,7 +161,7 @@ build argument를 추가하지 않는다.
 모든 명령은 `container-images` directory에서 실행한다.
 
 ```bash
-cd /home/jy/server_manage/container-images
+cd <저장소>/container-images
 ```
 
 먼저 실제 build 없이 Docker 명령과 생성될 tag를 확인한다.

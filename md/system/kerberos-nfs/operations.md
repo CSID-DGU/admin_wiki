@@ -20,7 +20,7 @@
 요청에 맞게 지정한다.
 
 ```bash
-cd /home/jy/server_manage/user-lifecycle/script
+cd <저장소>/user-lifecycle/script
 
 python3 -B -m uid_manager.cli create-container \
   --server-id FARM8 \
@@ -301,7 +301,7 @@ service keytab과 실제 `kvno`/canary 결과를 함께 본다.
 환경별 keytab 상태는 같은 checker를 profile만 바꿔 읽기 전용으로 확인한다.
 
 ```bash
-cd /home/jy/server_manage/monitoring
+cd <저장소>/monitoring
 health-checks/kerberos-nfs-keytab/script/check-nfs-keytab.sh --profile farm
 health-checks/kerberos-nfs-keytab/script/check-nfs-keytab.sh --profile lab
 ```
@@ -329,7 +329,7 @@ server-side 전체 설정 절차는
 ### 읽기 전용 점검
 
 ```bash
-cd /home/jy/server_manage/monitoring
+cd <저장소>/monitoring
 health-checks/kerberos-nfs-keytab/script/check-nfs-keytab.sh --profile farm
 
 systemctl --user status check-nfs-keytab@farm.timer --no-pager
@@ -350,7 +350,7 @@ profile 값은 [FARM config](https://github.com/CSID-DGU/admin_infra_server/blob
 ### Drift 수동 복구
 
 ```bash
-cd /home/jy/server_manage/kerberos-nfs
+cd <저장소>/kerberos-nfs
 
 ./script/keytab/repair-farm-nas-nfs-keytab.sh --check
 ./script/keytab/repair-farm-nas-nfs-keytab.sh --repair

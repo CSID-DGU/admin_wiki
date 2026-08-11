@@ -246,5 +246,5 @@ LAB NFSv4.1에서는 구형 storage kernel의 idmap deferral이 session slot을 
 조건을 확인한다. keytab은 필요할 때 다음 checker로 읽기 전용 점검한다.
 
 ```bash
-/home/jy/server_manage/monitoring/health-checks/kerberos-nfs-keytab/script/check-nfs-keytab.sh --profile lab
+<저장소>/monitoring/health-checks/kerberos-nfs-keytab/script/check-nfs-keytab.sh --profile lab
 ```

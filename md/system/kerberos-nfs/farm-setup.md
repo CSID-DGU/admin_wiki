@@ -131,7 +131,7 @@ principal을 모두 보존해야 하므로 `svcgssd`를 FARM principal 하나로
 keytab drift는 먼저 읽기 전용 checker로 점검한다.
 
 ```bash
-/home/jy/server_manage/monitoring/health-checks/kerberos-nfs-keytab/script/check-nfs-keytab.sh --profile farm
+<저장소>/monitoring/health-checks/kerberos-nfs-keytab/script/check-nfs-keytab.sh --profile farm
 ```
 
 ## 4. FARM 계산 host

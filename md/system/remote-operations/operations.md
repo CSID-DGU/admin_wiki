@@ -19,7 +19,7 @@
 모든 명령은 다음 directory에서 실행한다.
 
 ```bash
-cd /home/jy/server_manage/remote-operations
+cd <저장소>/remote-operations
 ```
 
 ## 2. 목적별 실행 위치
@@ -42,8 +42,11 @@ cd /home/jy/server_manage/remote-operations
 - `config/remote_boot.local.env`가 준비되어 있다.
 - 대상 서버의 MAC과 broadcast IP가 실제 네트워크와 일치한다.
 - 각 서버의 Wake-on-LAN이 firmware와 NIC에서 활성화되어 있다.
-- 설정한 Ansible inventory로 대상 서버에 SSH 접속할 수 있다.
-- mount와 GPU 복구에 필요한 원격 명령을 `sudo -n`으로 실행할 수 있다.
+- 공용 `ansible/inventory.ini`로 대상 서버에 SSH 접속할 수 있다
+  (`ansible <별칭> -m ping`). 접속 계정은 개인 `~/.ansible.cfg`가 정한다.
+  준비 절차는 [Ansible 설정](../ansible/config.md)에 있다.
+- mount와 GPU 복구에 필요한 원격 명령을 `sudo -n`으로 실행할 수 있다
+  ([Ansible 설정 5장](../ansible/config.md#5-sudo-권한-준비)).
 - 서버의 NFS mount와 NVIDIA driver가 이미 구성되어 있다.
 - 컨테이너 시작 대상 이미지 정규식이 실제 사용자 컨테이너와 일치한다.
 
@@ -217,8 +220,9 @@ status와 이번 boot의 log로 성공 여부를 판단한다.
 ## 7. 새 서버 추가
 
 1. 서버의 Wake-on-LAN을 firmware와 NIC에서 활성화하고 실제 MAC을 확인한다.
-2. 관리 서버의 Ansible inventory에 해당 서버 별칭을 추가하고 SSH 접속을
-   검증한다.
+2. 저장소의 공용 `ansible/inventory.ini`에 해당 서버 별칭을 추가하고 SSH 접속을
+   검증한다. 개인 사본을 만들지 않으며, 갱신 절차는
+   [Ansible 설정 3장](../ansible/config.md#3-공용-inventory)을 따른다.
 3. `REMOTE_BOOT_FARM_TARGETS` 또는 `REMOTE_BOOT_LAB_TARGETS`에 서버 ID를 추가한다.
 4. `REMOTE_BOOT_MAC_<SERVER_ID>`에 MAC을 설정한다.
 5. 구역별 broadcast IP와 요구 mount source, 서버별 mount 경로를 확인한다.

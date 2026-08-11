@@ -317,7 +317,7 @@ Grafana service·persistence·Secret 연결은 FARM Prometheus values에서 관�
 
 | 위치 | 역할 |
 | --- | --- |
-| `monitoring/ansible_playbook/inventory.ini` | FARM/LAB 배포 대상과 SSH 접속 정보 |
+| `ansible/inventory.ini` (저장소 공용) | FARM/LAB 배포 대상 목록. monitoring 전용 사본을 두지 않는다. 접속 계정은 관리자 개인의 `~/.ansible.cfg`가 담당한다([Ansible 설정](../ansible/config.md)) |
 | `monitoring/ansible_playbook/group_vars/exporters.yml` | 두 custom exporter의 공통·서버별 설정 |
 | `monitoring/ansible_playbook/deploy_exporters.yml` | 두 custom exporter build·설치·검증 |
 | `monitoring/ansible_playbook/deploy_prometheus.yml` | FARM/LAB monitoring stack 검증·배포 |

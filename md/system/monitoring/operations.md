@@ -3,6 +3,13 @@
 이 문서는 monitoring 구성 요소를 배포하고 endpoint, metric, alert와 incident를
 점검하는 방법을 설명한다.
 
+> **먼저 [Ansible 설정](../ansible/config.md)을 마쳐야 한다.** 이 문서의 배포
+> 명령은 모두 `ansible-playbook`을 사용하며, 대상 서버 목록과 접속 계정은
+> 관리자 개인의 `~/.ansible.cfg`와 공용 `ansible/inventory.ini`가 담당한다.
+> 이 문서에서는 Ansible 접속 설정을 따로 지정하지 않는다.
+>
+> `<저장소>`는 admin_infra_server를 clone한 경로이며 관리자마다 다르다.
+
 ## 운영 원칙
 
 - `up=1`과 실제 collection freshness를 구분한다(용어는 [설계 문서](design.md)
@@ -16,6 +23,8 @@
   backoff가 설정된 worker를 endpoint 호출로 우회하지 않는다.
 - 배포는 `monitoring/ansible_playbook/`을 기준으로 하고 target host의 개별 install
   script를 운영 entry point로 사용하지 않는다.
+- Ansible 접속 설정(inventory 경로, 접속 계정)은 이 모듈이 갖지 않는다. 관리자
+  개인의 `~/.ansible.cfg`가 담당한다([Ansible 설정](../ansible/config.md)).
 - DB password, Grafana password, webhook과 Kerberos credential은 metric, alert
   label, Git values와 일반 journal에 기록하지 않는다.
 
@@ -44,13 +53,12 @@
 ## 2. Exporter 배포
 
 ```bash
-cd /home/jy/server_manage/monitoring
+cd <저장소>/monitoring
 ```
 
 두 exporter를 한 host에 배포:
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_exporters.yml \
   -e exporter_hosts=farm8
 ```
@@ -58,21 +66,17 @@ ansible-playbook ansible_playbook/deploy_exporters.yml \
 FARM 전체 또는 FARM/LAB 전체:
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_exporters.yml \
   -e exporter_hosts=FARM
 
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_exporters.yml
 ```
 
 한 exporter만 전체 재배포:
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_cluster_monitor_exporter_all.yml
 
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_gpu_user_exporter_all.yml
 ```
 
@@ -95,7 +99,6 @@ gpu-user-exporter.service        -> :30072/metrics, :30072/-/healthy
 NFS GSS readiness/canary/recovery worker:
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_nfs_gss_health.yml \
   -e nfs_gss_health_hosts=lab8
 ```
@@ -103,7 +106,6 @@ ansible-playbook ansible_playbook/deploy_nfs_gss_health.yml \
 NFS forensics:
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_nfs_forensics.yml
 ```
 
@@ -133,14 +135,12 @@ keytab/kinit/kvno/rpc-gssd readiness와 guarded recovery는 유지한다. LAB ca
 FARM 읽기 전용 checker:
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_kerberos_nfs_keytab_check.yml
 ```
 
 LAB을 상시 점검 대상으로 전환한 뒤에만 두 profile을 활성화한다.
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_kerberos_nfs_keytab_check.yml \
   -e '{"keytab_check_profiles":["farm","lab"]}'
 ```
@@ -151,7 +151,7 @@ systemctl --user status check-nfs-keytab@farm.service --no-pager
 ```
 
 checker는 drift를 고치지 않는다. KVNO history, repair와 rotation은
-[Kerberos/NFS 운영](../kerberos-nfs/operations.md#8-farm-nas-service-account-kvno)을
+[Kerberos/NFS 운영](../kerberos-nfs/operations.md#8-farm-nas-service-account와-kvno-운영)을
 따른다.
 
 ## 5. Prometheus/Alertmanager 배포
@@ -160,14 +160,12 @@ checker는 drift를 고치지 않는다. KVNO history, repair와 rotation은
 것)와 cluster precondition만 검증한다.
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_prometheus.yml
 ```
 
 변경 적용:
 
 ```bash
-ANSIBLE_CONFIG=ansible_playbook/ansible.cfg \
 ansible-playbook ansible_playbook/deploy_prometheus.yml \
   -e prometheus_dry_run=false
 ```
@@ -274,7 +272,7 @@ reference이며 실제 FARM release와 값이 다를 수 있다.
 6. mount가 이미 있거나 D-state caller가 있으면 강제 remount를 반복하지 않는다.
 
 Kerberos source는 IP가 아니라 FQDN이어야 한다. 자세한 기준은
-[Kerberos/NFS 운영의 mount 절](../kerberos-nfs/operations.md#5-nfs-mount-source)을
+[Kerberos/NFS 운영의 mount 절](../kerberos-nfs/operations.md#5-nfs-mount-source-확인)을
 따른다.
 
 ### GSS readiness/canary/recovery
@@ -332,7 +330,7 @@ dashboard 원본:
 ## 10. 테스트
 
 ```bash
-cd /home/jy/server_manage/monitoring
+cd <저장소>/monitoring
 
 (cd prometheus/exporters/cluster-monitor-exporter && go test ./...)
 (cd prometheus/exporters/gpu-user-exporter && go test ./...)
@@ -352,7 +350,7 @@ python3 prometheus/config/tests/test_slack_notify_relay.py
 
 ## 11. 새 서버 추가 체크리스트
 
-1. `ansible_playbook/inventory.ini`에 `farmN`/`labN` 형식으로 추가
+1. 공용 `ansible/inventory.ini`에 `farmN`/`labN` 형식으로 추가
 2. `group_vars/exporters.yml`의 mount source, SPN과 환경 기본값 확인
 3. host share target와 public `N89` port 계산 확인
 4. GSS readiness/forensics/exporter 배포

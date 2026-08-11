@@ -1,5 +1,5 @@
-site_name: Server Manage 운영 위키
-site_description: DECS 서버 관리 코드의 핵심 기능, 모듈 경계, 설계 의도와 운영 절차
+site_name: 관리자용 자동화 시스템 매뉴얼
+site_description: DGU AI LAB GPU 서버 자동화 시스템의 설계와 운영 매뉴얼
 docs_dir: wiki-docs
 site_dir: site
 use_directory_urls: true
@@ -131,4 +131,3 @@ nav:
       - LAB & FARM 유저 매뉴얼: user/LAB-FARM-유저-매뉴얼.md
       - AI LAB 홈페이지 이용 방법: user/AI-LAB-홈페이지-이용-방법.md
       - 서버 내 파일 백업하기: user/서버-내-파일-백업하기.md
-  - PDF 다운로드: downloads.md

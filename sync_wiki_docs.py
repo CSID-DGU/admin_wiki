@@ -26,74 +26,6 @@ def page_name(manual: Manual) -> Path:
     return manual.source.relative_to(MD_DIR)
 
 
-def build_downloads() -> str:
-    grouped: dict[str, list[Manual]] = {}
-    for manual in MANUALS:
-        section = Path(manual.output).parts[0]
-        grouped.setdefault(section, []).append(manual)
-
-    lines = [
-        "# PDF 다운로드",
-        "",
-        "PDF는 `md/`의 Markdown에서 생성한 읽기 전용 산출물입니다.",
-        "내용을 수정할 때는 PDF가 아니라 원본 Markdown을 변경한 뒤 다시 export합니다.",
-        "",
-        "[사용자 매뉴얼](pdf/user/user-manual.pdf){ .md-button }",
-        "",
-        "[전체 통합 매뉴얼](pdf/system/server-manage-manual.pdf){ .md-button .md-button--primary }",
-        "",
-        "Backend, Infra, System, User 문서를 모두 합친 PDF입니다.",
-        "",
-        "[ZIP으로 전체 문서 받기](pdf/admin-wiki-manuals.zip){ .md-button }",
-        "",
-        "문서 묶음별 PDF를 압축해 한 번에 내려받을 수 있는 파일입니다.",
-        "",
-        "## 문서 묶음별 PDF",
-        "",
-    ]
-
-    section_titles = {
-        "backend": "Backend",
-        "infra": "Infra",
-        "system": "System",
-        "user": "User",
-    }
-    section_descriptions = {
-        "backend": "승인, API, 인증, 스케줄러 같은 Admin BE 문서 PDF",
-        "infra": "config-server, NodePort, Kerberos, 운영 절차 문서 PDF",
-        "system": "GPU 서버 운영 기반과 모듈별 시스템 문서 PDF",
-        "user": "학생과 연구원이 보는 사용 절차, 홈페이지 사용법, 백업 안내 PDF",
-    }
-
-    for section in ("backend", "infra", "system", "user"):
-        manuals = grouped.get(section)
-        if not manuals:
-            continue
-        lines.append(f"### {section_titles.get(section, section)}")
-        lines.append("")
-        description = section_descriptions.get(section)
-        if description:
-            lines.append(description)
-            lines.append("")
-        for manual in manuals:
-            lines.append(f"- [{manual.label}](pdf/{manual.output})")
-        lines.append("")
-
-    lines.extend(
-        [
-            "## 다시 생성",
-            "",
-            "```bash",
-            "cd /path/to/admin_wiki",
-            "python3 manage.py export",
-            "python3 manage.py sync-now",
-            "```",
-            "",
-        ]
-    )
-    return "\n".join(lines)
-
-
 def sync(output_dir: Path) -> Path:
     output_dir = output_dir.resolve()
     if output_dir.parent != REPO_ROOT.resolve():
@@ -125,8 +57,6 @@ def sync(output_dir: Path) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(asset, target)
 
-    (output_dir / "downloads.md").write_text(build_downloads(), encoding="utf-8")
-
     stylesheet_target = output_dir / "stylesheets"
     stylesheet_target.mkdir(mode=0o755)
     shutil.copy2(ASSET_DIR / "extra.css", stylesheet_target / "extra.css")
@@ -134,11 +64,16 @@ def sync(output_dir: Path) -> Path:
     pdf_target = output_dir / "pdf"
     pdf_target.mkdir(mode=0o755)
     if PDF_DIR.is_dir():
-        for pdf in sorted(PDF_DIR.rglob("*.pdf")):
-            relative = pdf.relative_to(PDF_DIR)
+        artifacts = [
+            path
+            for path in PDF_DIR.rglob("*")
+            if path.is_file() and path.suffix.lower() in {".pdf", ".zip"}
+        ]
+        for artifact in sorted(artifacts):
+            relative = artifact.relative_to(PDF_DIR)
             target = pdf_target / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(pdf, target)
+            shutil.copy2(artifact, target)
     return output_dir
 
 

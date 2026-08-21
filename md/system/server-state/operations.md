@@ -10,11 +10,11 @@
 
 | 작업 | 변경 위치 | 확인 방법 |
 | --- | --- | --- |
-| 서버 추가 | `servers.jsonl`, 공용 `ansible/inventory.ini` | `list-hosts`, `baseline-access` 점검 |
-| FARM/LAB 설정 변경 | `server-state/config/environments.yml` | `plan --show-command`의 extra vars 확인 |
-| 구성요소 추가·수정 | `server-state/components/`, Ansible role·playbook | `describe`, `audit`, `plan` |
-| 실행 형태·안전 수준 변경 | 구성요소 정의와 `server_state/` Python package | 단위 테스트와 승인 동작 확인 |
-| 서버 점검·설정 | `bin/server-state` CLI | 실행 결과와 종료 코드 확인 |
+| [서버 추가](#add-server) | `servers.jsonl`, 공용 `ansible/inventory.ini` | `list-hosts`, `baseline-access` 점검 |
+| [FARM/LAB 설정 변경](#env-config) | `server-state/config/environments.yml` | `plan --show-command`의 extra vars 확인 |
+| [구성요소 추가·수정](#components) | `server-state/components/`, Ansible role·playbook | `describe`, `audit`, `plan` |
+| [실행 형태·안전 수준 변경](#execution-safety) | 구성요소 정의와 `server_state/` Python package | 단위 테스트와 승인 동작 확인 |
+| [서버 점검·설정](#audit) | `bin/server-state` CLI | 실행 결과와 종료 코드 확인 |
 
 ### 사전 조건
 
@@ -23,15 +23,15 @@
 비대화형 sudo 준비는 그 문서가 담당하며 이 문서에서는 다시 설명하지 않는다.
 Ansible 자체가 익숙하지 않다면 [Ansible 기초 개념](../ansible/basic.md)을 먼저 읽는다.
 
-명령은 `admin_infra_server` 저장소를 clone한 루트 디렉터리에서 실행한다. 이 문서에서
-`<저장소>`는 그 경로를 뜻하며, clone 위치는 관리자마다 다를 수 있다.
+명령은 저장소를 clone한 루트 디렉터리에서 실행한다. 이 문서는 홈 디렉터리에
+clone한 경우(`~/admin_infra_server`)를 기준으로 한다.
 
 ```bash
-cd <저장소>
+cd ~/admin_infra_server
 ./server-state/bin/server-state --help
 ```
 
-## 2. 신규 서버 추가
+## 2. 신규 서버 추가 <a id="add-server"></a>
 신규 서버 추가는 서버 정보 등록, Ansible 접속 대상 등록, 접속 점검, 표준 구성
 순서로 진행한다.
 
@@ -112,7 +112,7 @@ Ansible 접속, hostname과 sudo 조건은 `baseline-access` 점검으로 확인
 `kubernetes-membership`은 출력된 운영 절차에 따라 진행한다. 실행 명령과 승인
 옵션은 아래의 **서버 설정** 절에서 설명한다.
 
-## 3. FARM/LAB 환경 설정 변경
+## 3. FARM/LAB 환경 설정 변경 <a id="env-config"></a>
 [`server-state/config/environments.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fserver-state%2Fconfig%2Fenvironments.yml)은
 여러 서버가 공유하는 환경 값을 관리한다.
 
@@ -145,7 +145,7 @@ public health port 계산값은 다음 명령으로 확인한다.
 ./server-state/bin/server-state list-hosts --hosts FARM
 ```
 
-## 4. 구성요소 추가·수정
+## 4. 구성요소 추가·수정 <a id="components"></a>
 구성요소는 하나의 목표 상태와 그 상태를 확인하는 점검 작업, 목표 상태를 만드는
 설정 작업을 묶는다.
 
@@ -229,7 +229,7 @@ converge:
   --show-command
 ```
 
-## 5. 실행 형태와 안전 수준 변경
+## 5. 실행 형태와 안전 수준 변경 <a id="execution-safety"></a>
 설정 작업의 실행 제어는 `converge.kind`와 `converge.safety`로 나뉜다.
 
 ### 5.1 실행 형태
@@ -278,7 +278,7 @@ converge:
 4. 설계 문서와 운영 문서에 영향 범위와 실행 명령을 기록한다.
 5. 한 서버에서 차단·승인·실행·재점검 흐름을 확인한다.
 
-## 6. 대상과 정책 확인
+## 6. 대상과 정책 확인 <a id="targets"></a>
 기존 서버를 점검할 때는 2절(신규 서버 추가)이 아니라 이 절부터 시작한다.
 
 > **선행 조건**: [Ansible 설정](../ansible/config.md)이 끝나 있어야 한다. 특히
@@ -310,9 +310,9 @@ converge:
 `--component`를 생략하면 전체 정책을 선택한다. 여러 번 사용하거나 쉼표로 묶을 수
 있으며, 실행 순서는 정책의 구성요소 순서를 따른다.
 
-## 7. 운영 서버 점검
-점검은 대상 서버를 변경하지 않는다. 실행 전에 6절의 선행
-조건을 확인한다.
+## 7. 운영 서버 점검 <a id="audit"></a>
+점검은 대상 서버를 변경하지 않는다. 실행 전에 [6절(대상과 정책 확인)](#targets)의
+선행 조건을 확인한다.
 
 ### 7.1 실행 명령 확인
 
@@ -456,14 +456,14 @@ GPU workload와 reboot 일정까지 확인한 뒤 승인한다.
 Python 단위 테스트:
 
 ```bash
-cd <저장소>/server-state
+cd ~/admin_infra_server/server-state
 python3 -m unittest discover -s tests -v
 ```
 
 주요 Ansible 구문 검사:
 
 ```bash
-cd <저장소>
+cd ~/admin_infra_server
 ANSIBLE_ROLES_PATH="$PWD/server-state/ansible/roles:$PWD/kerberos-nfs/ansible/roles" \
 ansible-playbook --syntax-check server-state/ansible/playbooks/audit.yml
 

@@ -18,7 +18,7 @@
 
 | 파일 | 담는 내용 | 관리 방식 |
 | --- | --- | --- |
-| `~/admin_infra_server/ansible/inventory.ini` | 서버 목록 (host 이름, IP, SSH port) | 저장소에서 공유. 모든 관리자가 같은 값을 사용한다 |
+| `~/admin_infra_server/ansible/inventory.ini` | 서버 목록 (host 이름, IP, SSH port) | GitHub에서 공유. 모든 관리자가 같은 값을 사용한다 |
 | `~/.ansible.cfg` | 접속 계정, 임시 디렉터리 경로 | 관리자별로 각자 작성한다. 저장소에 넣지 않는다 |
 
 기준은 "이 값이 관리자마다 다른가"이다. 서버 목록은 모두 같으므로 공유하고, 접속

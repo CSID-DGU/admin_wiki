@@ -102,7 +102,7 @@ git clone https://github.com/CSID-DGU/admin_infra_server.git
 | 서버 목록 | host 이름, IP, SSH port | `~/admin_infra_server/ansible/inventory.ini` | 저장소에 이미 있다. `git pull`로 받는다 |
 | 접속 계정과 실행 환경 | 접속 계정, 임시 디렉터리 경로 | `~/.ansible.cfg` | **관리자가 직접 만든다** ([설정](config.md) 4장) |
 
-기준은 "이 값이 관리자마다 다른가"이다. 서버 목록은 모두 같으므로 저장소에서 공유하고,
+기준은 "이 값이 관리자마다 다른가"이다. 서버 목록은 모두 같으므로 GitHub에서 공유하고,
 접속 계정은 각자 다르므로 홈 디렉터리에 둔다. **공유 파일에는 접속 계정을 기록하지
 않는다.**
 

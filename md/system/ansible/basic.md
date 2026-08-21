@@ -9,7 +9,7 @@
 
 | 표현 | 뜻 |
 | --- | --- |
-| 관리용 데스크탑 | 관리자가 명령을 입력하는 자신의 컴퓨터. Ansible은 여기에만 설치한다 |
+| 관리용 데스크탑 | 서버실에 있는 데스크탑. Ansible은 여기에만 설치된다. |
 | 대상 서버 | 명령을 받아 실제 작업이 실행되는 FARM/LAB 서버 |
 | 저장소 | `admin_infra_server`를 `git clone`으로 내려받은 폴더. Git이 관리하는 프로젝트 폴더이며, **홈 디렉터리에 내려받는 것을 기준으로 한다**(`~/admin_infra_server`) |
 
@@ -212,7 +212,7 @@ Ansible이 이 파일을 찾는 곳은 정해져 있다. admin_infra_server에�
 
 | 파일 | 담는 내용 | 공유 여부 |
 | --- | --- | --- |
-| `~/admin_infra_server/ansible/inventory.ini` | 서버 목록 (모두 같다) | 저장소에서 공유 |
+| `~/admin_infra_server/ansible/inventory.ini` | 서버 목록 (모두 같다) | GitHub에서 공유 |
 | `~/.ansible.cfg` | 접속 계정, inventory 경로 (각자 다르다) | 개인이 각자 작성 |
 
 기준은 "이 값이 관리자마다 다른가"이다. 실제 작성 절차는

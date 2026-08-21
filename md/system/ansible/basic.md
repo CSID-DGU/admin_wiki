@@ -9,9 +9,13 @@
 
 | 표현 | 뜻 |
 | --- | --- |
-| 관리 데스크탑 | 관리자가 명령을 입력하는 자신의 컴퓨터. Ansible은 여기에만 설치한다 |
+| 관리용 데스크탑 | 관리자가 명령을 입력하는 자신의 컴퓨터. Ansible은 여기에만 설치한다 |
 | 대상 서버 | 명령을 받아 실제 작업이 실행되는 FARM/LAB 서버 |
-| 저장소 | `admin_infra_server`를 `git clone`으로 내려받은 폴더. Git이 관리하는 프로젝트 폴더이며, 내려받은 위치는 관리자마다 다를 수 있다 |
+| 저장소 | `admin_infra_server`를 `git clone`으로 내려받은 폴더. Git이 관리하는 프로젝트 폴더이며, **홈 디렉터리에 내려받는 것을 기준으로 한다**(`~/admin_infra_server`) |
+
+저장소는 <https://github.com/CSID-DGU/admin_infra_server>에 있다. **관리용 데스크탑의
+관리자 각자 홈 디렉터리에 clone**해서 쓴다. clone 절차는
+[설정 2.3](config.md#clone)에 있다.
 
 ---
 
@@ -20,16 +24,16 @@
 같은 명령을 반복하면 시간이 오래 걸리고, 중간에 한 대를 빠뜨리거나 명령을 잘못
 입력하기 쉽다.
 
-Ansible은 이 과정을 대신한다. 관리 데스크탑에서 명령을 한 번 실행하면 Ansible이
+Ansible은 이 과정을 대신한다. 관리용 데스크탑에서 명령을 한 번 실행하면 Ansible이
 대상 서버들에 SSH로 접속해 작업을 수행하고 결과를 모아서 보여준다.
 
-대상 서버에 Ansible을 설치할 필요는 없다. 관리 데스크탑에만 설치하면 되고,
+대상 서버에 Ansible을 설치할 필요는 없다. 관리용 데스크탑에만 설치하면 되고,
 서버 쪽에는 SSH 접속과 Python만 있으면 된다. 이런 방식을 **agentless**라고 한다.
 
 ```mermaid
 flowchart LR
-    subgraph DESK["관리 데스크탑"]
-        A["Ansible<br/>관리 서버에만 설치한다"]
+    subgraph DESK["관리용 데스크탑"]
+        A["Ansible<br/>여기에만 설치한다"]
         C["~/.ansible.cfg<br/>inventory.ini<br/>playbook · role"]
     end
     subgraph TARGET["대상 서버 (Ansible 설치하지 않는다)"]
@@ -43,7 +47,7 @@ flowchart LR
     L -.->|실행 결과| A
 ```
 
-설정 파일과 작업 내용은 모두 관리 데스크탑에 있고, 대상 서버에는 아무것도 두지
+설정 파일과 작업 내용은 모두 관리용 데스크탑에 있고, 대상 서버에는 아무것도 두지
 않는다. 서버를 새로 추가해도 그 서버에 준비할 것은 SSH 접속과 sudo 권한뿐이다.
 
 
@@ -77,7 +81,7 @@ admin_infra_server에서는 **`ansible.cfg`에만 적는다.** 그렇게 정한 
 ---
 
 ## 3. inventory <a id="inventory"></a>
-inventory는 관리 서버에서 접속하고자 하는 대상 서버 목록이다. Ansible은 여기에 없는 서버에는 접속하지 않는다.
+inventory는 관리용 데스크탑에서 접속하고자 하는 대상 서버 목록이다. Ansible은 여기에 없는 서버에는 접속하지 않는다.
 
 ### 파일 위치
 
@@ -159,7 +163,7 @@ farm8 | SUCCESS => {
 
 ```bash
 # 설정 파일이 없을 때: 매번 inventory와 계정을 지정해야 한다
-ansible farm8 -i /home/suhyeon/CSID-DGU/admin_infra_server/ansible/inventory.ini -u suhyeon -m ping
+ansible farm8 -i ~/admin_infra_server/ansible/inventory.ini -u suhyeon -m ping
 ```
 
 같은 값을 파일에 한 번 적어 두면 옵션 없이 실행할 수 있다.
@@ -167,7 +171,7 @@ ansible farm8 -i /home/suhyeon/CSID-DGU/admin_infra_server/ansible/inventory.ini
 ```ini
 # ~/.ansible.cfg
 [defaults]
-inventory   = /home/suhyeon/CSID-DGU/admin_infra_server/ansible/inventory.ini
+inventory   = ~/admin_infra_server/ansible/inventory.ini
 remote_user = suhyeon
 ```
 
@@ -196,7 +200,7 @@ Ansible이 이 파일을 찾는 곳은 정해져 있다. admin_infra_server에�
 
 | 설정 | 의미 | 관리자마다 다른가 |
 | --- | --- | --- |
-| `inventory` | 사용할 서버 목록 파일 경로 | 다르다 (clone 위치가 다르므로) |
+| `inventory` | 사용할 서버 목록 파일 경로 | 같다 (홈 디렉터리에 clone하는 것을 기준으로 하므로) |
 | `remote_user` | 대상 서버에 접속할 계정 | 다르다 |
 
 ### 왜 개인 파일인가
@@ -208,7 +212,7 @@ Ansible이 이 파일을 찾는 곳은 정해져 있다. admin_infra_server에�
 
 | 파일 | 담는 내용 | 공유 여부 |
 | --- | --- | --- |
-| `<저장소>/ansible/inventory.ini` | 서버 목록 (모두 같다) | 저장소에서 공유 |
+| `~/admin_infra_server/ansible/inventory.ini` | 서버 목록 (모두 같다) | 저장소에서 공유 |
 | `~/.ansible.cfg` | 접속 계정, inventory 경로 (각자 다르다) | 개인이 각자 작성 |
 
 기준은 "이 값이 관리자마다 다른가"이다. 실제 작성 절차는
@@ -565,7 +569,7 @@ ansible-config dump --only-changed
 
 ```bash
 # 실행 결과
-DEFAULT_HOST_LIST(/home/suhyeon/.ansible.cfg) = ['/home/suhyeon/CSID-DGU/admin_infra_server/ansible/inventory.ini']
+DEFAULT_HOST_LIST(/home/suhyeon/.ansible.cfg) = ['/home/suhyeon/admin_infra_server/ansible/inventory.ini']
 DEFAULT_REMOTE_USER(/home/suhyeon/.ansible.cfg) = suhyeon
 ```
 
@@ -592,7 +596,7 @@ pipelining = True
 | --- | --- |
 | `inventory` | 사용할 서버 목록 파일 |
 | `remote_user` | 서버에 접속할 계정 |
-| `local_tmp` | 관리 데스크탑에서 쓰는 임시 디렉터리 |
+| `local_tmp` | 관리용 데스크탑에서 쓰는 임시 디렉터리 |
 | `remote_tmp` | 대상 서버에서 쓰는 임시 디렉터리 |
 | `interpreter_python` | 대상 서버의 Python 경로를 자동으로 찾고 경고를 표시하지 않는다 |
 | `host_key_checking` | SSH host key를 확인할지 여부. `False`면 접속할 때마다 확인을 묻지 않는다 |
@@ -652,7 +656,7 @@ flowchart TD
     C6 --> C7["7. 결과를 모아서 출력한다<br/>PLAY RECAP (5장)"]
 ```
 
-1~3번은 관리 데스크탑에서만 일어나고, 4번부터 대상 서버가 관여한다. 실행이 실패했을
+1~3번은 관리용 데스크탑에서만 일어나고, 4번부터 대상 서버가 관여한다. 실행이 실패했을
 때 어느 단계에서 멈췄는지 알면 원인을 좁힐 수 있다. 단계별 오류와 대응 방법은
 [설정](config.md#8-문제-해결)에 정리되어 있다.
 

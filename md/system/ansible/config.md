@@ -7,7 +7,7 @@
 이 문서는 관리용 데스크탑에서 admin_infra_server의 모듈들을 실행할 수 있도록 Ansible을
 설정하는 방법을 설명한다. 개념 설명은 [기초 개념](basic.md)에 있다.
 
-이 문서는 저장소를 **홈 디렉터리에 clone한 경우**(`~/admin_infra_server`)를 기준으로
+이 문서는 GitHub를 **홈 디렉터리에 clone한 경우**(`~/admin_infra_server`)를 기준으로
 쓰여 있다. `<관리자계정>`은 관리용 데스크탑에서 FARM/LAB 서버에 접속할 본인의 계정 이름을
 뜻하며, 관리자마다 다르므로 자신의 값으로 바꿔서 사용한다.
 
@@ -18,20 +18,21 @@
 
 | 파일 | 담는 내용 | 관리 방식 |
 | --- | --- | --- |
-| `~/admin_infra_server/ansible/inventory.ini` | 서버 목록 (host 이름, IP, SSH port) | GitHub에서 공유. 모든 관리자가 같은 값을 사용한다 |
-| `~/.ansible.cfg` | 접속 계정, 임시 디렉터리 경로 | 관리자별로 각자 작성한다. 저장소에 넣지 않는다 |
+| `~/admin_infra_server/ansible/inventory.ini` | 서버 목록 (host 이름, IP, SSH port) | GitHub에서 공유. 모든 관리자가 같은 값을 사용한다. |
+| `~/.ansible.cfg` | 접속 계정, 임시 디렉터리 경로 | 관리자별로 각자 작성한다. Github에서 공유하지 않는다. |
 
 기준은 "이 값이 관리자마다 다른가"이다. 서버 목록은 모두 같으므로 공유하고, 접속
 계정은 각자 다르므로 개인 파일에 둔다.
 
-> **기존에 이 저장소를 쓰던 관리자에게**: 예전에는 admin_infra_server의 모듈 안에 공유 `ansible.cfg`가
-> 있었고 명령마다 `ANSIBLE_CONFIG=...`를 지정했다. 그 파일은 삭제됐다. 저장소를
-> 최신으로 받은 뒤에는 **`~/.ansible.cfg`가 없으면 모듈 명령이 동작하지 않는다.**
+> **기존에 GitHub를 쓰던 관리자에게**: 예전에는 admin_infra_server의 모듈 안에 공유 `ansible.cfg`가
+> 있었고 명령마다 `ANSIBLE_CONFIG=...`를 지정했다. 그 파일은 삭제됐다. GitHub에서
+> 최신 내용을 받은 뒤에는 **`~/.ansible.cfg`가 없으면 모듈 명령이 동작하지 않는다.**
 > [4장(개인 설정 파일 작성)](#personal-config)의 파일을 먼저 만든다.
 
 **공유 파일에는 접속 계정을 기록하지 않는다.** inventory의 `ansible_user`는
 `~/.ansible.cfg`의 `remote_user`보다 우선하므로, 공유 파일에 계정이 남아 있으면 개인
-설정이 적용되지 않는다.
+설정이 적용되지 않는다. 이 우선순위 규칙은 [기초 개념 6장(설정 파일과
+우선순위)](basic.md#config-priority)에서 자세히 다룬다.
 
 ---
 
@@ -95,22 +96,46 @@ passphrase를 사용해서 키를 생성한다. 두 파일이 만들어진다.
 이 명령도 **관리용 데스크탑에서** 실행하며, 서버마다 한 번씩 반복한다. 이때는 아직
 키가 없으므로 **그 서버의 비밀번호를 묻는다.** 등록에 성공하면 다음부터 묻지 않는다.
 
-```bash
-# FARM (port는 서버마다 다르다)
-ssh-copy-id -p 8081 <관리자계정>@192.168.2.11    # farm1
-ssh-copy-id -p 8082 <관리자계정>@192.168.2.12    # farm2
-ssh-copy-id -p 8086 <관리자계정>@192.168.2.16    # farm6
-ssh-copy-id -p 8087 <관리자계정>@192.168.2.17    # farm7
-ssh-copy-id -p 8088 <관리자계정>@192.168.2.18    # farm8
-ssh-copy-id -p 8089 <관리자계정>@192.168.2.19    # farm9
+서버 16대에 매번 `ssh-copy-id`를 따로 입력할 필요는 없다. 아래처럼 반복문으로 한
+번에 등록한다. **`admin_account=` 줄의 `<관리자계정>`만 자신의 값으로 바꾸면 나머지는
+그대로 복사해서 실행할 수 있다.**
 
-# LAB
-ssh-copy-id -p 8081 <관리자계정>@192.168.1.11    # lab1
-ssh-copy-id -p 8082 <관리자계정>@192.168.1.12    # lab2
-# ... lab10까지 같은 방식
+> `<관리자계정>`은 관리용 데스크탑에서 FARM/LAB 서버에 접속할 때 쓸 본인의 계정
+> 이름이다. [4장](#personal-config)에서 만들 `~/.ansible.cfg`의 `remote_user`에
+> 적는 값과 반드시 같아야 한다.
+
+```bash
+admin_account=<관리자계정>   # 예: suhyeon. 본인이 서버에 접속할 계정 이름으로 바꾼다
+
+targets=(
+  8081:192.168.2.11   # farm1
+  8082:192.168.2.12   # farm2
+  8086:192.168.2.16   # farm6
+  8087:192.168.2.17   # farm7
+  8088:192.168.2.18   # farm8
+  8089:192.168.2.19   # farm9
+  8081:192.168.1.11   # lab1
+  8082:192.168.1.12   # lab2
+  8083:192.168.1.13   # lab3
+  8084:192.168.1.14   # lab4
+  8085:192.168.1.15   # lab5
+  8086:192.168.1.16   # lab6
+  8087:192.168.1.17   # lab7
+  8088:192.168.1.18   # lab8
+  8089:192.168.1.19   # lab9
+  8090:192.168.1.110  # lab10
+)
+
+for target in "${targets[@]}"; do
+  port="${target%%:*}"
+  ip="${target#*:}"
+  ssh-copy-id -p "$port" "$admin_account@$ip"
+done
 ```
 
-IP와 port는 [3장(공용 inventory)](#shared-inventory)의 목록과 같다.
+서버마다 비밀번호를 물어보므로 하나씩 입력하면서 진행한다. 목록은
+[3장(공용 inventory)](#shared-inventory)의 `inventory.ini`와 같은 내용이며, 서버가
+추가·변경되면 이 목록도 함께 갱신해야 한다.
 
 #### ③ 접속 확인
 
@@ -120,17 +145,20 @@ IP와 port는 [3장(공용 inventory)](#shared-inventory)의 목록과 같다.
 ssh -p 8088 <관리자계정>@192.168.2.18
 ```
 
-**비밀번호를 묻지 않고 바로 로그인되면 성공이다.** 비밀번호를 물어보면 그 서버는 아직
-공개키가 등록되지 않은 것이므로 ②를 다시 실행한다. 확인 후 `exit`으로 빠져나온다.
+**대상 서버의 계정 비밀번호를 묻지 않고 바로 로그인되면 성공이다.** ①에서 키를
+만들 때 입력한 **passphrase는 이 확인과 다르다.** 개인키를 쓸 때마다 관리용
+데스크탑이 로컬에서 묻는 값이라 여기서 입력하는 것은 정상이고, 계속 나타난다.
+서버 쪽 **계정 비밀번호**를 물어보면 그 서버는 아직 공개키가 등록되지 않은 것이므로
+②를 다시 실행한다. 확인 후 `exit`으로 빠져나온다.
 
 전체 서버를 한 번에 확인하는 방법은 [6.3 접속 확인](#connection-check)에 있다. 다만 그
 명령은 `~/.ansible.cfg`와 inventory가 준비된 뒤에야 쓸 수 있으므로, 설정을 마친 뒤에
 확인해도 된다.
 
-### 2.3 저장소 clone <a id="clone"></a>
+### 2.3 GitHub clone <a id="clone"></a>
 
 **홈 디렉터리에 clone한다.** 관리자마다 위치가 다르면 설정 파일마다 자기 경로를 찾아
-고쳐야 하므로 위치를 하나로 통일한다. 저장소는 다음 위치에 있다.
+고쳐야 하므로 위치를 하나로 통일한다. GitHub 주소는 다음과 같다.
 
 - <https://github.com/CSID-DGU/admin_infra_server>
 
@@ -205,7 +233,7 @@ lab-storage ansible_host=192.168.1.20 ansible_port=6953
 
 ### 서버를 추가·변경할 때
 
-이 파일은 **저장소에 커밋해서 관리한다.** 관리자가 각자 자기 홈에 사본을 만들어
+이 파일은 **GitHub에 커밋해서 관리한다.** 관리자가 각자 자기 홈에 사본을 만들어
 쓰면 서버가 추가됐을 때 누구는 반영하고 누구는 못 해서 값이 어긋난다.
 
 같은 서버 집합을 나타내는 파일이 하나 더 있다.
@@ -286,7 +314,7 @@ pipelining = True
 | `control_path_dir` | `<관리자계정>` → 서버 접속 계정 |
 
 `inventory` 줄은 홈 디렉터리에 clone했다면 그대로 두면 된다. 다른 위치에 clone했다면
-그 줄만 자신의 경로로 바꾼다([2.3 저장소 clone](#clone) 참고).
+그 줄만 자신의 경로로 바꾼다([2.3 GitHub clone](#clone) 참고).
 
 계정이 `suhyeon`이라면 완성된 파일은 다음과 같다.
 
@@ -459,7 +487,7 @@ ansible --version | grep "config file"
 ansible-config dump --only-changed
 ```
 
-`DEFAULT_HOST_LIST`가 저장소의 inventory를, `DEFAULT_REMOTE_USER`가 본인 계정을
+`DEFAULT_HOST_LIST`가 GitHub의 inventory를, `DEFAULT_REMOTE_USER`가 본인 계정을
 가리키는지 확인한다.
 
 ### 6.3 접속 확인 <a id="connection-check"></a>
@@ -516,7 +544,7 @@ ansible-inventory --host farm8
 
 ## 7. 모듈별 적용 현황 <a id="modules"></a>
 모든 모듈이 이 구조를 사용한다. 모듈마다 inventory 경로를 지정하는 위치가 다르므로,
-저장소를 다른 곳에 clone했다면 아래 파일들의 경로도 함께 맞춘다.
+GitHub를 다른 곳에 clone했다면 아래 파일들의 경로도 함께 맞춘다.
 
 | 모듈 | inventory 지정 위치 | 비고 |
 | --- | --- | --- |
@@ -524,7 +552,7 @@ ansible-inventory --host farm8
 | [`remote-operations`](../remote-operations/index.md) | `config/remote_boot.local.env`의 `REMOTE_BOOT_ANSIBLE_INVENTORY` | **설정 파일이 환경변수를 덮어쓴다.** 셸에서 export해도 이 값이 이긴다 |
 | `user-lifecycle` | `config/db_config.local.env`의 `ANSIBLE_INVENTORY` | `legacy/` 스크립트도 같은 파일을 읽는다 |
 | `user-lifecycle/ad_backup` | `ad_backup/config.local.env`의 `AD_BACKUP_INVENTORY` | **별도 파일이다.** `config.example.env`를 복사해 만든다 |
-| [`monitoring`](../monitoring/index.md) | 지정하지 않으면 저장소의 `ansible/inventory.ini` | 필요하면 `CLUSTER_MONITOR_ANSIBLE_INVENTORY`로 덮어쓴다 |
+| [`monitoring`](../monitoring/index.md) | 지정하지 않으면 GitHub의 `ansible/inventory.ini` | 필요하면 `CLUSTER_MONITOR_ANSIBLE_INVENTORY`로 덮어쓴다 |
 | [`kerberos-nfs`](../kerberos-nfs/index.md) | 해당 없음 | role만 제공하며 `server-state`를 통해 실행된다 |
 
 `*.local.env` 파일은 모두 Git에서 제외된다. 각 모듈의 `*.example.env`를 복사해 자신의
@@ -629,7 +657,7 @@ paramiko 라이브러리의 경고이며 작업 결과와 무관하다. 무시�
 | --- | --- | --- |
 | 1 | [Ansible 설치](#install) | `ansible --version` |
 | 2 | [전체 서버에 SSH 키 등록](#ssh-key) | `ssh -p <port> <계정>@<IP>` (비밀번호를 묻지 않아야 한다) |
-| 3 | [저장소 clone](#clone) | `ls ~/admin_infra_server/ansible/inventory.ini` |
+| 3 | [GitHub clone](#clone) | `ls ~/admin_infra_server/ansible/inventory.ini` |
 | 4 | [`~/.ansible.cfg` 작성](#personal-config) | `ansible --version \| grep "config file"` |
 | 5 | [전체 서버 NOPASSWD sudo 설정](#sudo) | `ansible 'FARM:LAB' -f 1 -m command -a 'sudo -n true' -o` |
 | 6 | [sudoers 파일 검증](#sudoers-check) | `ansible 'FARM:LAB' -f 1 -b -m command -a 'visudo -c' -o` |

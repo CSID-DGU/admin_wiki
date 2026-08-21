@@ -85,7 +85,7 @@ inventory는 관리용 데스크탑에서 접속하고자 하는 대상 서버 �
 
 ### 파일 위치
 
-admin_infra_server에서는 저장소의 `ansible/inventory.ini` 하나를 관리자 전원이
+admin_infra_server에서는 GitHub의 `ansible/inventory.ini` 하나를 관리자 전원이
 공유한다. 서버가 추가되면 이 파일만 갱신하고 나머지 관리자는 `git pull`로 받는다.
 
 관리자가 이 파일을 실행할 때마다 지정할 필요는 없다. 경로를 한 번 적어 두면
@@ -189,7 +189,7 @@ Ansible이 이 파일을 찾는 곳은 정해져 있다. admin_infra_server에�
 | --- | --- |
 | 위치 | 홈 디렉터리 (`/home/<관리자계정>/`) |
 | 이름 | 반드시 `.ansible.cfg` (앞의 점 포함) |
-| 관리 | 관리자마다 각자 작성한다. 저장소에 넣지 않는다 |
+| 관리 | 관리자마다 각자 작성한다. GitHub에 넣지 않는다 |
 
 `~/ansible/ansible.cfg`처럼 **폴더를 만들어 그 안에 두면 무시된다.** 정확한 탐색
 순서와 이 규칙은 [6장](#config-priority)에서 다룬다.
@@ -381,7 +381,7 @@ TASK [baseline_access : Verify non-interactive sudo] ***************************
 `audit.yml`의 두 번째 항목이 바로 이것이다. **오류가 났을 때 이 줄만 보면 어느
 파일의 어느 부분인지 바로 찾을 수 있다.**
 
-playbook과 role은 **저장소에서 관리하는 작업 내용**이므로 관리자가 개인적으로
+playbook과 role은 **GitHub에서 관리하는 작업 내용**이므로 관리자가 개인적으로
 수정하거나 옮기지 않는다. 관리자가 준비하는 것은 inventory와 접속 계정뿐이다.
 
 ### 실행 결과 읽기

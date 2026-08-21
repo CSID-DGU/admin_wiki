@@ -35,11 +35,11 @@ flowchart LR
 farm8에 접속하고 점검을 수행한다. 그래서 Ansible 설정이 없으면 어떤 모듈 명령도
 서버에 접속하지 못하고 실패한다.
 
-## 저장소부터 받는다
+## GitHub에서 받는다
 
-Ansible 설정과 각 모듈의 코드는 모두 `admin_infra_server` 저장소에 있다.
+Ansible 설정과 각 모듈의 코드는 모두 GitHub의 `admin_infra_server`에 있다.
 
-- 저장소: <https://github.com/CSID-DGU/admin_infra_server>
+- GitHub: <https://github.com/CSID-DGU/admin_infra_server>
 - **관리용 데스크탑의 관리자 각자 홈 디렉터리에 clone한다** (`~/admin_infra_server`).
   관리자마다 clone 위치가 다르면 설정 파일마다 자기 경로를 따로 맞춰야 하므로, 위치를
   홈 디렉터리로 통일한다.
@@ -70,7 +70,7 @@ git clone https://github.com/CSID-DGU/admin_infra_server.git
 - inventory(대상 서버 목록), playbook과 role(작업 내용), 설정 파일 탐색 순서,
   권한 상승(`become`)을 다룬다.
 - 이미 Ansible을 다뤄봤다면 건너뛰고 [설정](config.md)으로 가도 된다. 다만 설정
-  파일 우선순위(6장)와 전체 흐름 정리(8장)는 이 저장소의 구조를 이해하는 데 필요하다.
+  파일 우선순위(6장)와 전체 흐름 정리(8장)는 이 GitHub의 구조를 이해하는 데 필요하다.
 
 ### 2. 실제 준비는 설정 문서에서 한다
 
@@ -99,7 +99,7 @@ git clone https://github.com/CSID-DGU/admin_infra_server.git
 
 | 구분 | 내용 | 파일 | 누가 만드나 |
 | --- | --- | --- | --- |
-| 서버 목록 | host 이름, IP, SSH port | `~/admin_infra_server/ansible/inventory.ini` | 저장소에 이미 있다. `git pull`로 받는다 |
+| 서버 목록 | host 이름, IP, SSH port | `~/admin_infra_server/ansible/inventory.ini` | GitHub에 이미 있다. `git pull`로 받는다 |
 | 접속 계정과 실행 환경 | 접속 계정, 임시 디렉터리 경로 | `~/.ansible.cfg` | **관리자가 직접 만든다** ([설정](config.md) 4장) |
 
 기준은 "이 값이 관리자마다 다른가"이다. 서버 목록은 모두 같으므로 GitHub에서 공유하고,
@@ -119,6 +119,6 @@ git clone https://github.com/CSID-DGU/admin_infra_server.git
 - 각 모듈이 **무엇을 점검하고 무엇을 바꾸는지**는 다루지 않는다. 그건 모듈 문서의
   내용이다. 예를 들어 서버 상태 점검 기준은
   [server-state 설계](../server-state/design.md)에 있다.
-- Ansible의 모든 기능을 설명하지 않는다. 이 저장소의 모듈을 쓰는 데 필요한 개념과
+- Ansible의 모든 기능을 설명하지 않는다. 이 GitHub의 모듈을 쓰는 데 필요한 개념과
   절차만 다룬다.
 - SSH 개인키, 비밀번호, keytab 같은 실제 값은 적지 않는다. 준비 절차와 확인 방법만 적는다.

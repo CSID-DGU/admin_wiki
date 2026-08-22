@@ -40,6 +40,18 @@ software 버전을 골라도) 똑같은 `alice` 계정과 홈을 그대로 이�
 사용자는 어떤 이미지 버전을 고르든 같은 방식으로 자기 계정·홈·SSH·Jupyter를
 쓸 수 있다.
 
+예를 들어 alice가 `cuda11.8-tf2.13-ubuntu22.04`를 쓸 때와
+`cuda12.5-tf2.20-ubuntu22.04`를 쓸 때를 비교하면 이렇다.
+
+| | `cuda11.8-tf2.13-ubuntu22.04` | `cuda12.5-tf2.20-ubuntu22.04` |
+| --- | --- | --- |
+| 계정·홈·SSH(`entrypoint.sh`가 구성) | `alice`, UID 1001, 홈 `/home/alice` — 동일 | `alice`, UID 1001, 홈 `/home/alice` — 동일 |
+| GPU software(`image-variants.json`에서 정의) | CUDA 11.8 / TensorFlow 2.13.0 | CUDA 12.5 / TensorFlow 2.20.0 |
+
+alice 입장에서는 접속 방법과 자기 파일이 그대로인 채로, 어떤 이미지를
+골랐는지에 따라 실제로 쓸 수 있는 CUDA/TensorFlow 버전만 달라지는
+것이다.
+
 ## 2. 사용자 실행 환경
 
 `Dockerfile`은 모든 이미지 버전에 필요한 프로그램과 `entrypoint.sh`를 image에

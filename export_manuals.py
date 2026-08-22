@@ -200,6 +200,7 @@ COMBINED_MANUALS = (
     MANUAL_BY_SLUG["infra"],
     MANUAL_BY_SLUG["kdc-setup"],
     MANUAL_BY_SLUG["server-manage"],
+    MANUAL_BY_SLUG["ansible"],
     MANUAL_BY_SLUG["server-state"],
     MANUAL_BY_SLUG["container-images"],
     MANUAL_BY_SLUG["monitoring"],

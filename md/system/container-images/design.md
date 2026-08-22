@@ -8,30 +8,37 @@
 
 ## 1. 개요
 
-`container-images`의 목표는 GPU container가 시작된 직후 사용자가 자신의
-계정과 공유 홈으로 접속하고, 선택한 GPU software 환경에서 바로 작업을 시작할
-수 있게 하는 것이다.
+사용자가 웹에서 GPU 서버 사용을 신청하고 관리자가 승인하면, `infra`
+시스템(`config-server`)이 계정을 만들고, 홈 디렉터리를
+준비하고, GPU container를 실행하고, 접속 포트를 여는 순서로 작업한다 —
+이 전체 흐름은 [infra 개요](../../infra/개요.md)에 있다.
+**`container-images`가 다루는 건 이 중 "GPU container를 실행한다" 단계,
+정확히는 그 container의 내부다.** container를 만들고 실행하는 행위
+자체는 `container-images`가 아니라 `infra`가 한다.
 
-`container-images`는 GPU container용 image(`Dockerfile`과
-`image-variants.json`)와, 그 image에 담겨 있다가 container가 시작될 때 자동
-실행되는 `entrypoint.sh`를 관리하는 모듈이다. 실제로 container를 만들고
-실행하는 행위(`docker run`)는 `infra`라는 별도 시스템이 수행하며,
-`container-images`의 역할은 그 실행이 시작된 뒤 image에 포함된
-`entrypoint.sh`가 넘겨받은 입력으로 사용자 환경을 구성하는 지점부터다.
+`infra`는 container를 만들 때 그 사용자의 `UID`/`GID`, 그룹, 공유 홈
+경로 같은 값을 함께 넘긴다. 예를 들어 `USER_ID=alice`, `UID=1001`,
+`GID=1001`을 넘기면, container 안에서 `container-images`가 관리하는
+`entrypoint.sh`가 그 값을 받아 `alice` 계정을 만들고 SSH·Jupyter를 그
+권한으로 띄운다. 그래서 사용자는 로그인하자마자 바로 자기 계정과 공유
+홈으로 작업을 시작할 수 있다.
 
-모든 container는 전달받은 UID/GID로 계정과 그룹을 구성한다. 홈 디렉터리는 
-컨테이너 밖의 공유 스토리지이므로, 그 안에 이미 있는 `.bashrc` 같은
-사용자 설정 파일이나 `vnc_password.txt` 같은 서비스별 password 파일이 있으면
-새로 만들지 않고 그대로 이어서 사용한다. SSH와 Jupyter를 기본으로 제공하고,
-필요한 경우 VNC와 Kerberos ccache 환경도 함께 구성한다. UID/GID와 홈이 항상
-같은 값으로 전달되므로, container를 재시작하거나 다른 이미지 버전을 선택해도
-같은 사용자(identity)와 작업 환경을 유지한다.
+나중에 같은 값으로 container를 다시 만들어도(재시작하거나 다른 GPU
+software 버전을 골라도) 똑같은 `alice` 계정과 홈을 그대로 이어서 쓴다 —
+홈이 container 밖 공유 스토리지에 있고, `infra`가 넘기는 `UID`/`GID`가
+항상 같기 때문이다.
 
-계정, supplemental group, 홈 디렉터리와 Kerberos 정보처럼 사용자와 host마다
-달라지는 값은 공통 `entrypoint.sh`가 시작 시 반영한다. CUDA, TensorFlow,
-Python과 Ubuntu 조합은 각각의 이미지 버전으로 제공한다. 따라서 사용자는 필요한
-GPU software 조합을 선택하면서도 모든 이미지 버전에서 동일한 방식으로 SSH, Jupyter,
-VNC와 공유 홈을 사용할 수 있다.
+`container-images`가 관리하는 건 이렇게 두 가지로 나뉜다.
+
+| 관리 대상 | 역할 | 자세한 내용 |
+| --- | --- | --- |
+| `entrypoint.sh` | container가 시작될 때 실행되는 스크립트. 전달받은 값으로 계정·홈·SSH·Jupyter·VNC·Kerberos를 구성한다. 모든 이미지 버전이 이 스크립트 하나를 공유한다 | 2절 |
+| `Dockerfile` + `image-variants.json` | CUDA·TensorFlow·Python 같은 GPU software 조합을 이미지 버전별로 정의한다 | 3절 |
+
+즉 계정·홈·SSH 같은 사용자 실행 환경은 모든 이미지 버전에서 똑같이
+동작하고, GPU software 조합만 이미지 버전에 따라 달라진다 — 그래서
+사용자는 어떤 이미지 버전을 고르든 같은 방식으로 자기 계정·홈·SSH·Jupyter를
+쓸 수 있다.
 
 ## 2. 사용자 실행 환경
 

@@ -687,6 +687,35 @@ admin_infra_server/
 | [`ansible/roles/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Fansible%2Froles) | 구성요소별 점검·설정 task |
 | [`kerberos-nfs/ansible/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fkerberos-nfs%2Fansible) | Kerberos/NFS 점검·설정 task |
 | [`monitoring/ansible_playbook/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fmonitoring%2Fansible_playbook) | exporter 점검·배포 playbook |
-| `ansible/inventory.ini` | 관리자 전원이 공유하는 Ansible 접속 대상 목록 (접속 계정은 포함하지 않는다) |
-| `user-lifecycle/server_info/servers.jsonl` | 서버 상세 정보 (`user-lifecycle` 소유) |
+| [`ansible/inventory.ini`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fansible%2Finventory.ini) | 관리자 전원이 공유하는 Ansible 접속 대상 목록 (접속 계정은 포함하지 않는다) |
+| [`user-lifecycle/server_info/servers.jsonl`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Fblob%2Fmain%2Fuser-lifecycle%2Fserver_info%2Fservers.jsonl) | 서버 상세 정보 (`user-lifecycle` 소유) |
 | [`tests/`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server%2Ftree%2Fmain%2Fserver-state%2Ftests) | 정책, 서버 정보, 명령 구성과 승인 test |
+
+## 7. 용어 정리
+
+용어를 누르면 그 용어를 설명하는 절로 이동한다.
+
+| 용어 | 의미 | 설명 위치 |
+| --- | --- | --- |
+| 구성요소(component) | "무엇을 확인하고, 틀렸으면 어떻게 고칠지"를 하나로 묶은 단위. 10개가 있다 | 1절, 3절 |
+| 정책(policy) | 10개 구성요소를 어떤 순서로 다룰지 정한 목록 파일 하나 | 1절, 3절, 5.1절 |
+| 구성요소 정의 | 구성요소 하나를 기술하는 파일(`components/<id>.yml`) | 2절, 5.1절 |
+| [정상 상태](#def-desired-state) | 구성요소가 만족해야 할 목표. `desired_state` 값 그대로 | 3.2절 |
+| [점검(audit)](#def-audit) | 정상 상태인지 확인하는 방법(읽기 전용, 서버를 바꾸지 않는다) | 3.2절 |
+| [설정(converge)](#def-converge) | 정상 상태로 만드는 방법(실제로 서버를 바꾼다) | 3.2절 |
+| [설정 실행](#def-execution) | 설정을 누가, 어떤 승인으로 실행할지의 조건 | 3.2절 |
+| [실행 형태](#def-exec-form) | 설정을 자동(`ansible-playbook`)으로 하는지 수동(`manual`)으로 하는지 | 3.2절 |
+| [안전 수준](#def-safety-level) | 실행 전 필요한 승인 정도. `safe`/`gated`/`risky` | 3.2절 |
+| 운영 영향 / 작업 영향 / 운영 일정 | `gated`/`risky` 실행 전에 확인해야 하는 것들(재시작 영향, GPU 작업 영향, 시점) | 3.2절 |
+| [`describe`](#sec-3-3) | 서버에 접속하지 않고 구성요소 정의를 보여주는 명령 | 3.3절 |
+| `audit`(명령) | 서버를 점검만 하는 명령(읽기 전용) | 3.4절 |
+| [`plan`](#sec-3-5) | 적용하면 무엇이 바뀔지 미리 보여주는 명령(실행하지 않는다) | 3.5절 |
+| [`apply`](#section-apply) | 실제로 서버를 정상 상태로 만드는 명령 | 3.6절 |
+| `--hosts` | 대상 서버를 고르는 옵션 | 3.1절 |
+| `--component` | 대상 구성요소를 고르는 옵션 | 3.1절 |
+| `--show-command` | 서버에 접속하지 않고 만들어질 명령만 보여주는 옵션 | 3.4절 |
+| `--execute` | `apply`가 실제로 실행하게 하는 옵션 | 3.6절 |
+| `--approve-gated` / `--approve-risky` | `gated`/`risky` 구성요소를 `apply`로 실행하는 데 필요한 승인 옵션 | 3.6절 |
+| FARM / LAB | 서버가 속한 두 환경 구분 | 1절, 5.2절 |
+| `servers.jsonl` | 서버 상세 정보 파일. `user-lifecycle` 소유, 실제 접속에는 안 쓰인다 | 2절, 4.1절, 6절 |
+| `inventory.ini` | 관리자 공용 Ansible 접속 대상 목록. 실제 SSH 접속 주소를 여기서 결정한다 | 2절, 4.1절, 6절 |

@@ -43,10 +43,6 @@ Ansible은 다섯 모듈과 나란히 있는 여섯 번째 모듈이 아니라, 
 | [`remote-operations`](remote-operations/index.md) | 서버를 원격으로 켜고, 쓸 수 있는 상태인지 확인한 뒤 사용자 컨테이너를 시작한다 |
 | [`kerberos-nfs`](kerberos-nfs/index.md) | Kerberos로 사용자를 인증하고 그 신원에 맞는 NFS 공유 스토리지 권한을 적용한다 |
 
-세 모듈은 다루는 시점이 서로 비슷해 보이지만 역할이 다르다. `server-state`는
-**기준에 맞게 고치고**, `remote-operations`는 **부팅 시점에 한 번 확인하고**,
-`monitoring`은 **계속 지켜본다.**
-
 ## PDF와 세부 매뉴얼
 
 | 매뉴얼 | 상세 매뉴얼 | PDF |

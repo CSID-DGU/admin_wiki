@@ -1,13 +1,13 @@
 # Ansible 설정
 
-> [개요](index.md) · [기초 개념](basic.md)
+> [개요](index.md) · [기초 개념](basic.md) · [GitHub](https://github.com/CSID-DGU/admin_infra_server)
 
 ## 1. 개요
 
-이 문서는 관리용 데스크탑에서 admin_infra_server의 모듈들을 실행할 수 있도록 Ansible을
+이 매뉴얼은 관리용 데스크탑에서 admin_infra_server의 모듈들을 실행할 수 있도록 Ansible을
 설정하는 방법을 설명한다. 개념 설명은 [기초 개념](basic.md)에 있다.
 
-이 문서는 GitHub를 **홈 디렉터리에 clone한 경우**(`~/admin_infra_server`)를 기준으로
+이 매뉴얼은 GitHub를 **홈 디렉터리에 clone한 경우**(`~/admin_infra_server`)를 기준으로
 쓰여 있다. `<관리자계정>`은 관리용 데스크탑에서 FARM/LAB 서버에 접속할 본인의 계정 이름을
 뜻하며, 관리자마다 다르므로 자신의 값으로 바꿔서 사용한다.
 
@@ -167,7 +167,7 @@ cd ~
 git clone https://github.com/CSID-DGU/admin_infra_server.git
 ```
 
-결과 경로는 다음과 같고, 이 문서의 모든 예시는 이 위치를 전제로 한다.
+결과 경로는 다음과 같고, 이 매뉴얼의 모든 예시는 이 위치를 전제로 한다.
 
 ```
 ~/admin_infra_server
@@ -588,7 +588,7 @@ Ansible 실행은 [기초 개념](basic.md#overall-flow)의 실행 순서를 따
 | 3. 접속 계정 결정 | 의도하지 않은 계정으로 접속한다 | inventory에 `ansible_user`가 남아 있다 | [8.4](#trouble-wrong-user) |
 | 4. SSH 접속 | `Permission denied`, `UNREACHABLE` | SSH 키가 등록되지 않았거나 계정이 맞지 않다 | [2.2](#ssh-key) |
 | 5. 권한 상승 | `Missing sudo password` | 대상 서버에 NOPASSWD sudo가 없다 | [8.2](#trouble-sudo-password) |
-| 6. 작업 실행 | `failed`, `fatal` | 서버 상태가 기준과 다르거나 작업이 오류를 냈다 | 해당 모듈 문서 |
+| 6. 작업 실행 | `failed`, `fatal` | 서버 상태가 기준과 다르거나 작업이 오류를 냈다 | 해당 모듈 매뉴얼 |
 
 관리용 데스크탑에서 일어나는 1~3번은 설정 파일 문제이고, 4번부터는 대상 서버 문제다.
 
@@ -664,7 +664,7 @@ paramiko 라이브러리의 경고이며 작업 결과와 무관하다. 무시�
 | 7 | [접속 확인](#connection-check) | `ansible farm8 -m ping` |
 | 8 | 모듈에서 최종 확인 | `server-state audit --hosts farm --component baseline-access` |
 
-8단계가 모두 통과하면 모듈 문서의 절차를 수행할 수 있다. 마지막 단계는 접속·계정·sudo
+8단계가 모두 통과하면 모듈 매뉴얼의 절차를 수행할 수 있다. 마지막 단계는 접속·계정·sudo
 세 가지를 한 번에 확인하므로, 여기서 모든 서버가 `OK`면 설정이 끝난 것이다.
 
 모듈별로 `*.local.env`를 쓰는 경우에는 [7장(모듈별 적용 현황)](#modules)의

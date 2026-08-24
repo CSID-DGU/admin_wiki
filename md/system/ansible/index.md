@@ -1,11 +1,13 @@
 # ansible 개요
 
-`ansible` 문서는 admin_infra_server의 모듈들이 공통으로 사용하는 **실행 기반**을
+> [기초 개념](basic.md) · [설정](config.md) · [GitHub](https://github.com/CSID-DGU/admin_infra_server)
+
+`ansible` 매뉴얼은 admin_infra_server의 모듈들이 공통으로 사용하는 **실행 기반**을
 설명한다. `container-images`, `kerberos-nfs`, `monitoring`, `remote-operations`,
 `server-state`는 각각 담당하는 기능이 다르지만, 서버에 실제로 명령을 보내는 방식은
-모두 같다. 그 방식이 Ansible이고, 이 문서는 Ansible을 사용하기 위한 준비 과정을 다룬다.
+모두 같다. 그 방식이 Ansible이고, 이 매뉴얼은 Ansible을 사용하기 위한 준비 과정을 다룬다.
 
-처음 보는 사람은 이 페이지에서 "어떤 문서를 먼저 읽어야 하는지"를 잡고, 각 문서
+처음 보는 사람은 이 페이지에서 "어떤 매뉴얼을 먼저 읽어야 하는지"를 잡고, 각 매뉴얼
 안에서 세부 내용을 내려가면 된다.
 
 ## Ansible이 무엇을 하나
@@ -35,25 +37,14 @@ flowchart LR
 farm8에 접속하고 점검을 수행한다. 그래서 Ansible 설정이 없으면 어떤 모듈 명령도
 서버에 접속하지 못하고 실패한다.
 
-## GitHub에서 받는다
+Ansible 설정과 각 모듈의 코드는 GitHub의
+`admin_infra_server`(<https://github.com/CSID-DGU/admin_infra_server>)에 있다.
+관리용 데스크탑의 관리자 각자 홈 디렉터리에 clone해서 쓰며, 자세한 절차는
+[설정 2.3](config.md#clone)에 있다.
 
-Ansible 설정과 각 모듈의 코드는 모두 GitHub의 `admin_infra_server`에 있다.
+## 상황별로 볼 곳
 
-- GitHub: <https://github.com/CSID-DGU/admin_infra_server>
-- **관리용 데스크탑의 관리자 각자 홈 디렉터리에 clone한다** (`~/admin_infra_server`).
-  관리자마다 clone 위치가 다르면 설정 파일마다 자기 경로를 따로 맞춰야 하므로, 위치를
-  홈 디렉터리로 통일한다.
-
-```bash
-cd ~
-git clone https://github.com/CSID-DGU/admin_infra_server.git
-```
-
-자세한 clone 절차는 [설정 2.3](config.md#clone)에 있다.
-
-## 어디부터 보면 되나
-
-| 상황 | 확인할 문서 |
+| 상황 | 확인할 매뉴얼 |
 | --- | --- |
 | 관리용 데스크탑을 처음 준비한다 | [설정](config.md) 2장부터 순서대로 따라간다 |
 | Ansible이라는 도구가 낯설거나 `inventory`, `playbook`, `become` 같은 용어를 모르겠다 | [기초 개념](basic.md) |
@@ -62,9 +53,9 @@ git clone https://github.com/CSID-DGU/admin_infra_server.git
 | 서버를 새로 추가했다 | [설정](config.md) 3장 공용 inventory |
 | 다른 관리자가 새로 합류한다 | [설정](config.md) 9장 신규 관리자 체크리스트 |
 
-## 문서는 이런 순서로 이어진다
+## 매뉴얼 읽기 순서
 
-### 1. 도구를 모르면 기초부터 본다
+### 1. Ansible을 모르면 기초 개념부터 본다
 
 - [기초 개념](basic.md)은 Ansible이 무엇을 어떤 순서로 하는지 설명한다.
 - inventory(대상 서버 목록), playbook과 role(작업 내용), 설정 파일 탐색 순서,
@@ -72,25 +63,25 @@ git clone https://github.com/CSID-DGU/admin_infra_server.git
 - 이미 Ansible을 다뤄봤다면 건너뛰고 [설정](config.md)으로 가도 된다. 다만 설정
   파일 우선순위(6장)와 전체 흐름 정리(8장)는 이 GitHub의 구조를 이해하는 데 필요하다.
 
-### 2. 실제 준비는 설정 문서에서 한다
+### 2. 실제 준비는 설정 매뉴얼에서 한다
 
-- [설정](config.md)이 이 묶음의 중심 문서다.
+- [설정](config.md)이 Anible 매뉴얼 중 핵심 내용을 담고 있다.
 - 관리용 데스크탑에서 무엇을 설치하고, 어떤 파일을 만들고, 서버에 어떤 권한을 준비해야
   하는지를 순서대로 다룬다.
 - 준비가 끝났는지 확인하는 절차(6장)와 실패했을 때 원인을 찾는 표(8장)도 여기 있다.
 
-### 3. 준비가 끝나면 각 모듈 문서로 간다
+### 3. 설정이 끝나면 각 모듈 매뉴얼로 간다
 
-- Ansible 설정은 한 번만 하면 되고, 그다음부터는 각 모듈 문서의 절차를 따른다.
-- 모듈 문서는 Ansible 설정이 끝나 있다고 전제하고 쓰여 있다.
+- Ansible 설정은 한 번만 하면 되고, 그다음부터는 각 모듈 매뉴얼의 절차를 따른다.
+- 모듈 매뉴얼은 Ansible 설정이 끝나 있다고 전제하고 쓰여 있다.
 
-## 문서 지도
+## 매뉴얼 지도
 
-| 문서 | 역할 | 여기서 이해하는 내용 |
+| 매뉴얼 | 역할 | 여기서 이해하는 내용 |
 | --- | --- | --- |
-| 개요 (현재 페이지) | 출발점 | Ansible이 하는 일, 설정을 두 곳으로 나누는 이유, 문서 순서 |
+| 개요 (현재 페이지) | 출발점 | Ansible이 하는 일, 설정을 두 곳으로 나누는 이유, 매뉴얼 순서 |
 | [기초 개념](basic.md) | 배경지식 보충 | inventory, playbook, role, 설정 파일 우선순위, `become`, 실행 결과 읽는 법 |
-| [설정](config.md) | 중심 문서 | `~/.ansible.cfg` 작성, 공용 inventory, NOPASSWD sudo 준비, 확인과 문제 해결 |
+| [설정](config.md) | 중심 매뉴얼 | `~/.ansible.cfg` 작성, 공용 inventory, NOPASSWD sudo 준비, 확인과 문제 해결 |
 
 ## 설정 구조
 
@@ -112,11 +103,11 @@ git clone https://github.com/CSID-DGU/admin_infra_server.git
 2. 대상 서버에 본인 계정의 SSH 키 등록 (2장)
 3. 대상 서버에 본인 계정의 NOPASSWD sudo 설정 (5장)
 
-## 이 문서가 다루는 범위
+## 이 매뉴얼이 다루는 범위
 
 - 관리용 데스크탑에서 FARM/LAB 서버에 접속하기 위한 **공통 준비**를 다룬다. 접속 대상,
   접속 계정, 권한, 그리고 준비가 됐는지 확인하는 방법이다.
-- 각 모듈이 **무엇을 점검하고 무엇을 바꾸는지**는 다루지 않는다. 그건 모듈 문서의
+- 각 모듈이 **무엇을 점검하고 무엇을 바꾸는지**는 다루지 않는다. 그건 모듈 매뉴얼의
   내용이다. 예를 들어 서버 상태 점검 기준은
   [server-state 설계](../server-state/design.md)에 있다.
 - Ansible의 모든 기능을 설명하지 않는다. 이 GitHub의 모듈을 쓰는 데 필요한 개념과

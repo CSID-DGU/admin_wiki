@@ -1,11 +1,11 @@
 # Ansible 기초 개념
 
-> [개요](index.md) · [설정](config.md)
+> [개요](index.md) · [설정](config.md) · [GitHub](https://github.com/CSID-DGU/admin_infra_server)
 
-이 문서는 Ansible을 처음 다루는 관리자를 위해 [설정](config.md) 문서를 읽는 데
+이 매뉴얼은 Ansible을 처음 다루는 관리자를 위해 [설정](config.md) 매뉴얼을 읽는 데
 필요한 개념만 모아 둔다. 실제 설정 절차는 [설정](config.md)에 있다.
 
-이 문서에서 반복해서 쓰는 표현은 다음과 같다.
+이 매뉴얼에서 반복해서 쓰는 표현은 다음과 같다.
 
 | 표현 | 뜻 |
 | --- | --- |

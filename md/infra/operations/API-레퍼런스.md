@@ -27,7 +27,7 @@ config-server의 HTTP API 명세다. 배포된 API 목록은 config-server의 Sw
 | 인증 | `X-Internal-Token` 헤더. Secret `config-server-api-token`이 설정된 환경에서 없거나 틀리면 **401** `UNAUTHORIZED`. 토큰 없이 열린 경로는 `GET /health`, `GET /requests/{request_id}/status`, API 문서(`/apidocs`, `/apispec_1.json`)뿐이다 |
 | 계정 접두어 | `accounts.prefix`가 설정된 환경은 그 접두어로 시작하지 않는 계정에 대한 변경 요청을 **403**으로 거절한다 |
 | 입력 검증 | 본문을 요청 모델로 검사해 실패하면 **400** `INVALID_REQUEST`. 모르는 필드는 무시하고 문자열 앞뒤 공백은 지운다 |
-| 오류 형식 | `infra_error` — `step`(실패한 단계), `error`(코드), `detail`, 필요하면 `rollback`·`errors`. 그룹 API만 `{"error": "..."}` 단순 형식 |
+| 오류 형식 | 모든 실패가 `infra_error` — `step`(실패한 단계), `error`(코드), `detail`, 필요하면 `rollback`·`errors` |
 
 입력 검증 실패 예시:
 
@@ -44,9 +44,9 @@ admin_be 호출 주체:
 
 | admin_be | 엔드포인트 | 시점 |
 |------|------|------|
-| `OperationJobService` | `POST /operations/provision`, `POST /operations/revoke`, `GET /operations/{kind}/{request_id}`, `GET .../steps` | 승인, 만료·계정 삭제, 결과 폴링, 신청 상세 타임라인 |
-| `PodService` | `POST /migrate`, `POST /delete-pod` | 관리자 마이그레이션, 고아 Pod 삭제 |
-| `GroupService` | `PUT /accounts/groups`, `PUT /accounts/users/{username}/groups` | 그룹 생성, 승인 시 기존 계정에 그룹 추가 |
+| `OperationJobService` | `POST /operations/provision·revoke·migrate`, `GET /operations/{kind}/{request_id}`, `GET .../steps` | 승인, 만료·계정 삭제, 마이그레이션, 결과 폴링, 신청 상세 타임라인 |
+| `PodService` | `DELETE /pods/{pod_name}` | 고아 Pod 삭제 |
+| `GroupService` | `POST /groups`, `POST /users/{username}/groups` | 그룹 생성, 승인 시 기존 계정에 그룹 추가 |
 | (프론트엔드 nginx) | `GET /requests/{request_id}/status` | 승인 진행 표시. nginx가 이 경로만 넘긴다 |
 
 ---
@@ -140,7 +140,7 @@ admin_be 호출 주체:
 
 ## 5. GET /operations/{kind}/{request_id} — 작업 결과
 
-`kind`는 `provision` 또는 `revoke`(그 외 404).
+`kind`는 `provision`, `revoke`, `migrate`(그 외 404 `UNKNOWN_JOB_KIND`). 마이그레이션 작업의 `result`에는 `status`(`migrated`/`skipped`), `reason`, `from_node`, `to_node`, `old_pod_name`, `old_pod_cleanup`이 더 붙는다.
 
 ```json
 {
@@ -182,6 +182,8 @@ admin_be 호출 주체:
 }
 ```
 
+제어기가 작업을 실행하는 동안 진행 상황 단계가 바뀌면 `action: "PROGRESS"`, `phase: "INFO"` 행이 남고 `summary`에 `stage`·`message`가 온다(예: `pulling_image` "이미지 다운로드 중" → `starting_container`). 진행 상황 조회(7절)는 마지막 단계만 1시간 보관하지만, 이 행은 작업 이력에 계속 남는다.
+
 `summary`는 화면에 보여도 되는 항목만 담는다(내부 주소·마운트 경로·명령 출력 제외). 컨테이너 준비 대기(`WAIT_READY`)는 `image_source`(`pulled`/`cached`), `image_pull_seconds`, `image_size_mb`, `mount_retries`, `restarts`를, 접근 시험 행은 시험별 근거를 담는다. 재시도 행은 `phase`가 `RETRY`이고 `step`에 다시 돌린 단계 이름이 온다.
 
 ---
@@ -198,48 +200,47 @@ admin_be 호출 주체:
 
 ---
 
-## 8. POST /migrate — 다른 노드로 옮기기 (동기)
+## 8. POST /operations/migrate — 마이그레이션 작업 등록
 
 **입력.**
 
 ```json
-{"username": "user2100", "nodes": ["farm2", "farm6", "farm7"], "force": true}
+{"request_id": "4821", "username": "user2100", "pod_name": "ailab-user2100-1a2b3c4d", "nodes": ["farm2", "farm6", "farm7"], "force": true}
 ```
 
 | 필드 | 규칙 |
 |------|------|
+| `request_id` | 필수. 신청 번호 |
 | `username` | 필수 |
+| `pod_name` | 옮길 Pod. 없으면 사용자의 실행 중인 Pod |
 | `nodes` | 후보 노드 목록(현재 노드 포함), 1개 이상 |
 | `min_improvement_ratio` | 0~1. 생략하면 0.2. 최고 후보가 이만큼 좋아져야 옮긴다 |
 | `force` | 참이면 개선 비율을 보지 않고 가장 여유 있는 후보로 옮긴다 |
 
-**처리 순서.** 사용자별 잠금 → 노드 이름 확인(모르면 400) → 실행 중 Pod 확인(없으면 404, 현재 노드가 후보에 없으면 400) → 후보가 없으면 `skipped` → GPU 점수 비교(`force`가 아니면 개선 비율 검사) → 사용자 설정 조회 → 기존 Pod 로그인 비밀번호 Secret 이어받기 → 새 Pod 생성·Ready 대기(최대 500초)·Service 생성 → 기존 Pod·Service·포트 배정 삭제.
+**실행 단계(제어기).** 옮길 노드 선택(노드 이름 확인, 기존 Pod·현재 노드 확인, GPU 점수 비교) → 사용자 설정 조회 → 기존 Pod 로그인 비밀번호 Secret 이어받기 → Pod 준비 → Pod 스펙 → Pod 생성 → Ready 대기(최대 500초) → 접속 포트 연결 → 기존 Pod·Service·포트 배정·비밀번호 Secret 정리.
 
-**홈 디렉터리는 유지되지만 컨테이너 안의 시스템 변경(설치한 패키지 등)은 유지되지 않는다.**
+- 현재 노드 말고 후보가 없거나(`no_candidate_node`) 개선 비율을 못 넘으면(`no_significant_improvement`) 남은 단계를 돌리지 않고 **성공**으로 끝나며 결과 `status`가 `skipped`다.
+- 새 Pod가 실패하면 새 Pod와 새 포트를 정리하고 기존 Pod는 그대로 둔다(작업 FAIL).
+- 기존 Pod 정리가 실패해도 새 Pod가 서비스 중이므로 작업은 성공이고 결과 `old_pod_cleanup`이 `failed`다.
+- **홈 디렉터리는 유지되지만 컨테이너 안의 시스템 변경(설치한 패키지 등)은 유지되지 않는다.**
 
-**성공 응답.** `200`
-
-```json
-{"status": "migrated", "from": "farm2", "to": "farm6", "new_pod": "ailab-user2100-9z8y7x6w",
- "ports": [{"internal_port": 22, "external_port": 32005, "usage_purpose": "ssh"}]}
-```
-
-건너뛴 경우도 200이며 `{"status": "skipped", "reason": "no_candidate_node" | "no_significant_improvement", ...}`이다.
+**성공 응답.** `202`. 결과는 `GET /operations/migrate/{request_id}`로 본다.
 
 | 상태 | 의미 |
 |:---:|------|
-| 400 | 입력 오류, 알 수 없는 노드, 현재 노드가 후보에 없음 |
-| 404 | 실행 중인 Pod 없음 |
-| 422 | 이어받을 로그인 비밀번호가 없음 (`LOGIN_PASSWORD_MISSING`) |
-| 500 | 새 Pod 기동·Service 생성 실패 (새 Pod와 새 포트를 정리하고 기존 Pod는 유지) |
+| 400 | 입력 오류 |
+| 403 | 계정 접두어 불일치 |
+| 409 | 같은 신청의 마이그레이션 작업이 아직 끝나지 않음 |
+
+작업 실패 코드: `UNKNOWN_NODE`, `POD_NOT_FOUND`, `CURRENT_NODE_NOT_IN_CANDIDATES`, `LOGIN_PASSWORD_MISSING`, 그 밖에 생성 단계와 같은 코드.
 
 ---
 
-## 9. POST /delete-pod — 고아 Pod 삭제 (동기)
+## 9. DELETE /pods/{pod_name} — 고아 Pod 삭제 (동기)
 
 신청 기록이 없는 Pod를 지울 때만 쓴다. 신청이 있는 Pod는 회수 작업(4절)으로 지운다.
 
-**입력.** `{"pod_name": "ailab-user2100-1a2b3c4d", "request_id": "선택"}`
+**입력.** 경로의 `pod_name`(`ailab-` 형식), 선택 쿼리 `request_id`.
 
 **처리 순서.** 접속 포트 해제 → 포트 배정 반환 → Pod 삭제(실제 삭제까지 최대 60초 대기) → 그 노드 keytab 정리.
 
@@ -250,11 +251,11 @@ admin_be 호출 주체:
  "progress": {"servicesDeleted": true, "nodeportsReleased": true, "podDeleteRequested": true, "podDeleted": true}}
 ```
 
-Pod가 원래 없었으면 `already_absent: true`가 붙는다. 실패는 400(입력), 500(단계 실패 — `infra_error`에 `rollback` 포함).
+Pod가 원래 없었으면 `already_absent: true`가 붙는다. 실패는 400(잘못된 Pod 이름), 500(단계 실패 — `rollback` 포함).
 
 ---
 
-## 10. PUT /accounts/groups — 그룹 생성
+## 10. POST /groups — 그룹 생성
 
 **입력.** `{"name": "developers", "gid": 20005, "members": ["user2100"]}` — `name` 필수, `gid` 생략 시 자동 배정, `members` 선택.
 
@@ -262,13 +263,13 @@ Pod가 원래 없었으면 `already_absent: true`가 붙는다. 실패는 400(�
 
 | 상태 | 의미 |
 |:---:|------|
-| 400 | 입력 오류, 존재하지 않는 멤버 |
-| 409 | 그룹 이름 또는 gid 중복 |
+| 400 | 입력 오류, 존재하지 않는 멤버(`INVALID_GROUP_MEMBER`) |
+| 409 | 그룹 이름 중복(`GROUP_NAME_EXISTS`) 또는 gid 중복(`GROUP_GID_EXISTS`) |
 | 500 | GID 대역 소진 |
 
 ---
 
-## 11. PUT /accounts/users/{username}/groups — 사용자 그룹 추가
+## 11. POST /users/{username}/groups — 사용자 그룹 추가
 
 **입력.** `{"groups": ["developers", "ai-lab"]}` (1개 이상)
 
@@ -277,7 +278,7 @@ Pod가 원래 없었으면 `already_absent: true`가 붙는다. 실패는 400(�
 | 상태 | 의미 |
 |:---:|------|
 | 400 | `groups` 누락 |
-| 404 | 사용자 없음, 또는 존재하지 않는 그룹 포함 |
+| 404 | 사용자 없음(`USER_NOT_FOUND`), 또는 존재하지 않는 그룹 포함(`GROUP_NOT_FOUND`) |
 
 ---
 
@@ -285,6 +286,10 @@ Pod가 원래 없었으면 `already_absent: true`가 붙는다. 실패는 400(�
 
 | 옛 API | 대신 쓰는 것 |
 |--------|-------------|
+| `POST /migrate` (동기) | `POST /operations/migrate` (작업) |
+| `POST /delete-pod` | `DELETE /pods/{pod_name}` |
+| `PUT /accounts/groups` | `POST /groups` |
+| `PUT /accounts/users/{username}/groups` | `POST /users/{username}/groups` |
 | `POST /create-pod`, `PUT /accounts/users` | `POST /operations/provision` |
 | `DELETE /accounts/users/{username}` | `POST /operations/revoke` (`delete_account: true`) |
 | `GET /pods/{username}/status` | `GET /requests/{request_id}/status` |

@@ -144,7 +144,9 @@ group-dir-share ~/project vision
 mode인 `restricted`는 package 설치에 필요한 명령은 허용하지만 사용자
 전환, mount, 권한 변경, root shell과 우회 가능한 interpreter 실행은 막는다. 기존
 사용자의 password는 재시작할 때 변경하지 않으며, `USER_PW`는 사용자를 처음 생성할
-때만 적용한다.
+때만 적용한다. `USER_PW`에는 기본값이 없다. 비어 있으면 비밀번호 로그인을 잠근다
+(`passwd -l`). config-server는 이 값을 Pod별 Secret으로 넘기고, 비어 있으면 컨테이너를
+만들지 않는다.
 
 entrypoint가 입력으로 받는 주요 값은 다음과 같다.
 

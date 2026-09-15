@@ -221,6 +221,8 @@ admin_be 호출 주체:
 
 - 현재 노드 말고 후보가 없거나(`no_candidate_node`) 개선 비율을 못 넘으면(`no_significant_improvement`) 남은 단계를 돌리지 않고 **성공**으로 끝나며 결과 `status`가 `skipped`다.
 - 새 Pod가 실패하면 새 Pod와 새 포트를 정리하고 기존 Pod는 그대로 둔다(작업 FAIL).
+- 기존 Pod 정리는 접속 포트·포트 배정·Pod·계정 Secret과 기존 노드의 keytab을 지운다. 같은 사용자의 다른 Pod가 기존 노드에 남아 있으면 keytab은 둔다.
+- `full` 모드는 새 Pod의 접근 시험을 통과한 뒤에 기존 Pod를 정리한다.
 - 기존 Pod 정리가 실패해도 새 Pod가 서비스 중이므로 작업은 성공이고 결과 `old_pod_cleanup`이 `failed`다.
 - **홈 디렉터리는 유지되지만 컨테이너 안의 시스템 변경(설치한 패키지 등)은 유지되지 않는다.**
 

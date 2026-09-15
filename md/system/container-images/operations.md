@@ -44,11 +44,20 @@ image 구성, 시작 동작과 검증에 함께 영향을 주면 표의 관련 �
 | image repository, 날짜 tag, alias 또는 지원 상태를 바꾼다. | [`image-variants.json`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/image-variants.json), [`variant_matrix.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/variant_matrix.py) | [`build_variants.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/build_variants.py)의 dry-run tag |
 | 로컬 build 명령이나 build argument 전달 방식을 바꾼다. | [`build_variants.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/build_variants.py) | `variant_matrix.py`, `Dockerfile`의 `ARG`, 배포 workflow의 build argument |
 | image에서 확인할 package·TensorFlow·GPU 항목을 추가한다. | [`test_image_variants.py`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/scripts/test_image_variants.py) | CPU test와 대상 GPU host test 결과 |
-| Docker Hub build/push를 자동화하거나 trigger를 변경한다. | [`docker-publish.yml`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/.github/workflows/docker-publish.yml) | workflow 위치, build context, Docker Hub secret과 release tag |
+| Docker Hub build/push를 실행하거나 방식을 바꾼다. | `admin_infra`의 [`build-decs-image.yaml`](https://github.com/CSID-DGU/admin_infra/blob/develop/.github/workflows/build-decs-image.yaml) (Actions → Build DECS Image) | 입력 `variant`·`date_tag`(YYMMDD)·`source_ref`. 비공개인 이 저장소는 `ADMIN_INFRA_SERVER_TOKEN`(Contents 읽기 전용) 시크릿으로 받는다. `container-images/.github/workflows/docker-publish.yml`은 저장소 루트가 아니라 GitHub가 실행하지 않는다 |
 
 특정 사용자의 UID/GID, group membership, 홈 mount나 port를 변경하는 것은
 `container-images` 변경 목적이 아니다. 외부에서 전달된 값을 container 내부에서
 처리하는 방식 자체를 바꿀 때만 `entrypoint.sh`를 수정한다.
+
+### 2.1 Actions로 빌드하기
+
+1. `admin_infra` → Actions → **Build DECS Image** → Run workflow
+2. `variant`에 `image-variants.json`의 id, `date_tag`에 오늘 날짜(YYMMDD), `source_ref`에 브랜치(기본 `main`)를 넣는다.
+3. 한 번에 variant 하나, 날짜 태그 하나만 올린다. `latest`·`stable` 같은 별칭은 옮기지 않는다.
+4. 이미지 한 개에 7~10분 걸린다. 결과 태그는 `dguailab/decs:<variant>-<date_tag>`이다.
+
+새 태그를 사용자에게 제공하려면 admin_be의 컨테이너 이미지 목록(`container_image.image_version`)을 새 태그로 바꾼다. 이미 떠 있는 컨테이너는 옛 이미지 그대로이고, 새로 만들거나 마이그레이션한 컨테이너부터 적용된다.
 
 ## 3. 새 이미지 버전 추가
 

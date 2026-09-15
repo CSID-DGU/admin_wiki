@@ -74,6 +74,8 @@ config-server 배포용 Helm 차트이다. 위치는 저장소의 `config-server
 | Role + RoleBinding | `config-server-role` / `config-server-rolebinding` | `ailab-infra` namespace 안에서 Pod(exec·log 하위 리소스 포함)·Service·PVC·Secret을 만들고 지울 권한을 위 ServiceAccount에 붙인다. 사용자 Pod 생성·삭제뿐 아니라 Pod 안에서 명령 실행(exec)·로그 조회까지 이 권한으로 이뤄진다 |
 | ClusterRole + Binding | `...-node-reader` | 노드 목록 조회 권한이다. 노드는 namespace에 속하지 않는(cluster-scoped) 리소스라서 Role로는 못 주고 ClusterRole이 따로 필요하다 |
 | ConfigMap | `krb5-conf` | Kerberos 클라이언트 설정(`krb5.conf`)을 담아 config-server Pod에 주입한다 |
+| Deployment | `<release>-controller` | v2.0 제어기. 같은 이미지로 `controller.py`를 실행해 등록된 생성·회수 작업을 처리한다. `controller.enabled`가 참일 때만 만든다 (replicas 1, Recreate) |
+| CronJob | `...-gpu-check` | 10분마다 GPU가 보이지 않는 사용자 Pod를 점검해 인프라 알림을 보낸다 |
 | CronJob | `...-krb5-reconcile` | 30분마다 `reconcile_krb5.py`를 실행한다. `krb5_cleanup_pending`에 남은 실패 건을 다시 정리하고, FARM 노드의 keytab 목록과 `nodeport_allocations`를 비교해 Pod가 없는 사용자의 keytab도 지운다. |
 
 ### 1.2 파일 구성
@@ -87,6 +89,8 @@ config-server 배포용 Helm 차트이다. 위치는 저장소의 `config-server
 | `templates/rbac.yaml` | Role/RoleBinding + ClusterRole/ClusterRoleBinding 양식이다 |
 | `templates/serviceaccount.yaml` | ServiceAccount 양식이다 |
 | `templates/configmap.yaml` | krb5.conf ConfigMap 양식이다 |
+| `templates/controller.yaml` | v2.0 제어기 Deployment 양식이다 |
+| `templates/cronjob-gpu-check.yaml` | GPU 유실 점검 CronJob 양식이다 |
 | `templates/cronjob-krb5-reconcile.yaml` | 30분마다 Kerberos 정리 재시도와 남은 keytab 확인을 실행하는 CronJob 설정이다. |
 | `templates/_helpers.tpl` | 리소스 이름 조립 헬퍼이다 — 릴리스 이름을 그대로 리소스 이름으로 쓴다 |
 
@@ -164,6 +168,19 @@ NodePort 배정 기록은 MySQL에, 이미지 저장·로드 상태는 Redis에 
 
 DB 비밀번호는 values에 없다 — Secret `config-server-db-secret`에서 주입된다(1.4절).
 
+#### 실행 방식·제어기·대역 (v2.0)
+
+| 키 | 의미 | 기본값 |
+|----|------|--------|
+| `verifyMode` | 실행 방식 `baseline` / `noprobe` / `full` (`RUN_MODE`로 주입). 허용 밖의 값이면 기동하지 않는다 | `noprobe` |
+| `controller.enabled` / `pollSec` / `workers` | 제어기 사용 여부, 작업 조회 주기(초), 동시 실행 수 | `false` / `2` / `4` |
+| `accounts.uidMin` / `uidMax` | 새 계정 UID 대역. `uidMax` 0은 상한 없음. 여러 환경을 띄울 때 겹치지 않게 나눈다 | `20000` / `0` |
+| `accounts.prefix` | 이 접두어로 시작하는 계정만 받는다(실험 환경 전용, 운영은 비움) | `""` |
+| `nodeport.min` / `max` | 사용자 Pod NodePort 대역 | `30000` / `32767` |
+| `logDb.host` / `name` / `user` | 작업 이력(`operation_log`) 전용 MySQL | `log-mysql` / `operation_state_db` / `log_db_user` |
+| `apiToken.secretName` | 내부 API 토큰 Secret 이름 | `config-server-api-token` |
+| `sshKnownHosts.secretName` | farm·AD·NAS SSH 호스트 키 Secret 이름 | `config-server-ssh-known-hosts` |
+
 #### 배치 관련 — config-server가 어디에 뜨나
 
 | 키 | 의미 | 기본값 |
@@ -184,7 +201,16 @@ DB 비밀번호는 values에 없다 — Secret `config-server-db-secret`에서 �
 | `farm-ssh-key` | farm 노드 접속용 SSH 개인키 | `/etc/farm-ssh`에 read-only 마운트 |
 | `farm-ad-ssh-key` | AD/DC 노드 접속용 SSH 개인키 | `/etc/farm-ad-ssh`에 read-only 마운트 |
 
-이 외에 config-server는 사용자별 `krb5-keytab-<user>` Secret을 만든다. `rbac.yaml`의 Secret 생성 권한은 이 작업에 필요하다.
+아래 두 Secret은 없어도 Pod가 뜨지만(optional), 없으면 해당 보호가 꺼진다.
+
+| Secret 이름 | 내용 | 없을 때 |
+|-------------|------|--------|
+| `config-server-api-token` | 내부 API 토큰 (key: `token`) → `CONFIG_API_TOKEN` | 토큰 검사를 하지 않는다 |
+| `config-server-ssh-known-hosts` | farm·AD·NAS 호스트 키 (key: `known_hosts`) → `/etc/ssh-known-hosts` | 상대 서버를 확인하지 않는다 |
+
+두 Secret 값을 바꾼 뒤에는 config-server와 제어기를 재시작해야 새 값을 읽는다(Pod 템플릿에 드러나지 않아 helm 업그레이드만으로는 재시작되지 않는다).
+
+이 외에 config-server는 사용자별 `krb5-keytab-<user>` Secret과 Pod별 로그인 비밀번호 Secret(Pod 소유)을 만든다. `rbac.yaml`의 Secret 생성 권한은 이 작업에 필요하다.
 
 ### 1.5 값을 바꿀 때
 

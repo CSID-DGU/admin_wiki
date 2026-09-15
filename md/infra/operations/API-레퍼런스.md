@@ -182,7 +182,7 @@ admin_be 호출 주체:
 }
 ```
 
-제어기가 작업을 실행하는 동안 진행 상황 단계가 바뀌면 `action: "PROGRESS"`, `phase: "INFO"` 행이 남고 `summary`에 `stage`·`message`가 온다(예: `pulling_image` "이미지 다운로드 중" → `starting_container`). 진행 상황 조회(7절)는 마지막 단계만 1시간 보관하지만, 이 행은 작업 이력에 계속 남는다.
+컨테이너 준비 대기(`WAIT_READY`) 안의 세부 단계도 다른 단계와 같은 행으로 남는다: `PULL_IMAGE`(이미지 다운로드, 노드에 이미 있으면 없음), `START_CONTAINER`(컨테이너 시작·준비 확인), `MOUNT_VOLUME`(볼륨 마운트 재시도). Pod 이벤트를 5초마다 보고 판정하므로 시각은 5초 안쪽으로 근사다. 준비 대기가 실패하면 진행 중이던 세부 단계가 `FAIL`(`POD_READY_TIMEOUT` 등)로 닫힌다. 진행 상황 조회(7절)는 마지막 단계만 1시간 보관하지만, 이 행들은 작업 이력에 계속 남는다.
 
 `summary`는 화면에 보여도 되는 항목만 담는다(내부 주소·마운트 경로·명령 출력 제외). 컨테이너 준비 대기(`WAIT_READY`)는 `image_source`(`pulled`/`cached`), `image_pull_seconds`, `image_size_mb`, `mount_retries`, `restarts`를, 접근 시험 행은 시험별 근거를 담는다. 재시도 행은 `phase`가 `RETRY`이고 `step`에 다시 돌린 단계 이름이 온다.
 

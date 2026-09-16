@@ -35,9 +35,10 @@ FARM과 LAB은 스토리지와 protocol이 서로 다르다. 현재 기준값은
 | 사용자 keytab이나 ccache를 확인해야 한다 | [운영](operations.md) 3~4장 |
 | mount가 안 되거나 권한이 이상하다 | [운영](operations.md) 5장 mount source 확인 |
 | NAS 계정과 KVNO 문제를 봐야 한다 | [운영](operations.md) 8장 |
-| 장애가 났는데 무엇부터 봐야 할지 모르겠다 | [운영](operations.md) 10장 장애 진단 순서 |
+| keytab 배포·컨테이너 생성이 유난히 느리다 | [운영](operations.md#keytab-deploy-slow) 9장 |
+| 장애가 났는데 무엇부터 봐야 할지 모르겠다 | [운영](operations.md) 11장 장애 진단 순서 |
 | 과거에 있었던 장애의 원인과 재현 조건을 알고 싶다 | [디버깅 로그](debugging/index.md) |
-| 설정을 바꾸기 전후에 확인할 것을 알고 싶다 | [운영](operations.md) 11장 체크리스트 |
+| 설정을 바꾸기 전후에 확인할 것을 알고 싶다 | [운영](operations.md) 12장 체크리스트 |
 
 ## 매뉴얼 읽기 순서
 

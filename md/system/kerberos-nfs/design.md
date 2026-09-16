@@ -196,6 +196,12 @@ Keytab은 새 ticket을 계속 발급할 수 있는 장기 credential이다. Hos
 AD group이 변경된 사용자는 keytab으로 새 TGT를 발급해 최신 group 정보를 ccache에
 반영한다.
 
+갱신 스크립트와 service/timer unit은 컨테이너를 만들 때 host에 설치하는데, **내용이
+달라졌을 때만** 쓰고 그때만 `daemon-reload` 한다. 첫 ticket은 systemd를 거치지 않고
+갱신 스크립트를 직접 실행해 발급하고, 확인이 끝난 뒤 timer를 등록한다. systemd가 다른
+작업으로 멈춰 있어도 keytab 설치와 ticket 발급은 끝나게 하려는 구성이다. 배경은
+[운영 9장](operations.md#keytab-deploy-slow)에 있다.
+
 ## 6. NFS service identity
 
 NFS 서비스(NAS / Linux NFS server) 쪽도 Kerberos principal로 자신을 증명해야 한다. 이

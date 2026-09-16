@@ -8,6 +8,7 @@
 
 | 검증일 | 상태 | 문제 | 핵심 결론 |
 | --- | --- | --- | --- |
+| 2026-09-16 | 원인 확정, 영구 조치 적용·운영 검증 완료 | [keytab 배포가 100초 넘게 걸린 원인](farm-keytab-deploy-systemd-stall.md) | 로그인마다 뜨는 소리 서버가 블루투스를 기다려 systemd 본체가 90초 멈췄고, 그 사이 배포 스크립트의 불필요한 `daemon-reload`가 붙잡혔음. 조치 후 0.4~1.2초 |
 | 2026-07-23 | 영구 조치 적용·운영 검증 완료 | [NFSv4.1 session slot 고착 해결 및 운영 적용](nfs-v41-session-slot-stuck-remediation.md) | LAB storage를 `6.12.0-250.el10`으로 교체하고 LAB8 운영 mount의 15초 idmap 지연 시험에서도 영구 slot 고착이 없음을 확인함 |
 | 2026-07-20 | 관측, 인과 미확정 | [LAB9에서 `sec=krb5`를 사용하는 이유](lab9-why-sec-krb5.md) | `krb5p`에서 `krb5`로 전환한 뒤 D-state 지속 시간, SUNRPC 적체와 mount probe 지연이 크게 감소함 |
 | 2026-07-16 | 재현 완료, 과거 장애 원인 후보 | [NFSv4.1 session slot 고착](nfs-v41-session-slot-stuck.md) | 구형 storage kernel에서 지연된 idmap decode가 NFSv4.1 slot 하나를 영구 `INUSE` 상태로 남기는 경로를 재현함 |

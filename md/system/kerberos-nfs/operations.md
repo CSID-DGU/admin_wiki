@@ -85,10 +85,15 @@ sudo -u '#<uid>' env KRB5CCNAME=FILE:/run/user/<uid>/krb5cc \
   klist -c FILE:/run/user/<uid>/krb5cc
 ```
 
-컨테이너 생성 때 timer unit을 설치·enable/start하고, 기존 ccache가 유효하지
-않으면 oneshot service를 즉시 실행하도록 구현되어 있다. timer만 존재하고
-최초 ccache가 없는 상태에서 컨테이너를 먼저 시작하면 Kerberized home 접근이
-실패할 수 있다.
+컨테이너 생성 때 keytab과 refresh env를 설치하고, **첫 ticket은 갱신 스크립트를
+직접 실행해 발급한 뒤** timer를 enable/start한다. 순서가 중요하다. timer를 먼저 걸면
+timer가 띄운 실행과 직접 실행이 겹쳐 ccache를 확인하는 순간 빈 파일을 볼 수 있다.
+timer만 존재하고 최초 ccache가 없는 상태에서 컨테이너를 먼저 시작하면 Kerberized
+home 접근이 실패할 수 있다.
+
+service/timer unit 파일은 **내용이 달라졌을 때만** 다시 쓰고, 그때만 `daemon-reload`
+한다. 같은 내용을 매번 덮어쓰면 systemd가 재로딩을 요구하게 되고, 재로딩이 다른
+세션의 대기와 겹치면 배포가 90초 넘게 멈춘다(9절 참고).
 
 AD group을 변경했다면 renew만 기다리지 말고 fresh ticket을 발급한다.
 
@@ -97,6 +102,34 @@ sudo rm -f /run/user/<uid>/krb5cc
 sudo systemctl start 'decs-krb-refresh@<username>.service'
 sudo -u '#<uid>' klist -c FILE:/run/user/<uid>/krb5cc
 ```
+
+### keytab 배포 스크립트
+
+FARM 노드의 `/usr/local/sbin/ailab-krb5-admin`이 config-server의 요청을 받아 keytab을
+설치·정리한다. 서비스 계정 `ailab-krb5`의 `authorized_keys`에 forced-command로 걸려
+있어, 이 계정으로 접속하면 이 스크립트만 실행된다.
+
+| 항목 | 위치 |
+| --- | --- |
+| 원본 | `admin_infra_server` 저장소 `kerberos-nfs/script/farm/ailab-krb5-admin` |
+| 배포 | `kerberos-nfs/ansible/deploy_farm_krb5_admin.yml` (FARM 6대) |
+| 설명 문서 | 같은 저장소 `kerberos-nfs/docs/farm-krb5-admin.md` |
+
+```bash
+# 관리 서버에서 (키 암호가 걸려 있으면 ssh-agent 필요)
+cd ~/admin_infra_server
+ansible-playbook -i ansible/inventory.ini kerberos-nfs/ansible/deploy_farm_krb5_admin.yml \
+  -u uugaemi --ask-become-pass --limit farm9 --check --diff   # 확인만
+ansible-playbook -i ansible/inventory.ini kerberos-nfs/ansible/deploy_farm_krb5_admin.yml \
+  -u uugaemi --ask-become-pass                                 # 전체 적용
+```
+
+기존 스크립트는 `ailab-krb5-admin.<pid>.<날짜>~`로 백업되므로 되돌릴 때는 그 파일을
+제자리에 복사한다. 같은 플레이북이 노드 전역에서 소리 서버(PulseAudio)를 꺼 둔다.
+이유는 9절에 있다.
+
+**정상 소요 시간은 keytab 배포 0.4~1.2초, 정리 1~2초다.** 수십 초 이상 걸리면 9절을
+확인한다.
 
 ## 4. 컨테이너 credential 확인
 
@@ -375,7 +408,39 @@ rotation은 random password 설정, AD KVNO 변경, 새 key export, NAS keytab m
 ticket lifetime보다 긴 최소 48시간 보존한다. 구현은
 [rotation script](https://github.com/CSID-DGU/admin_infra_server/blob/main/kerberos-nfs/script/keytab/rotate-farm-nfs-service-key.sh)에 있다.
 
-## 9. 모니터링에서 확인할 항목
+## 9. keytab 배포가 오래 걸릴 때 { #keytab-deploy-slow }
+
+2026-09-16까지 FARM6는 매번 104초, FARM9는 114초가 걸렸다. 원인은 Kerberos가 아니라
+systemd였다.
+
+1. config-server가 `ailab-krb5`로 SSH 접속한다.
+2. systemd가 그 계정의 사용자 세션을 띄우고, 데스크톱 패키지 때문에 **소리 서버
+   (PulseAudio)가 자동으로 시작**된다.
+3. 소리 서버가 시스템 D-Bus에 블루투스 서비스(`org.bluez`) 실행을 요청한다. 서버에는
+   블루투스 장치가 없어 25초 시간 초과가 난다.
+4. 그 대기 중에 들어온 systemd 본체 요청(배포 스크립트의 `daemon-reload`, timer 등록,
+   다른 사용자의 로그인, `sudo` 세션 등록)은 **소리 서버의 시작 제한 90초가 끝날 때까지
+   멈춘다.**
+
+확인 방법은 다음과 같다. 멈춤이 있었다면 systemd 본체 로그가 `Reloading.` 이후 90초
+넘게 비어 있다.
+
+```bash
+sudo journalctl _PID=1 --since "<시작>" --until "<끝>" -o short-precise --no-pager
+sudo journalctl --since "<시작>" --until "<끝>" --no-pager | grep -iE "bluez|pulseaudio|timed out"
+```
+
+조치는 두 가지이며 둘 다 적용되어 있다.
+
+- 배포 스크립트가 **내용이 바뀔 때만** unit 파일을 쓰고 재로딩한다. 평상시에는 재로딩
+  자체가 없다.
+- 플레이북이 노드 전역에서 소리 서버를 끈다(`/etc/systemd/user/pulseaudio.{service,socket}`
+  → `/dev/null`). FARM 노드에서 소리를 쓰는 사용자·자동화가 없고, FARM6의 xrdp도 소리
+  전달 모듈이 없어 동작하지 않는 것을 확인한 뒤 결정했다. 되돌리려면 두 링크를 지운다.
+
+적용 뒤 같은 작업이 **0.4~1.2초**로 끝난다.
+
+## 10. 모니터링에서 확인할 항목
 
 | 무엇을 확인하는가 | 대표 상태/지표 | 코드 |
 | --- | --- | --- |
@@ -390,7 +455,7 @@ ticket lifetime보다 긴 최소 48시간 보존한다. 구현은
 상세한 Prometheus/Grafana 운영은 [monitoring 운영 문서](../monitoring/operations.md)를
 참고한다.
 
-## 10. 장애 진단 순서
+## 11. 장애 진단 순서
 
 ### 사용자 한 명만 실패
 
@@ -420,7 +485,7 @@ ticket lifetime보다 긴 최소 48시간 보존한다. 구현은
 6. D-state caller가 남아 있으면 forced unmount 반복 대신 증거 보존 후 reboot를
    검토한다.
 
-## 11. 변경 전후 체크리스트
+## 12. 변경 전후 체크리스트
 
 ### 변경 전
 
@@ -440,7 +505,7 @@ ticket lifetime보다 긴 최소 48시간 보존한다. 구현은
 - Prometheus target/rules와 Grafana dashboard 정상
 - 이전 KVNO를 최소 48시간 보존
 
-## 12. 문서에 추가로 유지할 내용
+## 13. 문서에 추가로 유지할 내용
 
 설계와 운영이 다시 섞이지 않도록 다음 내용을 계속 분리해 기록한다.
 

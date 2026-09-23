@@ -125,20 +125,20 @@ UID/GID를 기준으로 파일 권한을 판단한다. container 안에서 실�
 하는지는 판단하지 않는다. 같은 이름의 사용자나 그룹이 다른 UID/GID로 이미
 존재하면 외부 권한과 다르게 동작할 수 있으므로 container 시작을 중단한다.
 
-계정과 그룹을 만드는 것 외에, entrypoint는 사용자가 나중에 직접 쓸 수 있는
-그룹 공유 도구도 하나 설치해 둔다. Kerberos 공유 스토리지에서는 사용자가 자신의
-홈 directory를 배정된 그룹과 공유할 수 있도록 `group-dir-share` 명령을
-제공한다. `Dockerfile`은 ACL 도구를 포함하고, entrypoint는 Kerberos 환경을
-구성할 때 이 명령을 `/usr/local/bin`에 생성해 둔다. 이 명령을 실행하는 주체는
-entrypoint가 아니라 로그인한 사용자다.
+팀 공유는 홈 밖의 팀 디렉터리 `/home/_g_<그룹>`에서 한다. config-server가 그룹을
+만들 때 NAS에 `root:<그룹>` 소유, `2770` mode로 만든다. setgid 비트가 새 파일의
+그룹을 팀으로 고정하고 로그인 umask `002`가 그룹 쓰기를 남기므로 사용자는
+`chgrp`나 `chmod`를 할 필요가 없다. entrypoint는 Kerberos 환경을 구성할 때 자기 팀
+디렉터리를 보여 주는 `group-dir-share` 명령을 `/usr/local/bin`에 생성해 둔다.
 
 ```bash
-group-dir-share ~/project vision
+group-dir-share
 ```
 
-이 명령은 사용자가 해당 그룹에 속하는지와 경로가 사용자 홈 안에 있는지를 확인한
-뒤 group owner, `2770` mode와 ACL을 설정한다. 별도의 권한을 부여하는 명령이 아니라
-실행한 사용자가 이미 가진 group membership 범위에서만 동작한다.
+예전에는 이 명령이 사용자 홈 안의 디렉터리를 그룹에 열어 주었다. 홈이 `750`이라
+팀원이 지나가려면 ACL이 필요한데, 홈을 마운트하는 `nfs4 sec=krb5`는 POSIX ACL을
+지원하지 않아 이 방식은 성립하지 않는다. 옛 사용법(`group-dir-share DIR GROUP`)은
+아무것도 바꾸지 않고 종료코드 2로 팀 디렉터리를 안내한다.
 
 계정·그룹 구성과 별개로, entrypoint는 sudo 권한도 함께 제어한다. 기본 sudo
 mode인 `restricted`는 package 설치에 필요한 명령은 허용하지만 사용자
@@ -168,11 +168,11 @@ entrypoint가 입력으로 받는 주요 값은 다음과 같다.
   primary group과 사용자를 생성·검증하고 sudo mode를 적용한다.
 - [`ensure_supplemental_groups`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L154-L185):
   추가 그룹의 이름과 GID가 전달값과 일치하는지 확인한다.
-- [`Dockerfile`의 ACL package 설치](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/Dockerfile%23L41-L68):
-  `group-dir-share`가 ACL을 구성할 때 사용하는 `setfacl`을 image에 포함한다.
-- [`install_kerberos_share_helper`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L91-L152):
-  `/usr/local/bin/group-dir-share` script의 검증과 권한 설정 동작을 정의하고
-  container 시작 시 파일을 생성한다.
+- [`install_kerberos_share_helper`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L102-L133):
+  사용자의 팀 디렉터리를 보여 주는 `/usr/local/bin/group-dir-share` script를
+  container 시작 시 생성한다.
+- [`create_team_directory`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra-proposed/blob/develop/config-server/utils.py):
+  config-server가 NAS에 팀 디렉터리를 만든다.
 - [`ensure_kerberos_runtime`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L332-L366):
   Kerberos ccache가 전달된 경우에만 그룹 공유 명령을 생성한다.
 - [`write_restricted_sudoers`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L44-L69):

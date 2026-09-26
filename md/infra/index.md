@@ -12,6 +12,7 @@
 | 승인 뒤 계정, 홈 디렉터리, Pod, NodePort가 만들어지는 실제 순서가 궁금하다 | [시스템 아키텍처](design/시스템-아키텍처.md) | [데이터베이스](design/데이터베이스.md), [API 레퍼런스](operations/API-레퍼런스.md) |
 | Kubernetes, UID/GID, NFS, NodePort 같은 용어가 낯설다 | [기초 개념](design/기초-개념.md) | 다시 [시스템 아키텍처](design/시스템-아키텍처.md) |
 | 배포, 점검, 장애 대응 절차를 확인해야 한다 | [운영 매뉴얼](operations/운영-매뉴얼.md) | [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md), [데이터베이스](design/데이터베이스.md) |
+| 자원이 남거나 상태가 어긋나는 지점(무결성·정합성)을 확인해야 한다 | [무결성·정합성 점검](design/무결성-정합성-점검.md) | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | API 입력과 응답을 바로 확인해야 한다 | [API 레퍼런스](operations/API-레퍼런스.md) | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | Kerberos와 AD, keytab 흐름을 따로 봐야 한다 | [kdc-setup](kdc-setup/index.md) | [설계](kdc-setup/design.md), [운영](kdc-setup/operations.md) |
 
@@ -56,6 +57,7 @@
 | [시스템 아키텍처](design/시스템-아키텍처.md) | 중심 문서 | 계정, 홈 디렉터리, Pod, NodePort가 실제로 생성되는 순서 | [데이터베이스](design/데이터베이스.md), [API 레퍼런스](operations/API-레퍼런스.md) |
 | [기초 개념](design/기초-개념.md) | 배경지식 보충 | UID/GID, 계정 파일, Kubernetes, NFS, NodePort 같은 개념 | 다시 본문 문서 |
 | [데이터베이스](design/데이터베이스.md) | 기록 구조 보충 | infra-mysql, NodePort 할당 기록, 테이블 구조 | [운영 매뉴얼](operations/운영-매뉴얼.md) |
+| [무결성·정합성 점검](design/무결성-정합성-점검.md) | 점검 결과 | 고아 자원·상태 불일치가 생기는 지점과 책임 경계 | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | [처음 작업할 때](operations/시작.md) | 작업 시작 안내 | 브랜치 전략, 로컬 실행, PR 흐름 | [운영 매뉴얼](operations/운영-매뉴얼.md) |
 | [운영 매뉴얼](operations/운영-매뉴얼.md) | 운영 지침 | 점검, 배포, 오류 대응, 복구 순서 | [데이터베이스](design/데이터베이스.md), [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md) |
 | [API 레퍼런스](operations/API-레퍼런스.md) | API 참고 | config-server API의 입력, 응답, 호출 주체 | [시스템 아키텍처](design/시스템-아키텍처.md) |

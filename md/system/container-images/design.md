@@ -171,7 +171,7 @@ entrypoint가 입력으로 받는 주요 값은 다음과 같다.
 - [`install_kerberos_share_helper`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L102-L133):
   사용자의 팀 디렉터리를 보여 주는 `/usr/local/bin/group-dir-share` script를
   container 시작 시 생성한다.
-- [`create_team_directory`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra-proposed/blob/develop/config-server/utils.py):
+- [`create_team_directory`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra-proposed/blob/main/config-server/utils.py):
   config-server가 NAS에 팀 디렉터리를 만든다.
 - [`ensure_kerberos_runtime`](https://github.com/login?return_to=%2FCSID-DGU%2Fadmin_infra_server/blob/main/container-images/entrypoint.sh%23L332-L366):
   Kerberos ccache가 전달된 경우에만 그룹 공유 명령을 생성한다.

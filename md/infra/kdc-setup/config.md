@@ -16,12 +16,13 @@
 
 ## 설정이 들어가는 곳
 
-config-server의 FARM AD 설정은 Helm values, CI secret, Kubernetes Secret, 노드의 root 전용 파일에 나뉘어 있다. 실제 비밀 값과 변경 이력은 관리자 전용 시크릿과 배포 설정 문서에만 두며, 이 문서에는 값, 개인키, keytab을 적지 않는다.
+config-server의 FARM AD 설정은 Helm values, GitHub Secret, Kubernetes Secret, 노드의 root 전용 파일에 나뉘어 있다. 실제 비밀 값과 변경 이력은 관리자 전용 시크릿과 배포 설정 문서에만 두며, 이 문서에는 값, 개인키, keytab을 적지 않는다.
 
 ```text
-CI Secret / 관리자 전용 시크릿 문서
-  -> Helm values 주입
-  -> config-server Deployment 환경 변수·Secret mount
+admin_infra GitHub Secret / 관리자 전용 시크릿 문서
+  -> Sync Config Server Secrets 워크플로 -> 구 운영(ailab-infra) 릴리스 값
+  -> 스택 설치(stack-up.sh)가 그 값을 읽어 스택 릴리스에 주입
+  -> config-server API·제어기 환경 변수·Secret mount
   -> 제한된 AD/노드 관리 채널
   -> 노드 root-only keytab과 사용자 ccache
 ```
@@ -33,7 +34,9 @@ CI Secret / 관리자 전용 시크릿 문서
 | Realm | `KRB5_REALM` | config-server, 사용자 Pod | 새 설정은 FARM AD Realm을 쓴다. |
 | 노드 관리 | `FARM_SSH_*`, 노드 목록 | config-server | AD 관리용 키와 계정을 섞지 않는다. |
 | AD 관리 | `FARM_AD_SSH_*`, DC 목록 | config-server | AD DC에서 허용한 명령만 실행한다. |
-| 홈 경로 | `FARM_HOME_MOUNT_ROOT` | 사용자 Pod | FARM 노드에 이미 마운트된 NFS 홈 경로를 가리킨다. |
+| 홈 경로 | NFS 사용자 홈 경로 | 사용자 Pod | FARM 노드에 이미 마운트된 NFS 홈 경로를 가리킨다. |
+| 노드 신원 대기 | `NODE_IDENTITY_WAIT_SEC`(기본 900초) | config-server | keytab 배포 전 노드가 사용자를 UID로 확인할 때까지 기다리는 한도 |
+| 호스트 키 | `config-server-ssh-known-hosts` Secret | config-server | 없으면 AD·노드·NAS SSH 접속을 모두 거절한다 |
 | NAS 홈 관리 | NAS SSH 설정 | config-server | 홈 디렉터리 생성과 삭제에만 쓴다. |
 | 사용자 keytab | `krb5-keytab-<user>` Secret | config-server | Pod에는 마운트하지 않는다. |
 
@@ -43,10 +46,11 @@ CI Secret / 관리자 전용 시크릿 문서
 확인한다.
 
 ```bash
-kubectl -n ailab-infra get deploy containerssh-config-server \
-  -o custom-columns=IMAGE:.spec.template.spec.containers[0].image,SA:.spec.template.spec.serviceAccountName
-kubectl -n ailab-infra describe deploy containerssh-config-server
-kubectl -n ailab-infra get secret farm-ssh-key farm-ad-ssh-key
+ns=ailab-operation
+kubectl -n "$ns" get deploy config-server-operation config-server-operation-controller \
+  -o custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,SA:.spec.template.spec.serviceAccountName
+kubectl -n "$ns" describe deploy config-server-operation-controller
+kubectl -n "$ns" get secret farm-ssh-key farm-ad-ssh-key config-server-ssh-known-hosts
 ```
 
 사용자 keytab Secret은 이름·생성 시각만 확인한다. `kubectl get secret -o yaml`,
@@ -76,4 +80,4 @@ config-server에 마운트되는 `krb5-conf` ConfigMap은 현재 계정과 Pod �
 2. 실제 비밀 값은 관리자 전용 시크릿 문서에서만 확인하고 일반 문서에 복사하지 않는다.
 3. 시험 노드 한 대와 시험 사용자로 ccache·NFS 접근을 확인한다.
 4. 기존 Pod가 이전 Realm·홈 경로를 쓰는지 확인하고, 설정값을 덮어쓰지 않는다.
-5. 검증 뒤에만 CI/Helm 설정을 확대 적용한다.
+5. 실험 스택에서 검증한 뒤에만 GitHub Secret을 바꾸고 Sync Config Server Secrets → 스택 재배포 순서로 적용한다.

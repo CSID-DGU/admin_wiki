@@ -4,7 +4,7 @@
 
 - config-server Helm 차트가 어떤 리소스를 만드는지
 - `values.yaml`과 템플릿이 Deployment, Service, RBAC, CronJob에 어떻게 반영되는지
-- 배포 값을 바꾸기 전에 어디를 확인해야 하는지
+- 스택 설치 스크립트가 어떤 값을 덮어쓰는지, 값을 바꾸기 전에 어디를 확인해야 하는지
 
 ## 빠른 이동
 
@@ -22,250 +22,211 @@
 
 ### 0.1 왜 Helm을 쓰는가
 
-쿠버네티스에 무언가를 배포하려면 YAML 파일(매니페스트)을 여러 장 써야 한다. config-server 하나만 해도 Deployment, Service, 권한(RBAC), 설정(ConfigMap) 등 파일이 많다. 문제는 이 파일들 곳곳에 **배포 환경마다 달라지는 값**(이미지 태그, NFS 서버 주소, 포트 번호)이 박혀 있다는 점이다. 값이 바뀔 때마다 여러 파일을 뒤져 고치는 것은 실수하기 좋다.
+쿠버네티스에 무언가를 배포하려면 YAML 파일(매니페스트)을 여러 장 써야 한다. config-server 하나만 해도 Deployment 두 개, Service, 권한(RBAC), 설정(ConfigMap), CronJob 두 개가 있다. 이 파일들 곳곳에 **배포 환경마다 달라지는 값**(이미지 태그, 네임스페이스, UID 대역, 포트 번호)이 들어간다. 값이 바뀔 때마다 여러 파일을 뒤져 고치면 실수하기 쉽다.
 
 - **템플릿(templates/)** — 매니페스트의 구조를 적어 둔 양식이다. 달라지는 자리는 `{{ .Values.image.tag }}`처럼 빈칸으로 뚫어 둔다.
-- **values.yaml** — 그 빈칸에 채워 넣을 값들의 모음이다. "이번 배포의 설정 전체"가 이 파일 한 장에 모인다.
-- **차트(Chart)** — 템플릿 묶음 + values.yaml + 메타데이터(Chart.yaml)를 합친 패키지이다.
-- **릴리스(release)** — 차트를 클러스터에 설치한 결과물의 이름이다. 같은 차트를 이름만 다르게 여러 번 설치할 수도 있다. 이 시스템의 릴리스 이름은 `containerssh-config-server`이다.
+- **values.yaml** — 그 빈칸에 채워 넣을 값들의 모음이다.
+- **차트(Chart)** — 템플릿 묶음 + values.yaml + 메타데이터(Chart.yaml)를 합친 패키지다.
+- **릴리스(release)** — 차트를 클러스터에 설치한 결과물의 이름이다. 같은 차트를 이름만 다르게 여러 번 설치할 수 있다. 이 시스템은 스택마다 `config-server-<스택>` 릴리스를 하나씩 둔다(운영은 `config-server-operation`).
 
 ```mermaid
 flowchart LR
-    V["values.yaml<br/>(빈칸에 넣을 값)"] --> H["helm upgrade --install<br/>(양식에 값 주입)"]
+    V["운영 릴리스 값<br/>+ 스택별 --set"] --> H["helm upgrade --install<br/>(양식에 값 주입)"]
     T["templates/*.yaml<br/>(빈칸 뚫린 양식)"] --> H
     H --> M["Kubernetes 매니페스트"]
-    M --> K["쿠버네티스 클러스터에 적용<br/>Deployment · Service · RBAC · ConfigMap ..."]
+    M --> K["클러스터에 적용<br/>Deployment · Service · RBAC · CronJob ..."]
 ```
-
-배포 명령(`helm upgrade`)을 실행하면 Helm이 값을 양식에 넣어 Kubernetes 매니페스트를 만들고 클러스터에 적용한다. 예를 들어 NFS 서버 주소가 바뀌면 템플릿을 고치지 않고 values.yaml의 값을 바꾸면 된다.
 
 ### 0.2 자주 쓰는 명령
 
 ```bash
-# 배포(설치+업데이트 겸용) — ./Chart 디렉터리의 차트를 릴리스에 반영한다
-helm upgrade --install containerssh-config-server ./Chart -n ailab-infra
+ns=ailab-operation
+release=config-server-operation
 
-# 새 Pod가 정상적으로 떴는지 확인한다
-kubectl rollout status deploy/containerssh-config-server -n ailab-infra
+# 릴리스 이력과 현재 값(비밀 값은 values에 없다)
+helm -n "$ns" history "$release"
+helm -n "$ns" get values "$release"
 
-# 잘못됐으면 직전 배포 상태로 되돌린다 (Helm이 릴리스 이력을 기억한다)
-helm rollback containerssh-config-server -n ailab-infra
+# 새 Pod가 정상적으로 떴는지 확인
+kubectl -n "$ns" rollout status deploy/"$release"
+kubectl -n "$ns" rollout status deploy/"$release"-controller
 ```
 
-`upgrade --install`은 "릴리스가 없으면 설치하고, 있으면 갱신하라"는 겸용 명령이라 설치와 업데이트를 구분해 외울 필요가 없다. `rollback`이 가능한 이유는 Helm이 릴리스마다 배포 이력을 버전으로 쌓아 두기 때문이다.
-
-### 0.3 `--set`으로 바꾼 값
-
-`helm upgrade ... --set image.tag=abc123`처럼 명령어 뒤에 값을 직접 붙이면 values.yaml을 고치지 않고 그 배포 한 번에만 값을 바꿀 수 있다. 다음 배포 때 values.yaml의 값으로 돌아가므로, 계속 유지할 변경은 values.yaml이나 별도 운영 values 파일에 기록한다.
+배포 자체(`helm upgrade --install`)는 손으로 하지 않고 Deploy Proposed Stack 워크플로가 `stack-up.sh` 안에서 실행한다(1.5절).
 
 ---
 
-## 1. Chart/ — config-server 차트 (현행)
+## 1. Chart/ — config-server 차트
 
-config-server 배포용 Helm 차트이다. 위치는 저장소의 `config-server/Chart/`이다.
+위치는 `admin_infra-proposed` 저장소의 `config-server/Chart/`다.
 
 ### 1.1 이 차트가 클러스터에 만드는 것
 
 | 리소스 | 이름 | 왜 필요한가 |
 |--------|------|------------|
-| Deployment | `containerssh-config-server` | config-server 컨테이너 1개(replicas: 1)를 실행한다. 15초 뒤부터 10초마다 `/health`를 확인해 Ready 상태를 판단한다. |
-| Service (NodePort) | `containerssh-config-service` | config-server의 고정 접속 주소이다. 내부 80 → 컨테이너 8000(gunicorn), 외부 NodePort 30082 |
-| ServiceAccount | `config-server` | config-server가 Kubernetes API를 호출할 때 사용하는 계정이다. |
-| Role + RoleBinding | `config-server-role` / `config-server-rolebinding` | `ailab-infra` namespace 안에서 Pod(exec·log 하위 리소스 포함)·Service·PVC·Secret을 만들고 지울 권한을 위 ServiceAccount에 붙인다. 사용자 Pod 생성·삭제뿐 아니라 Pod 안에서 명령 실행(exec)·로그 조회까지 이 권한으로 이뤄진다 |
-| ClusterRole + Binding | `...-node-reader` | 노드 목록 조회 권한이다. 노드는 namespace에 속하지 않는(cluster-scoped) 리소스라서 Role로는 못 주고 ClusterRole이 따로 필요하다 |
-| ConfigMap | `krb5-conf` | Kerberos 클라이언트 설정(`krb5.conf`)을 담아 config-server Pod에 주입한다 |
-| Deployment | `<release>-controller` | v2.0 제어기. 같은 이미지로 `controller.py`를 실행해 등록된 생성·회수 작업을 처리한다. `controller.enabled`가 참일 때만 만든다 (replicas 1, Recreate) |
-| CronJob | `...-gpu-check` | 10분마다 GPU가 보이지 않는 사용자 Pod를 점검해 인프라 알림을 보낸다 |
-| CronJob | `...-krb5-reconcile` | 30분마다 `reconcile_krb5.py`를 실행한다. `krb5_cleanup_pending`에 남은 실패 건을 다시 정리하고, FARM 노드의 keytab 목록과 `nodeport_allocations`를 비교해 Pod가 없는 사용자의 keytab도 지운다. |
+| Deployment | `<release>` | API 서버(gunicorn 워커 4개) 1개. 시작할 때 2초마다 `/health`를 확인해 준비되는 즉시 넘어가고(최대 2분), 뜬 뒤에는 10초마다 확인한다. 종료 유예 630초 |
+| Deployment | `<release>-controller` | 제어기. 같은 이미지로 `controller.py`를 실행해 등록된 작업을 처리한다. `controller.enabled`가 참일 때만 만든다(replicas 1, Recreate) |
+| Service (NodePort) | `containerssh-config-service` | API의 고정 주소. 내부 80 → 컨테이너 8000 |
+| ServiceAccount | `config-server` | config-server가 Kubernetes API를 부를 때 쓰는 신원 |
+| Role + RoleBinding | `config-server-role` | 네임스페이스 안에서 Pod(`exec`·`log` 포함)·Service·PVC·Secret을 만들고 지우고, 이벤트를 읽는다. 사용자 Pod 생성·삭제, Pod 안 명령 실행(비밀번호·그룹 반영), 이미지 다운로드 이벤트 판정에 쓴다 |
+| ClusterRole + Binding | `<release>-node-reader` | 노드 목록 조회. 노드는 네임스페이스에 속하지 않아 ClusterRole이 필요하다 |
+| ClusterRole + Binding | `<release>-service-reader` | 클러스터 전체 Service 조회. 다른 네임스페이스가 이미 쓰는 NodePort를 피한다 |
+| ConfigMap | `krb5-conf` | Kerberos 클라이언트 설정(`krb5.conf`). 지금 계정·Pod 작업에는 쓰지 않는다([kdc-setup 설정](../kdc-setup/config.md)) |
+| CronJob | `<release>-gpu-check` | 10분마다 GPU가 보이지 않는 사용자 Pod를 점검해 admin_be 내부 알림 API로 보낸다. 동시 실행 금지, 제한 5분 |
+| CronJob | `<release>-krb5-reconcile` | 30분마다 `reconcile_krb5.py`를 실행한다. `krb5_cleanup_pending` 재시도, 고아 keytab 후보 기록, NAS 그룹 캐시 비우기, 공유 그룹 idmapd 등록. 동시 실행 금지, 제한 15분 |
 
 ### 1.2 파일 구성
 
 | 파일 | 역할 |
 |------|------|
-| `Chart.yaml` | 차트 이름(`containerssh-config-server`)·버전 메타데이터이다 |
-| `values.yaml` | 배포마다 달라지는 설정값 모음이다(1.3절) |
-| `templates/deployment.yaml` | Deployment 양식이다 — 이미지·환경변수·마운트가 여기서 조립된다. values의 값 대부분이 컨테이너 **환경변수**로 주입된다 |
-| `templates/service.yaml` | NodePort Service 양식이다 |
-| `templates/rbac.yaml` | Role/RoleBinding + ClusterRole/ClusterRoleBinding 양식이다 |
-| `templates/serviceaccount.yaml` | ServiceAccount 양식이다 |
-| `templates/configmap.yaml` | krb5.conf ConfigMap 양식이다 |
-| `templates/controller.yaml` | v2.0 제어기 Deployment 양식이다 |
-| `templates/cronjob-gpu-check.yaml` | GPU 유실 점검 CronJob 양식이다 |
-| `templates/cronjob-krb5-reconcile.yaml` | 30분마다 Kerberos 정리 재시도와 남은 keytab 확인을 실행하는 CronJob 설정이다. |
-| `templates/_helpers.tpl` | 리소스 이름 조립 헬퍼이다 — 릴리스 이름을 그대로 리소스 이름으로 쓴다 |
+| `Chart.yaml` | 차트 이름(`containerssh-config-server`)·버전 |
+| `values.yaml` | 기본값(1.3절) |
+| `templates/_helpers.tpl` | 리소스 이름(릴리스 이름 그대로)과, API 서버·제어기가 함께 쓰는 환경 변수·마운트를 한 곳에서 정의한다 |
+| `templates/deployment.yaml` | API 서버 Deployment |
+| `templates/controller.yaml` | 제어기 Deployment |
+| `templates/service.yaml` | NodePort Service |
+| `templates/rbac.yaml` | Role/RoleBinding + ClusterRole/ClusterRoleBinding |
+| `templates/serviceaccount.yaml` | ServiceAccount |
+| `templates/configmap.yaml` | `krb5-conf` ConfigMap |
+| `templates/cronjob-gpu-check.yaml` | GPU 유실 점검 CronJob |
+| `templates/cronjob-krb5-reconcile.yaml` | Kerberos 재조정 CronJob |
 
-값은 `values.yaml`에서 `deployment.yaml` 템플릿의 `env`를 거쳐 컨테이너 환경 변수로 들어간다. `main.py`, `utils.py`는 이 환경 변수를 읽는다. 예를 들어 `nas.ssh.host`는 `NAS_SSH_HOST`가 되어 NAS SSH 접속에 사용된다.
+values의 값은 `_helpers.tpl`의 `env` 정의를 거쳐 컨테이너 환경 변수로 들어간다. API 서버와 제어기는 같은 정의를 쓰므로 둘의 설정이 어긋나지 않는다. 예를 들어 `nas.ssh.host`는 `NAS_SSH_HOST`, `verifyMode`는 `RUN_MODE`가 된다.
 
 ### 1.3 values.yaml에 넣는 값
 
-아래 기본값은 저장소 `values.yaml`을 기준으로 적었다. `""`(빈 값)인 키는 실제 배포 때 별도 values 파일이나 `--set`으로 넣는다. 저장소에는 주소·계정 같은 민감값을 두지 않는다.
+아래 기본값은 저장소 `values.yaml` 기준이다. `""`(빈 값)인 키는 배포 때 운영 릴리스 값에서 가져온다. 저장소에는 주소·계정 같은 운영 값을 두지 않는다.
 
-#### image — 무엇을 배포하나
-
-CI/CD가 새 이미지를 push한 뒤 이 값 기준으로 배포된다.
+#### image
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
-| `image.repository` | 운영 이미지 저장소 | `dguailab/config-server` |
-| `image.tag` | 이미지 태그 (CI가 latest + commit hash 이중 태깅) | `latest` |
-| `image.pullPolicy` | 이미지를 매번 새로 받을지 정하는 정책 | `Always` |
+| `image.repository` | 이미지 저장소 | `dguailab/config-server` |
+| `image.tag` | 이미지 태그. **반드시 지정한다**(비우면 렌더링이 실패한다) | `""` |
+| `image.pullPolicy` | 태그가 고정이라 노드에 있는 이미지를 그대로 쓴다 | `IfNotPresent` |
 
-#### service — 어떻게 접속하나
-
-admin_be와 관리자가 이 포트로 API를 호출한다.
+#### service · resources
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
-| `service.type` | Service 타입 | `NodePort` |
-| `service.port` | 클러스터 내부 포트 | `80` |
-| `service.targetPort` | 컨테이너 포트 (gunicorn) | `8000` |
-| `service.nodePort` | 외부 노출 NodePort | `30082` (README의 9732는 오기, kubectl 실측) |
-
-#### resources — config-server 자신의 몫
-
-사용자 Pod의 리소스가 아니라 **관리 서버 본인**이 쓸 CPU/메모리이다. requests는 스케줄링 시 보장받는 최소치, limits는 상한이다.
-
-| 키 | 의미 | 기본값 |
-|----|------|--------|
-| `resources.requests` | CPU/메모리 요청 | `500m` / `512Mi` |
+| `service.type` / `port` / `targetPort` | Service 타입과 포트 | `NodePort` / `80` / `8000` |
+| `service.nodePort` | 외부 NodePort. 스택마다 `uid-ranges.yaml`의 `config_nodeport`로 덮어쓴다 | `30082` |
+| `resources.requests` | CPU/메모리/임시 디스크 요청 | `500m` / `512Mi` / `1Gi` |
 | `resources.limits` | CPU/메모리 상한 | `2000m` / `1024Mi` |
 
-#### nfs / nas / farm — 연결할 서버 설정
+임시 디스크 요청이 없으면 노드 디스크가 찰 때 우선순위와 무관하게 먼저 내려간다. 한도는 두지 않는다.
 
-사용자 홈 NFS 주소, NAS SSH 접속 정보, keytab을 배포할 FARM 노드 목록을 정한다.
-
-| 키 | 의미 | 기본값 |
-|----|------|--------|
-| `nfs.server` | NFS 서버 주소 | `""` (배포 시 주입) |
-| `nfs.userSharePath` | 사용자 홈 루트 export 경로 | `""` |
-| `nfs.kubeSharePath` | 계정 파일(`/kube_share`) export 경로 — config-server Pod 자신이 이 NFS를 마운트한다 | `""` |
-| `nas.ssh.host` / `port` / `user` / `keyPath` | NAS 홈 생성용 SSH 접속 정보 (키 실체는 Secret, 1.4절) | `""` |
-| `farm.ssh.user` / `keyPath` / `nodes` | farm 노드 keytab 배포용 SSH 정보와 대상 노드 목록 | `""` / `[]` |
-| `farm.adSsh.user` / `keyPath` / `nodes` | AD/DC(krb5 principal 발급) 노드용 SSH 정보 | `""` / `[]` |
-| `farm.homeMountRoot` | 노드 호스트에 마운트된 홈 루트 — 사용자 Pod `/home`의 hostPath 원천이다 ([시스템 아키텍처](../design/시스템-아키텍처.md)의 사용자 Pod 그림) | `""` |
-
-#### security / krb5 — 권한과 인증
+#### nfs / nas / farm — 연결할 서버
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
-| `security.sudoAllowedCommands` | 사용자별 sudoers whitelist 명령 목록. **비어 있으면 sudoers 파일 자체를 만들지 않는다** | `""` |
-| `krb5.realm` | Kerberos realm(인증 도메인 이름) — 운영은 `AILAB.DGU`이다 | `""` |
-| `krb5.kdcHost` | KDC(티켓 발급 서버) 호스트. **기본 `values.yaml`과 현재 CI 배포 명령에는 이 값이 없다.** ConfigMap 템플릿은 이 값을 읽으므로, 현재 배포 결과의 `krb5.conf`에는 kdc와 admin_server 값이 비어 있다. 이 ConfigMap을 실제 Kerberos 클라이언트 설정으로 쓸 계획이면 values와 CI에 주입 경로를 추가해야 한다. | (키 없음) |
+| `nfs.server` / `userSharePath` | 사용자 홈 NFS | `""` |
+| `nfs.kubeSharePath` | 계정 대장(`/kube_share`) 경로. 스택마다 운영 경로 아래 하위 폴더로 덮어쓴다 | `""` |
+| `nas.ssh.host` / `port` / `user` / `keyPath` | NAS 홈 생성·삭제용 SSH | `""` |
+| `farm.ssh.user` / `keyPath` / `nodes` | FARM 노드 keytab 배포용 SSH와 노드 목록 | `""` / `[]` |
+| `farm.adSsh.user` / `keyPath` / `nodes` | AD DC(계정·keytab·그룹)용 SSH와 DC 목록 | `""` / `[]` |
 
-`krb5.realm`이 비어 있으면 config-server는 사용자 keytab과 ccache를 준비하지 않는다. NAS의 Kerberos NFS 설정에 이 값이 필요하면 새 Pod가 홈에 접근하지 못할 수 있다. 실제 NFS mount 옵션은 FARM 노드에서 확인한다.
-
-#### db / redis — 상태 저장소
-
-NodePort 배정 기록은 MySQL에, 이미지 저장·로드 상태는 Redis에 둔다([시스템 아키텍처](../design/시스템-아키텍처.md)의 NodePort 배정 방식).
+#### security / krb5 / infra
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
-| `db.host` | infra-mysql 호스트 | `infra-mysql` |
-| `db.name` | 데이터베이스명 | `pod_port_db` |
-| `db.user` | DB 사용자 | `pod_port_user` |
-| `redis.host` | 이미지 상태용 Redis | `redis-bg-master.ailab-infra.svc.cluster.local` |
-| `redis.port` | Redis 포트 | `6379` |
+| `security.sudoAllowedCommands` | 사용자별 sudoers 허용 명령. **비어 있으면 sudoers 파일을 만들지 않는다** | `""` |
+| `krb5.realm` | Kerberos realm. 비어 있으면 Kerberos·AD 단계를 모두 건너뛴다 | `""` |
+| `infra.adminBeInternalUrl` | admin_be 내부 주소. 사용자 설정 조회와 GPU 점검 알림이 여기로 간다. 스택마다 `http://admin-prod.<네임스페이스>`로 덮어쓴다 | `http://admin-prod.default` |
 
-DB 비밀번호는 values에 없다 — Secret `config-server-db-secret`에서 주입된다(1.4절).
-
-#### 실행 방식·제어기·대역 (v2.0)
+#### 대역 · 실행 방식 · 제어기
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
-| `verifyMode` | 실행 방식 `baseline` / `noprobe` / `full` (`RUN_MODE`로 주입). 허용 밖의 값이면 기동하지 않는다 | `noprobe` |
-| `controller.enabled` / `pollSec` / `workers` | 제어기 사용 여부, 작업 조회 주기(초), 동시 실행 수 | `false` / `2` / `4` |
-| `accounts.uidMin` / `uidMax` | 새 계정 UID 대역. `uidMax` 0은 상한 없음. 여러 환경을 띄울 때 겹치지 않게 나눈다 | `20000` / `0` |
-| `accounts.prefix` | 이 접두어로 시작하는 계정만 받는다(실험 환경 전용, 운영은 비움) | `""` |
+| `accounts.uidMin` / `uidMax` | 새 계정 UID 대역. `uidMax` 0은 상한 없음 | `20000` / `0` |
+| `accounts.sharedGidMin` / `sharedGidMax` | 공용(팀) 그룹 GID 대역. UID 대역과 겹치면 안 된다 | `70000` / `0` |
+| `accounts.prefix` | 이 접두어로 시작하는 계정만 받는다(실험 스택 전용, 운영은 비움) | `""` |
 | `nodeport.min` / `max` | 사용자 Pod NodePort 대역 | `30000` / `32767` |
-| `logDb.host` / `name` / `user` | 작업 이력(`operation_log`) 전용 MySQL | `log-mysql` / `operation_state_db` / `log_db_user` |
-| `apiToken.secretName` | 내부 API 토큰 Secret 이름 | `config-server-api-token` |
-| `sshKnownHosts.secretName` | farm·AD·NAS SSH 호스트 키 Secret 이름 | `config-server-ssh-known-hosts` |
+| `verifyMode` | 실행 방식 `baseline` / `noprobe` / `full` (`RUN_MODE`로 주입). 허용 밖의 값이면 기동하지 않는다 | `noprobe` |
+| `faultInjection` | 장애 주입 훅. 실험 스택 셋에서만 켠다. **운영은 항상 끈다** | `false` |
+| `controller.enabled` / `pollSec` / `workers` | 제어기 사용 여부, 작업 조회 주기(초), 동시 실행 수 | `false` / `2` / `4` |
 
-#### 배치 관련 — config-server가 어디에 뜨나
+스택별 실제 대역은 [시스템 아키텍처](../design/시스템-아키텍처.md) 7.3절에 있다.
+
+#### db / logDb / redis — 상태 저장소
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
-| `namespace` / `config.namespace` | 배포 대상 namespace. ConfigMap 템플릿은 `.Values.namespace`를 읽고 나머지 템플릿은 `.Values.config.namespace`를 읽는다. 두 값은 항상 같게 둔다. | `ailab-infra` |
-| `nodeSelector` | config-server 배포 노드 고정 | `kubernetes.io/hostname: csid-dgu-desktop` |
-| `tolerations` | control-plane의 NoSchedule taint 허용. taint는 노드에 걸린 "여기 배치 금지" 표식이고, toleration은 그 금지를 통과하는 허가증이다. 고정 대상 노드가 control-plane이라 nodeSelector와 반드시 짝으로 있어야 Pod가 뜬다 | `node-role.kubernetes.io/control-plane` |
-| `cleanup.image` | 현재 템플릿에서는 읽지 않는 값이다. 지워도 배포 결과는 달라지지 않는다. | `config-server:latest` |
+| `db.host` / `name` / `user` | 포트 배정·계정 대장 잠금 DB | `infra-mysql` / `pod_port_db` / `pod_port_user` |
+| `logDb.host` / `name` / `user` | 작업 이력·작업 소유권 DB | `log-mysql` / `operation_state_db` / `log_db_user` |
+| `redis.host` / `port` | 작업 입력·결과·진행 상황 Redis | `redis-bg-master.ailab-infra.svc.cluster.local` / `6379` |
+
+스택에서는 세 이름 모두 같은 스택 MySQL을 가리키고, Redis는 스택 네임스페이스의 `redis-bg-master`로 덮어쓴다. DB 비밀번호는 values에 없고 Secret에서 주입된다.
+
+#### 배치 · 기타
+
+| 키 | 의미 | 기본값 |
+|----|------|--------|
+| `namespace` / `config.namespace` | 배포 대상 네임스페이스. ConfigMap 템플릿은 `.Values.namespace`, 나머지는 `.Values.config.namespace`를 읽는다. 두 값은 항상 같게 둔다 | `ailab-infra` |
+| `priorityClassName` | config-server Pod의 우선순위 등급. 없는 이름을 적으면 Pod 생성이 거부되므로 기본은 비우고, 등급을 만들어 두는 스택 설치에서만 채운다 | `""` |
+| `imageStore.claimName` | 사용자 이미지 저장소 PVC. 비우면 임시 디스크(`emptyDir`) | `pvc-image-store` |
+| `nodeSelector` / `tolerations` | config-server를 control-plane 노드에 고정하고 그 노드의 `NoSchedule`을 허용한다. 둘은 짝으로 있어야 Pod가 뜬다 | control-plane 노드 |
+| `apiToken.secretName` | 내부 API 토큰 Secret | `config-server-api-token` |
+| `sshKnownHosts.secretName` | FARM·AD·NAS SSH 호스트 키 Secret | `config-server-ssh-known-hosts` |
+| `cleanup.image` | 템플릿에서 읽지 않는 값 | `config-server:latest` |
 
 ### 1.4 미리 만들어 둘 Secret
 
-민감값(비밀번호, SSH 개인키)은 values.yaml에 넣지 않고 쿠버네티스 Secret으로 관리한다. Secret은 차트가 만들어 주지 않으므로 **클러스터에 미리 존재해야** 하며, 없으면 Pod가 뜨지 못한다.
+민감값(비밀번호, SSH 개인키, 토큰)은 values에 넣지 않고 Secret으로 관리한다. 차트는 Secret을 만들지 않는다. 스택 설치 스크립트가 SSH 개인키는 구 운영 네임스페이스에서 복사하고, SSH 호스트 키는 배포 서버에서 접속 대상마다 수집해 넣고(하나라도 못 받으면 기존 값을 유지하고, 기존 값도 없으면 배포를 멈춘다), DB 비밀번호와 내부 API 토큰은 처음 설치할 때 무작위로 만들어 `stack-db`에 두고 아래 Secret으로 나눠 준다.
 
-| Secret 이름 | 내용 | 소비처 |
+| Secret 이름 | 내용 | 없으면 |
 |-------------|------|--------|
-| `config-server-db-secret` | DB 비밀번호 (key: `password`) | Deployment·CronJob의 `DB_PASSWORD` 환경변수 |
-| `nas-ssh-key` | NAS 접속용 SSH 개인키 | `/etc/nas-ssh`에 read-only 마운트 |
-| `farm-ssh-key` | farm 노드 접속용 SSH 개인키 | `/etc/farm-ssh`에 read-only 마운트 |
-| `farm-ad-ssh-key` | AD/DC 노드 접속용 SSH 개인키 | `/etc/farm-ad-ssh`에 read-only 마운트 |
+| `config-server-api-token` | 내부 API 토큰 (key: `token`) → `CONFIG_API_TOKEN` | **Pod가 뜨지 않는다.** 토큰 검사를 끄는 경로는 없다(로컬 개발의 `CONFIG_API_AUTH_DISABLED=true`만 예외) |
+| `nas-ssh-key` | NAS 접속용 SSH 개인키 → `/etc/nas-ssh` | Pod가 뜨지 않는다 |
+| `farm-ssh-key` | FARM 노드 접속용 SSH 개인키 → `/etc/farm-ssh` | Pod가 뜨지 않는다 |
+| `farm-ad-ssh-key` | AD DC 접속용 SSH 개인키 → `/etc/farm-ad-ssh` | Pod가 뜨지 않는다 |
+| `config-server-ssh-known-hosts` | FARM·AD·NAS 호스트 키 (key: `known_hosts`) → `/etc/ssh-known-hosts` | Pod는 뜨지만 **SSH 접속을 모두 거절한다**. 확인 없이 붙으면 중간에 끼어든 서버가 홈 생성·삭제 명령을 받아 간다 |
+| `config-server-db-secret` | `pod_port_db` 비밀번호 (key: `password`) → `DB_PASSWORD` | Pod가 뜨지 않는다 |
+| `log-mysql-secret` | `operation_state_db` 비밀번호 (key: `MYSQL_PASSWORD`) → `LOG_DB_PASSWORD` | Pod가 뜨지 않는다 |
+| `config-server-infra-slack-secret` | GPU 점검 알림 대상 (key: `webhookUrl`) | 알림을 건너뛰고 로그만 남긴다 |
 
-아래 두 Secret은 없어도 Pod가 뜨지만(optional), 없으면 해당 보호가 꺼진다.
+토큰·호스트 키 Secret 값을 바꾼 뒤에는 API 서버와 제어기를 재시작해야 새 값을 읽는다. Pod 템플릿에 값이 드러나지 않아 helm 업그레이드만으로는 재시작되지 않는다.
 
-| Secret 이름 | 내용 | 없을 때 |
-|-------------|------|--------|
-| `config-server-api-token` | 내부 API 토큰 (key: `token`) → `CONFIG_API_TOKEN` | 토큰 검사를 하지 않는다 |
-| `config-server-ssh-known-hosts` | farm·AD·NAS 호스트 키 (key: `known_hosts`) → `/etc/ssh-known-hosts` | 상대 서버를 확인하지 않는다 |
+이 외에 config-server는 사용자별 `krb5-keytab-<user>` Secret과 Pod별 로그인 비밀번호 Secret(`<pod>-account`, Pod 소유)을 만든다. Role의 Secret 권한은 이 작업에 필요하다.
 
-두 Secret 값을 바꾼 뒤에는 config-server와 제어기를 재시작해야 새 값을 읽는다(Pod 템플릿에 드러나지 않아 helm 업그레이드만으로는 재시작되지 않는다).
+### 1.5 스택 설치가 값을 넣는 방법
 
-이 외에 config-server는 사용자별 `krb5-keytab-<user>` Secret과 Pod별 로그인 비밀번호 Secret(Pod 소유)을 만든다. `rbac.yaml`의 Secret 생성 권한은 이 작업에 필요하다.
+`stack-up.sh`는 운영 릴리스 값(NFS·NAS·FARM·Kerberos 설정)을 바탕으로 쓰고, 스택마다 달라야 하는 값만 `--set`으로 덮어쓴다.
 
-### 1.5 값을 바꿀 때
+| 덮어쓰는 값 | 출처 |
+|------|------|
+| `namespace`, `config.namespace` | `ailab-<스택>` |
+| `image.*` | 워크플로가 고른 ref로 만든 이미지 |
+| `service.nodePort` | `uid-ranges.yaml`의 `config_nodeport` |
+| `nfs.kubeSharePath` | 스택별 계정 대장 경로 |
+| `infra.adminBeInternalUrl` | `http://admin-prod.<네임스페이스>` |
+| `accounts.*`, `nodeport.*` | `uid-ranges.yaml` |
+| `verifyMode` | 실험 스택은 스택 이름, operation은 `baseline` |
+| `faultInjection` | 실험 스택 셋만 `true` |
+| `redis.host`, `db.host`, `logDb.host` | 스택 안의 Redis·MySQL |
+| `imageStore.claimName` | 비움(임시 디스크) |
+| `controller.enabled` | `true` |
+| `priorityClassName` | `ailab-stack-component` |
 
-먼저 위치부터 잡는다. `config-server/`는 GitHub 저장소(CSID-DGU/admin_infra) 안의 폴더이다. 저장소를 내려받아(`git clone https://github.com/CSID-DGU/admin_infra.git`) 그 안의 `config-server/`로 이동한 상태에서 아래를 실행한다. 단, ②~④는 클러스터에 연결된 관리 서버(kubectl과 helm이 설정된 컴퓨터)에서만 동작한다. 개인 노트북에서 clone만 받아서는 ①(파일 수정)까지만 가능하다.
+설치 직전에 이전 설치가 `failed`로 남아 있으면 지우고 다시 설치한다. 첫 설치가 실패한 릴리스는 `upgrade`가 받지 않을 수 있기 때문이다. `--wait`로 준비될 때까지 기다린다.
 
-기본 `values.yaml`에는 NFS·NAS·FARM·Kerberos의 실제 값이 비어 있다. 운영에서 수동으로 `helm upgrade`를 실행할 때는 CI가 넣는 것과 같은 별도 values 파일 또는 `--set` 값을 함께 사용한다. 빈 기본값만으로 아래 명령을 실행하지 않는다.
-
-```bash
-# ① values.yaml에서 값을 수정한다
-vi Chart/values.yaml
-
-# ② 릴리스에 반영한다 (재배포)
-helm upgrade --install containerssh-config-server ./Chart -n ailab-infra
-
-# ③ 새 Pod가 정상적으로 떴는지 확인한다
-kubectl rollout status deploy/containerssh-config-server -n ailab-infra
-
-# ④ 잘못됐으면 직전 배포 상태로 되돌린다
-helm rollback containerssh-config-server -n ailab-infra
-```
-
-반영 뒤에는 [운영 매뉴얼](운영-매뉴얼.md)의 배포 확인 절차를 따른다. 일회성 실험에는 `--set`을 쓸 수 있지만, 계속 유지할 값은 0.3절처럼 파일에 남긴다.
+차트 값을 바꿀 때는 `values.yaml` 또는 `stack-up.sh`를 고쳐 PR로 병합하고 워크플로로 배포한다. 클러스터에서 `helm upgrade --set`으로 바꾼 값은 다음 배포 때 사라진다. 운영 릴리스 값이 원본인 항목(NFS·NAS·FARM·Kerberos)은 admin_infra의 GitHub Secret을 고친 뒤 **Sync Config Server Secrets** 워크플로로 구 운영 릴리스 값에 반영하고, 그다음 스택을 다시 배포한다. 이 워크플로는 구 운영 config-server를 0개로 둔 채 값만 바꾼다.
 
 ---
 
-## 2. pvc-image-chart/ — 이미지 저장소 (현행)
+## 2. pvc-image-chart/ — 이미지 저장소
 
-사용자 컨테이너 이미지를 tar로 보관하는 공용 PVC `pvc-image-store`를 배포하는 작은 차트이다. **현행 구조에서 이 PVC를 마운트하는 것은 config-server뿐이다**(`/image-store` — 사용자별 이미지 저장/로드 경로는 `/image-store/images/user-<username>.tar`). 과거에는 게스트 Pod에도 붙였지만 마운트 실패 문제로 사용자 Pod 스펙에서는 제거됐다. 사용자별 홈 PVC가 폐기된 뒤에도 **image-store만 PVC로 남았다**([시스템 아키텍처](../design/시스템-아키텍처.md)의 홈 디렉터리와 이미지 저장소).
+사용자 컨테이너 이미지를 tar로 보관하는 공용 PVC `pvc-image-store`를 배포하는 작은 차트다. 마운트하는 것은 config-server뿐이다(`/image-store`). **지금 스택들은 이 PVC를 쓰지 않는다**(`imageStore.claimName` 비움). 재시작 때 변경분을 유지하는 기능은 노드에 이미지를 굽는 방식으로 바뀌었다([시스템 아키텍처](../design/시스템-아키텍처.md) 5절).
 
 | 키/장치 | 값 | 의미 |
 |---------|-----|------|
 | `imageStore.size` | `500Gi` | PVC 요청 용량 |
-| `storageClass` | `nfs-nas-v3-expandable` | NFS CSI 기반 StorageClass — 어떤 방식으로 저장소를 만들지 정한 템플릿 |
-| accessModes | `ReadWriteMany` | 여러 Pod가 동시에 마운트할 수 있는 모드. 현행 소비자는 config-server이지만, 이미지 저장소를 공유 스토리지로 유지하는 계약을 나타낸다 |
-| `helm.sh/resource-policy: keep` | annotation | **릴리스를 지워도 PVC는 남긴다.** 차트를 실수로 삭제해도 이미지 저장소 PVC가 함께 지워지지 않게 한다. |
+| `storageClass` | `nfs-nas-v3-expandable` | NFS CSI 기반 StorageClass |
+| accessModes | `ReadWriteMany` | 여러 Pod가 동시에 마운트할 수 있다 |
+| `helm.sh/resource-policy: keep` | annotation | 릴리스를 지워도 PVC는 남긴다 |
 
 ---
 
-## 3. pvc-chart/ (폐기)
+## 3. infra-sql/ — 테이블 정의
 
-사용자/그룹별 홈 PVC를 동적 생성하던 Helm 차트(`containerssh-pvc-chart`)의 잔재이다. 개별 사용자 PVC 방식은 26-07-02에 폐기되어 현행 흐름에서는 사용하지 않는다(현행은 NFS 직접 마운트 — [시스템 아키텍처](../design/시스템-아키텍처.md)의 홈 디렉터리와 이미지 저장소 참조).
-
-이 디렉터리는 저장소에 남아 있지만 현재 배포에는 쓰지 않는다. `Chart.yaml`, `values.yaml`, `README.md`, StorageClass 매니페스트 두 장(`sc-nfs-nas-v3-resizable.yaml`, `old-sc.yaml`)은 이전 클러스터 상태를 확인할 때만 본다. 새로 배포하거나 복구할 때는 이 차트를 쓰지 않고 NFS 직접 마운트와 `pvc-image-chart/`를 사용한다.
-
----
-
-## 4. infra-sql/ (현행)
-
-config-server의 NodePort 배정 기록 등 인프라 상태를 저장하는 MySQL을 배포하는 **일반 매니페스트**다. Helm 차트가 아니라 `kubectl apply`로 YAML을 적용한다.
-
-| 파일 | 역할 |
-|------|------|
-| `nfs-mysql.yaml` | MySQL용 NFS CSI StorageClass `sc-mysql`을 만든다 (NFS server `192.168.2.30`, share `/volume1/share`, reclaimPolicy `Retain` — PVC를 지워도 데이터 볼륨을 삭제하지 않고 남긴다) |
-| `infra-mysql.yaml` | `ailab-infra` namespace에 `infra-mysql` StatefulSet(고정 이름과 저장소를 유지하는 Pod 관리 객체, 저장소 10Gi) + ClusterIP Service(클러스터 내부 전용 접속 주소)를 생성한다 |
-
-DB에는 StatefulSet을 쓴다. Deployment와 달리 Pod가 다시 만들어져도 같은 이름과 저장소(PVC)를 다시 사용하므로 데이터가 이어진다. Service는 ClusterIP(클러스터 내부 전용)다. NodePort 배정 기록 DB를 클러스터 밖에 열지 않는다.
-
-infra-mysql은 `nodeport_allocations`와 `krb5_cleanup_pending` 테이블을 자동으로 만들지 않는다. DB를 다시 만들면 두 테이블의 생성 SQL을 직접 실행해야 한다. 스키마는 [데이터베이스](../design/데이터베이스.md)를 참고한다.
+`infra-sql/`에는 테이블 정의 SQL(`pod_port_db.sql`, `operation_log.sql`, `trial_manifest.sql`)과 구 운영 MySQL 매니페스트(`nfs-mysql.yaml`, `log-mysql.yaml`)가 있다. 스택 MySQL 자체는 `ops/proposed-stack/mysql.yaml`로 배포하고, 설치 스크립트가 SQL 파일을 배포 때마다 다시 적용한다. 스키마는 [데이터베이스](../design/데이터베이스.md)를 본다.

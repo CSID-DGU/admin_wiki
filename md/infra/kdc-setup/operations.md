@@ -16,7 +16,7 @@
 
 ## 1. 작업할 때 지킬 것
 
-1. 계정과 Pod 생성·삭제는 config-server API로 수행한다.
+1. 계정과 Pod 생성·삭제는 config-server 작업으로 수행한다. 노드나 AD에서 손으로 만들거나 지우지 않는다.
 2. keytab, 개인키, Secret `data`는 일반 운영 문서·로그·티켓에 출력하지 않는다.
 3. 사용자 장애는 해당 사용자와 Pod가 배치된 노드 범위에서 먼저 확인한다.
 4. `/tmp/krb5cc_0`에는 현재 노드의 머신 principal 이외의 ticket을 발급하지 않는다.
@@ -27,17 +27,20 @@
 ### Kubernetes
 
 ```bash
-kubectl -n ailab-infra get deploy,pod,cronjob
-kubectl -n ailab-infra get events --sort-by=.lastTimestamp
-kubectl -n ailab-infra logs deploy/containerssh-config-server --since=30m
+ns=ailab-operation
+kubectl -n "$ns" get deploy,pod,cronjob
+kubectl -n "$ns" get events --sort-by=.lastTimestamp
+kubectl -n "$ns" logs deploy/config-server-operation-controller --since=30m
+kubectl -n "$ns" get job | grep krb5-reconcile          # 최근 재조정 실행
+kubectl -n "$ns" logs job/<최근_krb5-reconcile_job_이름>
 ```
 
-config-server가 Ready인지, AD 계정 생성과 FARM 노드 설정이 반복해서 실패하지 않는지 확인한다.
+config-server 제어기가 Ready인지, AD 계정 생성·복제 대기와 FARM 노드 배포가 반복해서 실패하지 않는지, 30분 재조정이 고아 후보를 남기지 않았는지 확인한다.
 사용자 keytab Secret은 값이 아니라 메타데이터만 확인한다.
 
 ```bash
 target_user='<user>'
-kubectl -n ailab-infra get secret "krb5-keytab-$target_user" \
+kubectl -n "$ns" get secret "krb5-keytab-$target_user" \
   -o custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp
 ```
 
@@ -95,16 +98,19 @@ sudo test ! -e "/etc/decs-krb/keytabs/$target_user.keytab"
 sudo test ! -e "/etc/decs-krb/refresh.d/$target_user.env"
 ```
 
+같은 노드에 같은 사용자의 다른 Pod가 남아 있으면 keytab과 timer는 **남아 있어야 정상이다**. 지우면 살아 있는 Pod의 티켓이 갱신되지 않아 홈이 `nobody`로 보인다.
+
 ### 계정 삭제 후
 
-AD 사용자와 사용자 keytab Secret이 사라졌는지, 모든 FARM 노드의 사용자 timer·keytab·ccache가
-정리됐는지 확인한다. 전용 AD 그룹은 자동 삭제 대상이 아니므로 임의로 지우지 않는다.
+AD 사용자와 사용자 keytab Secret이 사라졌는지, 작업이 받은 노드(`node_name`)의 사용자 timer·keytab·ccache가 정리됐는지 확인한다. 계정 회수는 컨테이너를 썼던 노드마다 따로 등록된다. 정리에 실패한 노드는 `krb5_cleanup_pending`에 남고 30분 재조정이 다시 시도한다. 전용 AD 그룹은 자동 삭제 대상이 아니므로 임의로 지우지 않는다.
 
 ## 4. 문제별 확인 순서
 
 | 증상 | 먼저 확인할 것 | 금지할 것 |
 | --- | --- | --- |
-| AD 생성·keytab 발급 실패 | config-server stage, 대상 DC, 동일 이름의 사용자·그룹 | DC wrapper의 반복 직접 실행 |
+| AD 생성·keytab 발급 실패(`KDC_FAILED`) | 단계 기록, 대상 DC, 동일 이름의 사용자·그룹 | DC wrapper의 반복 직접 실행 |
+| AD 복제 대기 초과(`AD_REPLICATION_TIMEOUT`) | 모든 DC가 그 사용자를 같은 UID로 돌려주는지, DC 사이 복제 상태 | 한 DC에만 있는 상태로 Pod를 수동 생성 |
+| 노드 신원 확인 대기 초과 | 그 노드에서 `id <user>`, winbind·idmap 캐시, NAS 홈 소유자 | 노드 캐시를 확인 없이 반복 초기화 |
 | 대상 노드 배포 실패 | 노드 목록, 제한된 SSH 채널, keytab 파일 모드, service journal | keytab을 복사해 우회 |
 | ccache 갱신 실패 | DNS·시간·Realm·principal·keytab 모드 | keytab 내용을 출력 |
 | Pod 홈 접근 실패 | Pod UID/GID, ccache, rpc.gssd, 머신 ticket, mount | NAS를 바로 재시작 |

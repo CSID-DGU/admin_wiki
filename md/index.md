@@ -3,7 +3,8 @@
 이 위키는 DGU AI LAB의 GPU 서버 서비스를 운영하는 관리자를 위한 자동화 시스템
 매뉴얼이다.
 
-자동화 시스템은 `backend`, `infra`, `system` 세 영역으로 구성된다. `backend`는
+자동화 시스템은 `frontend`, `backend`, `infra`, `system` 네 영역으로 구성된다. `frontend`는
+사용자와 관리자가 쓰는 웹 화면이고, `backend`는
 GPU 서버 사용 신청과 승인 등의 서비스 요청을 처리하고, `infra`는 승인된 사용자의
 계정과 홈 디렉터리, Pod, NodePort를 생성한다. `system`은 자동화 시스템이 동작하는
 GPU 서버와 컨테이너 실행 환경, 모니터링, 원격 작업, Kerberos/NFS 공유 스토리지를
@@ -18,6 +19,7 @@ GPU 서버와 컨테이너 실행 환경, 모니터링, 원격 작업, Kerberos/
 | 영역 | 설명 | PDF 다운로드 |
 | --- | --- | --- |
 | [backend](backend/개요.md) | 신청·승인을 처리하고 Infra Server에 자원 생성과 회수를 요청하는 Admin BE 서버 | [PDF 다운로드](pdf/backend/admin-be-manual.pdf) |
+| [frontend](frontend/index.md) | 사용자가 신청하고 관리자가 승인·관리하는 웹 화면(Admin FE) | — |
 | [infra](infra/개요.md) | Backend 요청을 받아 계정, 홈 디렉터리, Pod와 NodePort를 구성하는 config-server | [PDF 다운로드](pdf/infra/infra-all-manual.pdf) |
 | [system](system/index.md) | FARM/LAB GPU 서버의 공통 설정과 운영 환경을 관리하는 도구와 절차 | [PDF 다운로드](pdf/system/system-manual.pdf) |
 | [user](user/index.md) | 학생과 연구원이 GPU 서버 서비스를 사용하는 방법 | [PDF 다운로드](pdf/user/user-manual.pdf) |
@@ -36,5 +38,5 @@ Kerberos/NFS 공유 스토리지를 관리하는 운영 도구와 절차를 다�
 
 개발에 참여할 때는 먼저 [브랜치·배포 규칙](브랜치-규칙.md)을 읽는다. 네 저장소가 같은 규칙을 쓴다.
 
-처음 보는 사람에게는 `backend` → `infra` → `system` → `user` 순서로 읽는 것을
+처음 보는 사람에게는 `backend` → `frontend` → `infra` → `system` → `user` 순서로 읽는 것을
 권장한다.

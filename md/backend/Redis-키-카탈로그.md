@@ -1,251 +1,189 @@
 # Redis 키 카탈로그
 
-Redis는 코드를 안 보면 지금 이 키가 왜 이 값을 갖고 있는지 짐작하기 어렵습니다. 장애 상황에서 코드를 뒤질 필요 없이 "이 키가 뭘 의미하고 지워도 되는지, 왜 이 TTL인지"를 아래 표만 보고 판단할 수 있게 정리했습니다. 장애 대응·디버깅은 물론 새 캐시나 중복 방지 키를 설계할 때도 여기를 기준으로 삼습니다.
+Redis에 남은 키는 코드를 보지 않으면 무엇인지 짐작하기 어렵습니다. 장애 중에 "이 키가 무엇이고 지워도 되는가"를 이 표만 보고 판단할 수 있게 정리했습니다. 새 키를 만들 때도 여기 규칙을 따릅니다.
 
----
+## 한눈에 보기
 
-## 전체 요약
+Admin BE는 Redis를 네 가지 용도로 씁니다.
 
-| 분류 | 키 패턴 | 타입 | TTL |
-|------|---------|------|-----|
-| 인증 | `email:verify:{email}` | String | 5분 |
-| 인증 | `VERIFIED:{email}` | String | 10분 |
-| 세션 | `RT:{userId}` | String | 7일 |
-| 이메일 중복 방지 | `email:preexpiry:{requestId}:{dayLabel}:{date}` | String | 25시간 |
-| Slack 큐 | `slack:notification:queue` | List | 없음 |
-| Slack 큐 | `slack:infra:notification:queue` | List | 없음 |
-| Slack 캐시 | `slack:cache:users:list` | String | 1시간 |
+| 용도 | 무엇을 | Redis가 비면 |
+| --- | --- | --- |
+| 로그인 유지 | 리프레시 토큰 | 모든 사용자가 다시 로그인해야 한다 |
+| 잠깐 보관 | 메일 인증번호, 인증 완료 표시 | 진행 중이던 가입·재설정을 처음부터 다시 |
+| 횟수 세기·중복 막기 | 로그인 실패, 발송 횟수, "이미 알림" 표시 | 제한이 초기화되고 같은 알림이 한 번 더 나갈 수 있다 |
+| 대기열 | 보낼 Slack 알림 | 아직 보내지 않은 알림이 사라진다 |
 
----
+**영구 기록은 Redis에 두지 않습니다.** Redis가 통째로 비어도 신청·사용자 데이터는 MySQL에 그대로 있습니다.
 
-## 1. 인증 키
+## 전체 목록
 
-이메일 인증 흐름에서 사용하는 두 개의 키입니다. 둘 다 TTL이 지나면 자동으로 사라지고, 정상 경로에서는 완료 즉시 명시 삭제됩니다.
+`{email}`은 소문자로 맞춘 이메일, `{userId}`는 사용자 번호입니다.
 
-### `email:verify:{email}`
+| 키 | 종류 | 유지 시간 | 용도 |
+| --- | --- | --- | --- |
+| `RT:{userId}` | 문자열 | 리프레시 토큰 수명 | 리프레시 토큰 |
+| `LOGIN_FAIL:{email}` | 숫자 | 15분 | 로그인 실패 횟수 |
+| `email:verify:{email}` | 문자열 | 5분 | 가입 인증번호 |
+| `email:verify-attempts:{email}` | 숫자 | 5분 | 가입 인증번호를 틀린 횟수 |
+| `VERIFIED:{email}` | 문자열 | 10분 | 이메일 인증을 마쳤다는 표시 |
+| `email:password-reset:{email}` | 문자열 | 5분 | 비밀번호 재설정 인증번호 |
+| `email:password-reset-attempts:{email}` | 숫자 | 5분 | 재설정 인증번호를 틀린 횟수 |
+| `email:send-cooldown:{email}` | 문자열 | 60초 | 인증 메일 연속 발송 막기 |
+| `email:send-count:{email}` | 숫자 | 1시간 | 인증 메일 발송 횟수 |
+| `request:create-count:{userId}` | 숫자 | 1일 | 컨테이너 신청 횟수 |
+| `group:create-count:{userId}` | 숫자 | 1일 | 그룹 생성 횟수 |
+| `request:restart-count:{userId}` | 숫자 | 1시간 | 본인 컨테이너 재시작 횟수 |
+| `request:slack-refusal-mail:{userId}` | 숫자 | 10분 | Slack 미가입 안내 메일 간격 |
+| `email:preexpiry:{신청 번호}:{남은 날}:{날짜}` | 문자열 | 25시간 | 만료 예고를 보냈다는 표시 |
+| `email:user-inactive-warning:{userId}:{남은 날}:{날짜}` | 문자열 | 25시간 | 장기 미사용 경고를 보냈다는 표시 |
+| `user-inactive-notice:{userId}` | 문자열 | 예정일 + 3일 | 사용자에게 알린 비활성화 예정일 |
+| `alert-once:{사건 키}` | 문자열 | 7일 | 관리자 알림을 보냈다는 표시 |
+| `slack:notification:queue` | 목록 | 없음 | Admin BE의 Slack 알림 대기열 |
+| `slack:infra:notification:queue` | 목록 | 없음 | config-server가 보낸 Slack 알림 대기열 |
+| `slack:cache:users:list` | 문자열 | 1시간 | Slack 회원 목록 보관 |
 
-이메일 인증번호를 임시 저장합니다.
+## 지워도 되는가
 
-```
-저장  POST /api/auth/email/send  →  SET email:verify:user@example.com = "183726" (TTL 5분)
-확인  POST /api/auth/email/verify →  GET email:verify:user@example.com
-삭제  인증 성공 직후              →  DEL email:verify:user@example.com
-     (5분 안에 인증 안 하면 TTL 만료로 자동 삭제)
-```
+| 키 | 지우면 |
+| --- | --- |
+| `RT:{userId}` | 그 사용자가 강제 로그아웃된다. **의도한 강제 로그아웃에 쓸 수 있다** |
+| `LOGIN_FAIL:{email}` | 로그인 잠금이 풀린다. **잠긴 사용자를 풀어 줄 때 쓴다** |
+| `email:send-cooldown:…`, `email:send-count:…` | 인증 메일 발송 제한이 풀린다 |
+| `request:create-count:…` 등 횟수 키 | 그 사용자의 횟수 제한이 풀린다 |
+| `email:verify:…`, `VERIFIED:…` | 진행 중이던 가입을 인증부터 다시 해야 한다 |
+| `email:preexpiry:…`, `email:user-inactive-warning:…` | 같은 날 예고가 한 번 더 나갈 수 있다 |
+| `alert-once:…` | 같은 관리자 알림이 한 번 더 나간다 |
+| `user-inactive-notice:{userId}` | **지우지 않는다.** 그 사용자의 비활성화 유예가 다시 시작된다 |
+| `slack:…:queue` | 아직 보내지 않은 알림이 사라진다. 대기열이 완전히 막혔을 때만 |
+| `slack:cache:users:list` | 다음 DM 때 Slack에서 회원 목록을 다시 받는다. **방금 가입한 사람을 찾지 못할 때 지운다** |
 
-| 항목 | 값 |
-|------|----|
-| 값 형태 | 숫자 인증번호 문자열 (ex: `"183726"`) |
-| TTL | 5분 (`AUTH_CODE_EXPIRE_SECONDS = 300`) |
-
----
-
-### `VERIFIED:{email}`
-
-인증번호 확인이 완료됐음을 나타내는 상태 키입니다. **이 키가 없으면 회원가입 API가 400을 반환합니다.**
-
-```
-저장  인증번호 일치 확인 후       →  SET VERIFIED:user@example.com = "true" (TTL 10분)
-삭제  회원가입 완료 직후           →  DEL VERIFIED:user@example.com
-     (10분 안에 가입 안 하면 TTL 만료로 자동 삭제)
-```
-
-| 항목 | 값 |
-|------|----|
-| 값 형태 | `"true"` |
-| TTL | 10분 |
-
-**TTL 설계 이유**: 인증번호 확인(5분)과 회원가입 폼 제출(10분)을 단계별로 분리한 이유는, 사용자가 인증 직후 바로 가입 폼을 제출하지 않을 수 있기 때문입니다. 더 짧은 TTL을 가진 `email:verify` 키를 먼저 삭제하고, `VERIFIED` 키에는 5분 더 긴 TTL(10분)을 줍니다.
-
-**흐름 요약**
-
-```
-이메일 발송       인증번호 확인               회원가입
-  │                   │                        │
-  ▼                   ▼                        ▼
-email:verify     DEL email:verify          DEL VERIFIED
-(TTL 5분)   →   SET VERIFIED          →   (회원가입 완료)
-                (TTL 10분)
-```
-
----
-
-## 2. 세션 키
+## 1. 로그인
 
 ### `RT:{userId}`
 
-Refresh Token을 저장하는 핵심 세션 키입니다. **이 키가 없으면 해당 사용자는 로그아웃 상태입니다.**
+리프레시 토큰입니다. **이 키가 없으면 그 사용자는 로그인을 이어 가지 못합니다.**
 
 ```
-저장  로그인 성공          →  SET RT:42 = "<JWT>" (TTL 7일)
-갱신  토큰 재발급          →  SET RT:42 = "<새 JWT>" (TTL 7일, 기존 키 재사용 가능)
-삭제  로그아웃             →  DEL RT:42
-     (7일 미갱신 시 TTL 만료로 자동 삭제 — 자동 로그아웃)
+저장  로그인 성공
+교체  토큰을 다시 받을 때 (낸 토큰이 저장된 값과 같을 때만)
+삭제  비밀번호 변경, 관리자의 비활성화·탈퇴, 저장된 값과 다른 토큰이 왔을 때
+      수명이 끝나면 저절로
 ```
 
-| 항목 | 값 |
-|------|----|
-| 값 형태 | Refresh Token JWT 문자열 |
-| TTL | 7일 (`jwt.refresh-token-expire-time`) |
-| `{userId}` | User 테이블의 PK (`BIGINT`) |
+사용자당 하나뿐이라 다른 기기에서 로그인하면 덮어씁니다. 자세한 규칙은 [인증·보안](인증-보안.md) 3절입니다.
 
-**설계 포인트**: Access Token은 Redis에 저장하지 않습니다(Stateless). Refresh Token만 Redis에 저장해서, 필요시 `DEL RT:{userId}`로 즉시 세션을 무효화(강제 로그아웃)할 수 있습니다. 자세한 내용은 [인증·보안](인증-보안.md)을 참고합니다.
+### `LOGIN_FAIL:{email}`
 
-**확인 방법**
+로그인 실패 횟수입니다. 다섯 번이 되면 15분이 지날 때까지 로그인을 받지 않습니다. 로그인에 성공하거나 메일 인증으로 비밀번호를 새로 정하면 지웁니다.
 
-```bash
-# 사용자 42번이 로그인 상태인지
-EXISTS RT:42       # 1 = 로그인, 0 = 로그아웃
+이메일 대소문자를 바꿔 제한을 피하지 못하게 소문자로 맞춰 셉니다.
 
-# 남은 세션 시간 (초)
-TTL RT:42          # -2 = 만료됨, 양수 = 남은 초
+## 2. 메일 인증
 
-# 현재 로그인된 사용자 전체 조회
-KEYS RT:*
-```
-
----
-
-## 3. 이메일 중복 방지 키
-
-### `email:preexpiry:{requestId}:{dayLabel}:{date}`
-
-스케줄러가 같은 날 같은 요청에 만료 예고 이메일을 두 번 보내지 않도록 막습니다.
-
-**키 예시**: `email:preexpiry:42:7일:2026-07-15`
+가입용과 비밀번호 재설정용은 **키가 다릅니다.** 가입용 인증번호로 비밀번호를 재설정하지 못하게 하기 위해서입니다.
 
 ```
-체크  이메일 발송 직전  →  SETNX email:preexpiry:42:7일:2026-07-15 "sent" (TTL 25h)
-                           키가 이미 있으면 → 발송 건너뜀
-                           키가 없으면     → 발송 진행 후 키 생성
-삭제  TTL 만료 (25시간 후 자동)
+인증 메일 요청     인증번호 확인              가입
+     │                 │                      │
+     ▼                 ▼                      ▼
+email:verify      email:verify 삭제       VERIFIED 삭제
+(5분)        →    VERIFIED 저장      →    (가입 완료)
+                  (10분)
 ```
 
-| 항목 | 값 |
-|------|----|
-| 값 형태 | `"sent"` |
-| TTL | 25시간 (24시간 주기보다 1시간 길게 — 스케줄러 실행 시각 편차 흡수) |
-| `{dayLabel}` | `7일`, `3일`, `1일` (만료까지 남은 날 수) |
-| `{date}` | 만료 목표 날짜 `yyyy-MM-dd` (today+7/3/1 중 해당일, 발송 당일이 아님) |
+- 인증번호는 맞히면 바로 지웁니다. 같은 번호로 두 번 통과할 수 없습니다.
+- 다섯 번 틀리면 인증번호를 폐기합니다. 새로 받아야 합니다.
+- `VERIFIED`가 10분인 것은 인증한 뒤 가입 양식을 채울 시간을 주기 위해서입니다.
+- 이미 가입된 주소로 요청해도 인증번호를 **저장은 합니다**(보내지는 않음). 저장하지 않으면 "횟수 초과" 응답이 나오는지로 가입 여부가 드러납니다.
 
-**Fail-open 설계**: Redis 장애 시 `setIfAbsent()`가 예외를 던집니다. 이 경우 `false`를 반환해 이메일 발송을 허용합니다(fail-open). 중복 발송보다 누락이 더 나쁘다는 판단입니다. 자세한 패턴은 [핵심 설계 패턴](핵심-설계-패턴.md) 3번을 참고합니다.
+## 3. 횟수 제한
 
-**확인 방법**
+"처음 한 때부터 정해진 시간 동안 몇 번"을 셉니다. 한도는 [핵심 설계 패턴](핵심-설계-패턴.md) 8번에 있습니다.
 
-```bash
-# 특정 요청의 중복 방지 키 전체 조회
-KEYS email:preexpiry:42:*
+키는 처음 셀 때 만들어지고, 유지 시간이 지나면 저절로 사라져 횟수가 초기화됩니다. 횟수 올리기와 유지 시간 걸기를 한 번에 하므로(`RedisWindowCounter`) 유지 시간 없는 키가 남지 않습니다.
 
-# 오늘자 전체 만료 예고 키 조회
-KEYS email:preexpiry:*:2026-07-15
-```
+!!! warning "TTL이 -1인 횟수 키가 보이면"
+    정상이 아닙니다. 그 사용자는 영원히 막혀 있습니다. 키를 지우고, 직접 `INCR`·`EXPIRE`를 쓰는 코드가 새로 들어왔는지 확인합니다.
 
----
+## 4. "이미 보냄" 표시
 
-## 4. Slack 알림 큐
+예약 작업이 같은 대상을 다시 봐도 알림이 한 번만 나가게 합니다. 키가 없을 때만 만들고(`SETNX`), 이미 있으면 보내지 않습니다.
 
-Slack Webhook API는 채널당 초당 1건의 rate limit이 있습니다. 비즈니스 로직이 직접 Slack API를 호출하면 블로킹됩니다. 대신 Redis List를 큐로 사용해 비동기 처리합니다.
+### `email:preexpiry:{신청 번호}:{남은 날}:{날짜}`
 
-**공통 구조**
+예: `email:preexpiry:42:7일:2026-07-15`
 
-```
-알림 발생 시 → RPUSH (오른쪽 삽입, FIFO)
-전용 Worker → LPOP (왼쪽 꺼내기, 1초 간격)
-발송 실패 → RPUSH로 재삽입 (최대 3회, 3회 초과 시 폐기)
-```
+`{남은 날}`은 `7일`·`3일`·`1일`, `{날짜}`는 보내는 날이 아니라 **그 신청의 만료일**입니다. 25시간은 하루 주기에 예약 작업이 늦게 도는 경우를 대비해 1시간을 더한 값입니다.
 
-두 큐는 소비하는 Worker 클래스도 분리되어 있습니다. `slack:notification:queue`는 `SlackNotificationWorker`가, `slack:infra:notification:queue`는 `InfraSlackNotificationWorker`가 각각 전담합니다. 서로 완전히 독립 운영되므로 한쪽 큐가 밀려도 다른 쪽 발송에는 영향이 없습니다.
+### `email:user-inactive-warning:{userId}:{남은 날}:{날짜}`
 
-### `slack:notification:queue`
+장기 미사용 경고에 같은 방식을 씁니다. `{남은 날}`은 `7`·`3`·`1`, `{날짜}`는 **보내는 날**입니다.
 
-일반 비즈니스 알림 큐입니다 (신청 접수, 승인, 거절, 삭제 등). `SlackNotificationWorker`가 소비합니다.
+### `user-inactive-notice:{userId}`
 
-| 항목 | 값 |
-|------|----|
-| 값 형태 | `SlackNotificationDTO` JSON 직렬화 |
-| TTL | 없음 (영구 보존, 꺼낼 때까지 유지) |
+위 둘과 성격이 다릅니다. 중복을 막는 표시가 아니라 **사용자에게 알린 비활성화 예정일**을 담고 있습니다. 예정일이 기록된 사용자만 비활성화하므로, 경고를 한 번도 받지 못한 사용자가 갑자기 비활성화되지 않습니다.
 
-### `slack:infra:notification:queue`
+### `alert-once:{사건 키}`
 
-Infra 서버 관련 알림 전용 큐입니다. `slack:notification:queue`와 별도로 운영해 우선순위나 처리 경로를 분리합니다. `InfraSlackNotificationWorker`가 소비합니다.
+관리자 알림용입니다. 사건 키에는 작업 종류, 신청 번호, 작업 번호가 들어갑니다.
 
-| 항목 | 값 |
-|------|----|
-| 값 형태 | `slack:notification:queue`와 동일 |
+예: `alert-once:provision-missing-result:42:1087`
 
-**확인 방법**
+결과 불명처럼 상태가 그대로 남는 사건은 폴러가 몇 초마다 다시 보는데, 이 표시가 있어 알림은 한 번만 나갑니다. 같은 신청이라도 새 작업이면 작업 번호가 달라 다시 알립니다.
 
-```bash
-# 현재 큐에 쌓인 메시지 수
-LLEN slack:notification:queue
-LLEN slack:infra:notification:queue
+!!! note "Redis에 닿지 못하면"
+    "이미 보냄" 확인에 실패하면 **알림을 보냅니다.** 못 받는 것보다 두 번 받는 편이 낫다고 판단했습니다.
 
-# 큐 내용 조회 (삭제하지 않고 확인)
-LRANGE slack:notification:queue 0 -1
-LRANGE slack:infra:notification:queue 0 -1
-```
-
-큐 길이가 계속 늘어난다면 `SlackNotificationWorker`가 멈췄거나 Slack API 장애를 의심합니다. 자세한 대응은 [운영 가이드](운영-가이드.md) 11절을 참고합니다.
-
-**동작을 직접 확인하고 싶을 때**
-
-메시지를 수동으로 넣어보고 Worker가 가져가는 과정을 실시간으로 볼 수 있습니다. DTO 필드는 실제 `SlackNotificationDTO`와 맞춰야 역직렬화 에러가 나지 않습니다.
-
-```bash
-# 큐에 테스트 메시지 하나 삽입 (RPUSH는 오른쪽 끝에 추가)
-RPUSH slack:notification:queue '{"type":"DM","username":"test_user","email":"test@test.com","message":"테스트"}'
-# 결과가 (integer) 1이면 큐에 1건 쌓인 것
-
-# 별도 터미널에서 실시간 명령 로그 확인
-MONITOR
-# 이 상태에서 스케줄러나 알림을 트리거하면 RPUSH → LPOP이 순서대로 찍히는 것을 볼 수 있음
-```
-
----
-
-## 5. Slack 캐시
-
-### `slack:cache:users:list`
-
-Slack 워크스페이스 멤버 목록을 캐싱합니다. DM 발송 시 이메일 → Slack UserId 변환에 사용됩니다. 매번 Slack `users.list` API를 호출하면 rate limit에 걸릴 수 있어 1시간 TTL로 캐싱합니다.
+## 5. Slack 대기열
 
 ```
-저장  Slack users.list API 호출 후  →  SET slack:cache:users:list = <멤버 목록 JSON> (TTL 1h)
-삭제  TTL 만료 (1시간 후 자동)
+알림 발생  →  목록 끝에 넣는다
+전송 작업  →  1초마다 앞에서 하나 꺼내 보낸다
+일시적 실패 →  다시 넣는다 (최대 3번)
 ```
 
-| 항목 | 값 |
-|------|----|
-| 값 형태 | Slack 멤버 목록 JSON 직렬화 |
-| TTL | 1시간 |
+| 키 | 넣는 쪽 | 꺼내는 쪽 |
+| --- | --- | --- |
+| `slack:notification:queue` | Admin BE의 알림 | `SlackNotificationWorker` |
+| `slack:infra:notification:queue` | config-server가 `/api/internal/slack/notify`로 보낸 알림 | `InfraSlackNotificationWorker` |
 
----
+둘을 나눈 이유는 한쪽이 밀려도 다른 쪽이 늦어지지 않게 하기 위해서입니다.
+
+**길이가 0에 가까우면 정상입니다.** 계속 늘어나면 전송 작업이 멈췄거나 Slack에 문제가 있는 것입니다([운영 가이드](운영-가이드.md) 6절).
+
+## 새 키를 만들 때
+
+| 규칙 | 이유 |
+| --- | --- |
+| 유지 시간(TTL)을 반드시 준다 | 주지 않으면 키가 영원히 쌓인다. 대기열만 예외 |
+| 이름은 `{영역}:{용도}:{대상}` | 무엇인지 이름으로 알 수 있게 |
+| 이메일이 들어가면 소문자로 맞춘다 (`EmailAddresses.normalize`) | 대소문자를 바꿔 제한을 피하지 못하게 |
+| 횟수는 `RedisWindowCounter`, 관리자 알림 중복은 `AlertDeduplicator`를 쓴다 | 직접 만들면 유지 시간 없는 키가 남기 쉽다 |
+| 없어져도 되는 값만 둔다 | Redis는 비워질 수 있다 |
+| 이 문서의 표에 추가한다 | 다음 사람이 장애 중에 찾는다 |
 
 ## redis-cli 빠른 참조
 
+Redis에 접속하는 방법은 [운영 가이드](운영-가이드.md) 5절에 있습니다.
+
 ```bash
-# ─── Redis Pod 접속 ──────────────────────────────────────────────
-kubectl exec -it <redis-pod-name> -n <namespace> -- redis-cli
+# 키가 있는지 / 값 / 남은 시간(초)
+EXISTS RT:42            # 1 있음, 0 없음
+GET LOGIN_FAIL:user@dgu.ac.kr
+TTL RT:42               # -2 없음, -1 유지 시간 없음, 양수 남은 초
 
-# ─── 키 존재 여부 / 값 / TTL ──────────────────────────────────────
-EXISTS RT:42                        # 1 = 있음, 0 = 없음
-GET RT:42                           # 값 조회
-TTL RT:42                           # 남은 TTL (초). -2 = 만료/없음
+# 대기열
+LLEN slack:notification:queue           # 쌓인 수
+LRANGE slack:notification:queue 0 4     # 앞에서 5개 보기 (꺼내지 않음)
 
-# ─── 인증 관련 ───────────────────────────────────────────────────
-EXISTS VERIFIED:user@example.com    # 인증 완료 상태 확인
-KEYS email:verify:*                 # 인증번호 대기 중인 이메일 목록
+# 여러 키 찾기
+SCAN 0 MATCH "alert-once:*" COUNT 100
+SCAN 0 MATCH "email:preexpiry:42:*" COUNT 100
 
-# ─── Slack 큐 ────────────────────────────────────────────────────
-LLEN slack:notification:queue       # 큐 메시지 수
-LRANGE slack:notification:queue 0 4 # 앞에서 5개 확인 (삭제 안 함)
-
-# ─── 만료 예고 중복 방지 ──────────────────────────────────────────
-KEYS email:preexpiry:42:*           # requestId=42의 발송 이력
-KEYS email:preexpiry:*              # 전체 발송 이력 (주의: 많으면 느림)
-
-# ─── 운영 환경 전체 키 스캔 (KEYS * 대신 사용) ──────────────────
-SCAN 0 MATCH * COUNT 100
+# 지우기
+DEL LOGIN_FAIL:user@dgu.ac.kr           # 로그인 잠금 풀기
+DEL RT:42                               # 강제 로그아웃
 ```
 
-> `KEYS *` 명령은 Redis를 블로킹합니다. 운영 환경에서는 반드시 `SCAN`을 사용하세요.
+!!! warning "`KEYS *`를 쓰지 않는다"
+    `KEYS`는 끝날 때까지 Redis를 멈춥니다. 운영에서는 `SCAN`을 씁니다.

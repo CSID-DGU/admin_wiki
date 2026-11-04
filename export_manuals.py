@@ -156,7 +156,9 @@ MANUALS = (
             MD_DIR / "infra" / "개요.md",
             MD_DIR / "infra" / "design" / "시스템-아키텍처.md",
             MD_DIR / "infra" / "design" / "기초-개념.md",
+            MD_DIR / "infra" / "design" / "Kerberos-AD-Samba.md",
             MD_DIR / "infra" / "design" / "데이터베이스.md",
+            MD_DIR / "infra" / "design" / "무결성-정합성-점검.md",
             MD_DIR / "infra" / "operations" / "시작.md",
             MD_DIR / "infra" / "operations" / "운영-매뉴얼.md",
             MD_DIR / "infra" / "operations" / "API-레퍼런스.md",
@@ -426,6 +428,7 @@ hr { border: 0; border-top: 1px solid #b9c8d4; margin: 8mm 0; }
 
 TABLE_DELIMITER = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+HEADING_ID = re.compile(r"\s*\{\s*#([\w-]+)\s*\}\s*$")
 UL_ITEM = re.compile(r"^\s*[-*+]\s+(.*)$")
 OL_ITEM = re.compile(r"^\s*\d+[.)]\s+(.*)$")
 IMG_TAG = re.compile(r"^<img\b[^>]*>$", re.IGNORECASE)
@@ -499,8 +502,14 @@ def preprocess_markdown(source: Path, registry: dict[Path, tuple[str, str]] | No
         markdown,
     )
     if registry:
+        own = registry.get(source.resolve())
+
         def rewrite_link(match: re.Match[str]) -> str:
-            anchor = rewrite_internal_link(source, match.group(2), registry)
+            target = match.group(2)
+            if target.startswith("#") and own:
+                # 같은 문서 안 링크: PDF의 제목 id는 매뉴얼 slug가 앞에 붙으므로 같은 접두어를 붙인다.
+                return f"[{match.group(1)}](#{own[0]}-{target[1:]})"
+            anchor = rewrite_internal_link(source, target, registry)
             if anchor is None:
                 return match.group(0)
             return f"[{match.group(1)}]({anchor})"
@@ -649,7 +658,13 @@ def markdown_to_html(markdown: str, browser: str, id_prefix: str = "") -> str:
         if heading:
             level = len(heading.group(1))
             title = heading.group(2).strip()
-            anchor = slugify_heading(title)
+            # MkDocs attr_list의 `## 제목 { #id }`는 제목에서 떼고 그 id를 앵커로 쓴다.
+            explicit_id = HEADING_ID.search(title)
+            if explicit_id:
+                title = title[: explicit_id.start()].rstrip()
+                anchor = explicit_id.group(1)
+            else:
+                anchor = slugify_heading(title)
             full_id = f"{id_prefix}-{anchor}" if id_prefix else anchor
             out.append(f'<h{level} id="{html.escape(full_id, quote=True)}">{render_inline(title)}</h{level}>')
             index += 1

@@ -11,6 +11,7 @@
 | config-server가 시스템에서 무슨 일을 하는지 먼저 이해하고 싶다 | [개요](개요.md) | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | 승인·회수·이동 등 작업이 실제로 어떤 단계를 거치는지 궁금하다 | [시스템 아키텍처](design/시스템-아키텍처.md) | [데이터베이스](design/데이터베이스.md), [API 레퍼런스](operations/API-레퍼런스.md) |
 | Kubernetes, UID/GID, NFS, NodePort 같은 용어가 낯설다 | [기초 개념](design/기초-개념.md) | 다시 [시스템 아키텍처](design/시스템-아키텍처.md) |
+| AD, Kerberos, keytab 같은 말이 낯설다 | [Kerberos, AD, Samba](design/Kerberos-AD-Samba.md) | [kdc-setup](kdc-setup/index.md) |
 | 배포, 점검, 장애 대응 절차를 확인해야 한다 | [운영 매뉴얼](operations/운영-매뉴얼.md) | [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md), [데이터베이스](design/데이터베이스.md) |
 | 자원이 남거나 상태가 어긋나는 지점(무결성·정합성)을 확인해야 한다 | [무결성·정합성 점검](design/무결성-정합성-점검.md) | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | API 입력과 응답을 바로 확인해야 한다 | [API 레퍼런스](operations/API-레퍼런스.md) | [시스템 아키텍처](design/시스템-아키텍처.md) |
@@ -31,9 +32,10 @@
 ### 3. 막히는 용어와 기록 구조를 보충한다
 
 - [기초 개념](design/기초-개념.md)은 UID/GID, Kubernetes, NFS, NodePort 같은 용어를 설명한다.
+- [Kerberos, AD, Samba](design/Kerberos-AD-Samba.md)는 홈에 Kerberos가 필요한 이유와 AD, Samba가 쓰이는 방식을 처음부터 순서대로 설명한다.
 - [데이터베이스](design/데이터베이스.md)는 스택 DB의 포트 배정·작업 이력·작업 소유권 테이블과 백업을 설명한다.
 
-생성 순서는 아키텍처 문서에서 보고, 용어나 기록 구조는 이 두 문서에서 보충하면 된다.
+생성 순서는 아키텍처 문서에서 보고, 용어나 기록 구조는 이 문서들에서 보충하면 된다.
 
 ### 4. 운영 문서와 참조 문서로 내려간다
 
@@ -56,6 +58,7 @@
 | [개요](개요.md) | 출발점 | config-server의 역할, 작업 종류, 관련 저장소, 배포 위치 | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | [시스템 아키텍처](design/시스템-아키텍처.md) | 중심 문서 | 작업 종류별 단계, 실행 방식, 계정·포트 번호 규칙 | [데이터베이스](design/데이터베이스.md), [API 레퍼런스](operations/API-레퍼런스.md) |
 | [기초 개념](design/기초-개념.md) | 배경지식 보충 | UID/GID, 계정 파일, Kubernetes, NFS, NodePort 같은 개념 | 다시 본문 문서 |
+| [Kerberos, AD, Samba](design/Kerberos-AD-Samba.md) | 배경지식 보충 | AD와 DC, Kerberos 티켓, keytab과 ccache, 계정 대장과 AD의 관계 | [kdc-setup](kdc-setup/index.md) |
 | [데이터베이스](design/데이터베이스.md) | 기록 구조 보충 | 스택 DB, 포트 배정·작업 이력 테이블, 잠금, 백업 | [운영 매뉴얼](operations/운영-매뉴얼.md) |
 | [무결성·정합성 점검](design/무결성-정합성-점검.md) | 점검 결과 | 고아 자원·상태 불일치가 생기는 지점과 책임 경계 | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | [처음 작업할 때](operations/시작.md) | 작업 시작 안내 | 브랜치 규칙, 테스트, 실험 스택·E2E, PR 흐름 | [운영 매뉴얼](operations/운영-매뉴얼.md) |

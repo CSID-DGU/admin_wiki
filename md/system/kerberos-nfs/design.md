@@ -31,6 +31,8 @@ numeric UID/GID, mode, ACL을 함께 사용해 파일 접근 권한을 결정한
 
 | 용어 | 의미 | 현재 구성에서의 사용 |
 | --- | --- | --- |
+| AD | Active Directory. 사용자·group 정보(LDAP), KDC, DNS를 한 서버에 묶은 중앙 계정 관리 시스템 | FARM/LAB 모두 Windows 서버 대신 Samba AD DC로 운영 |
+| DC | Domain Controller. AD 서버 한 대. 여러 대가 서로 복제한다 | FARM `farm2`·`farm6`(주)·`farm7`, LAB `dc1.lab.decs.internal` |
 | Realm | 하나의 Kerberos 인증 관리 영역 | `FARM.DECS.INTERNAL`, `LAB.DECS.INTERNAL` |
 | Principal | Kerberos가 식별하는 사용자 또는 service 이름 | `<username>@REALM`, `nfs/<fqdn>@REALM` |
 | KDC | principal의 비밀키를 관리하고 ticket을 발급하는 서버 | FARM/LAB의 Samba AD DC가 KDC 역할을 함께 수행 |

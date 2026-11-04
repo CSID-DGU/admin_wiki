@@ -5,3 +5,4 @@ wiki/
 wiki-docs/
 site/
 __pycache__/
+.omc/

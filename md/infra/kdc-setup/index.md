@@ -10,6 +10,7 @@
 
 | 필요할 때 | 문서 |
 | --- | --- |
+| AD, Kerberos, keytab 같은 말이 낯설다 | [Kerberos, AD, Samba](../design/Kerberos-AD-Samba.md) |
 | 파일과 단계의 설계를 본다 | [설계](design.md) |
 | 점검과 장애 대응 순서를 본다 | [운영](operations.md) |
 | Helm, CI, Secret 값의 위치를 본다 | [설정](config.md) |

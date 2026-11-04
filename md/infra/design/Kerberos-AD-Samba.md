@@ -3,7 +3,7 @@
 ## 이 문서에서 다루는 내용
 
 - 홈 디렉터리를 쓰는데 Kerberos가 필요한 이유
-- Kerberos와 AD(Active Directory), Samba는 무엇이고 각각의 연관성
+- Kerberos와 AD(Active Directory), Samba는 무엇이고 서로 어떤 연관이 있는지 설명
 
 세 가지를 먼저 요약하면 다음과 같다.
 

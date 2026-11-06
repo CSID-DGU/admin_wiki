@@ -44,7 +44,7 @@ sequenceDiagram
     participant NAS as NAS
 
     P->>NAS: "나는 UID 21001이다. 이 파일 열어 달라"
-    Note over NAS: 확인하지 않는다
+    Note over NAS: UID 미확인
     NAS-->>P: 허용
 ```
 
@@ -103,17 +103,21 @@ sequenceDiagram
     K-->>N: 2. TGT 발급 → ccache에 저장
     N->>K: 3. TGT 제시, "nfs/nas 티켓 달라"
     K-->>N: 4. NAS의 키로 잠근 서비스 티켓
-    N->>NAS: 5. 서비스 티켓 제시 + 파일 요청
-    NAS->>NAS: 6. 자기 keytab으로 티켓을 열어 사용자 확인
-    NAS->>NAS: 7. 사용자의 UID와 파일 권한 비교
-    NAS-->>N: 8. 허용되면 파일 제공
+    N->>NAS: 5. 서비스 티켓 제시 (GSS 컨텍스트 맺기)
+    NAS->>NAS: 6. 자기 keytab으로 티켓을 열어 사용자 이름 확인
+    NAS-->>N: 7. GSS 컨텍스트 번호 발급
+    N->>NAS: 8. 파일 요청 + GSS 컨텍스트 번호 + 서명
+    NAS->>NAS: 9. 번호로 사용자를 찾아 UID와 파일 권한 비교
+    NAS-->>N: 10. 허용되면 파일 제공
 ```
 
 네트워크에는 잠긴 티켓만 오가고 비밀번호나 키는 오가지 않는다. 티켓에는 시각이 들어 있어서 서버끼리 시계가 5분 넘게 어긋나면 거부된다.
 
 1~2단계는 TGT를 미리 받아 두는 과정이다. Pod를 만들 때 노드가 keytab으로 첫 TGT를 받아 ccache에 저장하고, 그 뒤로는 노드의 갱신 타이머가 한 시간마다 확인해 만료되지 않게 유지한다.
 
-3~8단계는 사용자가 파일을 열 때 일어난다. 사용자 프로세스는 파일을 열기만 하고 티켓은 노드가 챙긴다. 파일을 열면 노드 커널이 NAS에 보낼 요청을 만들고, 서비스 티켓이 없으면 노드의 `rpc.gssd` 프로그램이 ccache의 TGT로 KDC에서 받아 온다. 서비스 티켓은 한 번 받으면 유효 시간 동안 계속 쓰므로, 파일을 열 때마다 매번 KDC에서 받아오지는 않는다.
+3~7단계는 사용자가 NAS에 처음 접근할 때 한 번 일어난다. 사용자 프로세스는 파일을 열기만 하고 티켓은 노드가 챙긴다. 노드 커널이 NAS에 보낼 요청을 만들다가 그 사용자의 GSS 컨텍스트가 없으면, 노드의 `rpc.gssd` 프로그램이 ccache의 TGT로 서비스 티켓을 받아 NAS와 GSS 컨텍스트를 맺는다([5.5절](#gss-context)).
+
+8~10단계는 파일을 열고 읽고 쓸 때마다 일어난다. 요청에는 티켓이 아니라 GSS 컨텍스트 번호와 서명만 붙고, NAS는 그 번호로 처음 접근할 때 확인해 둔 사용자를 찾는다. 서비스 티켓과 GSS 컨텍스트는 유효 시간 동안 계속 쓰므로, 파일을 열 때마다 KDC에 가거나 티켓을 다시 내지 않는다.
 
 각 단계의 세부는 [Kerberos/NFS 설계](../../system/kerberos-nfs/design.md) 3장에 있다.
 
@@ -124,7 +128,7 @@ Kerberos는 프로토콜이므로 위 순서대로 실제로 돌아가려면 다
 | 필요한 것 | 필요한 이유 | AD의 구성 요소 |
 | --- | --- | --- |
 | 티켓을 발급하는 서버와 모든 principal의 비밀키 저장소 | 2, 4단계를 처리할 서버가 있어야 한다 | **KDC** |
-| 티켓의 사용자 이름(`user@REALM`)과 UID의 대응 정보 | 6단계에서 NAS가 확인한 것은 이름인데, 7단계의 파일 권한은 UID로 판정한다 | **사용자 정보 DB**와, 거기에 UID를 적는 **RFC2307 속성**(3.4·3.6절) |
+| 티켓의 사용자 이름(`user@REALM`)과 UID의 대응 정보 | 6단계에서 NAS가 확인한 것은 이름인데, 9단계의 파일 권한은 UID로 판정한다 | **사용자 정보 DB**와, 거기에 UID를 적는 **RFC2307 속성**(3.4·3.6절) |
 | KDC와 사용자 정보 DB의 위치를 찾는 방법 | 노드와 NAS가 둘이 있는 서버의 주소를 알아야 한다 | **DNS** |
 
 ## 3. AD와 도메인
@@ -295,15 +299,17 @@ sequenceDiagram
     P->>N: 1. 홈 파일 열기
     N->>DC: 2. ccache의 TGT로 NAS용 서비스 티켓 요청
     DC-->>N: 3. 서비스 티켓
-    N->>NAS: 4. 티켓을 붙여 파일 요청
-    NAS->>DC: 5. 티켓의 이름으로 UID 조회 (LDAP)
-    DC-->>NAS: 6. UID
-    NAS->>NAS: 7. UID와 파일 권한 비교
-    NAS-->>N: 8. 파일 제공
-    N-->>P: 9. 파일 전달
+    N->>NAS: 4. 서비스 티켓 제시 (GSS 컨텍스트 맺기)
+    NAS->>DC: 5. 티켓의 이름으로 UID·그룹 조회 (LDAP)
+    DC-->>NAS: 6. UID·그룹
+    NAS-->>N: 7. GSS 컨텍스트 번호
+    N->>NAS: 8. 파일 요청 + 컨텍스트 번호 + 서명
+    NAS->>NAS: 9. UID와 파일 권한 비교
+    NAS-->>N: 10. 파일 제공
+    N-->>P: 11. 파일 전달
 ```
 
-2~3단계는 노드에 서비스 티켓이 없을 때만, 5~6단계는 NAS에 그 사용자의 UID가 캐시되어 있지 않을 때만 일어난다. 그래서 파일을 열 때마다 DC에 다녀오지는 않는다.
+2~3단계는 노드에 서비스 티켓이 없을 때만, 4~7단계는 그 사용자의 GSS 컨텍스트가 없을 때만 일어난다. 그래서 파일을 열 때마다 DC에 다녀오지는 않는다. GSS 컨텍스트는 [5.5절](#gss-context)에서 본다.
 
 계정을 만들고 노드에 keytab을 두는 준비 과정은 config-server가 하며, 5.1절에서 본다.
 
@@ -311,72 +317,109 @@ sequenceDiagram
 
 ### 5.1 계정 생성부터 회수까지
 
-사용자 한 명의 계정이 만들어지고, Pod가 뜨고, 회수될 때까지 단계마다 어떤 일이 일어나는지 정리하면 다음과 같다. 계정 생성, Pod 생성, 회수 단계의 일은 config-server가 하고, Pod 사용 중 단계의 일은 노드와 NAS가 한다. 오른쪽 열은 그 일에 쓰이는 구성 요소로, 앞에서 설명한 Kerberos, AD, Samba가 각각 어느 단계에서 쓰이는지 보여 준다. 단계의 정확한 순서와 실패 처리는 [시스템 아키텍처](시스템-아키텍처.md) 3장에 있다.
+사용자 한 명의 계정이 만들어지고, Pod가 뜨고, 회수될 때까지를 네 단계로 나눠 본다. 계정 생성, Pod 생성, 회수 단계의 일은 config-server가 하고, Pod 사용 중 단계의 일은 노드와 NAS가 한다. 단계마다 그림 바로 아래 표에 하는 일과 쓰이는 구성 요소를 정리했다. 표의 "그림" 열은 그림의 화살표 번호이고, 구성 요소 열은 앞에서 설명한 Kerberos, AD, Samba가 각각 어느 단계에서 쓰이는지 보여 준다. 단계의 정확한 순서와 실패 처리는 [시스템 아키텍처](시스템-아키텍처.md) 3장에 있다.
 
-흐름을 순서대로 그리면 다음과 같다. Pod 사용 중 단계의 파일 열기는 4.3절 그림과 같은 과정이다.
+#### 계정 생성
 
 ```mermaid
 sequenceDiagram
     participant CS as config-server
     participant NAS as NAS
     participant DC as DC (Samba)
+
+    CS->>CS: 1. 계정 파일에 UID 정하기
+    CS->>NAS: 2. 그 UID 소유의 홈 만들기
+    CS->>DC: 3. 사용자·그룹 만들고 uidNumber 기록
+    DC-->>CS: 4. 사용자 keytab (Secret에 보관)
+    CS->>DC: 5. 세 DC가 모두 같은 UID로 답하는지 확인
+```
+
+| 그림 | 하는 일 | 쓰이는 구성 요소 |
+| --- | --- | --- |
+| 1~2 | [계정 파일](#account-file)에 UID를 정하고, NAS에 그 UID 소유의 홈을 만든다 | [계정 파일](#account-file), NAS |
+| 3 | DC에 사용자와 `<user>_gid` 그룹을 만들고 `uidNumber`·`gidNumber`를 기록한다. 이때 principal이 생긴다 | AD(사용자 정보 DB + KDC) |
+| 4 | DC가 사용자 keytab을 내보내고, config-server가 Kubernetes Secret `krb5-keytab-<user>`에 보관한다 | Kerberos |
+| 5 | 세 DC 모두 이 사용자를 그 UID로 돌려줄 때까지 기다린다 | AD 복제 |
+
+#### Pod 생성
+
+```mermaid
+sequenceDiagram
+    participant CS as config-server
+    participant DC as DC (Samba)
     participant N as FARM 노드
     participant P as 사용자 Pod
 
-    Note over CS,P: 계정 생성
-    CS->>CS: 계정 파일에 UID 정하기
-    CS->>NAS: 그 UID 소유의 홈 만들기
-    CS->>DC: 사용자·그룹 만들고 uidNumber 기록
-    DC-->>CS: 사용자 keytab (Secret에 보관)
-    CS->>DC: 세 DC가 모두 같은 UID로 답하는지 확인
-
-    Note over CS,P: Pod 생성
-    CS->>N: 노드가 사용자와 홈 소유자를 같은 UID로 보는지 확인
-    CS->>N: keytab 배포
-    N->>DC: 노드 스크립트가 keytab으로 첫 TGT 요청
-    DC-->>N: TGT (ccache에 저장)
-    N->>N: ccache 소유자 확인 후 갱신 타이머 등록
-    CS->>P: Pod 생성, 홈과 ccache 연결
-
-    Note over CS,P: Pod 사용 중
-    loop 한 시간마다
-        N->>DC: TGT 갱신 요청
-        DC-->>N: 새 TGT (ccache에 저장)
-    end
-    P->>N: 홈 파일 열기
-    opt 노드에 서비스 티켓이 없을 때
-        N->>DC: TGT로 NAS용 서비스 티켓 요청
-        DC-->>N: 서비스 티켓
-    end
-    N->>NAS: 티켓을 붙여 파일 요청
-    opt NAS에 UID가 캐시되어 있지 않을 때
-        NAS->>DC: 티켓의 이름으로 UID 조회 (LDAP)
-        DC-->>NAS: UID
-    end
-    NAS->>NAS: UID와 파일 권한 비교
-    NAS-->>N: 파일 제공
-    N-->>P: 파일 전달
-
-    Note over CS,P: 회수
-    CS->>P: Pod 삭제
-    CS->>N: keytab·타이머·ccache 삭제
-    CS->>DC: 계정을 지울 때는 사용자 삭제
+    CS->>N: 1. 노드가 사용자와 홈 소유자를 같은 UID로 보는지 확인
+    CS->>N: 2. keytab 배포
+    N->>DC: 3. 노드 스크립트가 keytab으로 첫 TGT 요청
+    DC-->>N: 4. TGT (ccache에 저장)
+    N->>N: 5. ccache 소유자 확인 후 갱신 타이머 등록
+    CS->>P: 6. Pod 생성, 홈과 ccache 연결
 ```
 
-단계마다 하는 일과 쓰이는 구성 요소를 정리하면 다음과 같다.
-
-| 단계 | 하는 일 | 쓰이는 구성 요소 |
+| 그림 | 하는 일 | 쓰이는 구성 요소 |
 | --- | --- | --- |
-| 계정 생성 | [계정 파일](#account-file)에 UID를 정하고, NAS에 그 UID 소유의 홈을 만든다 | [계정 파일](#account-file), NAS |
-| | DC에 사용자와 `<user>_gid` 그룹을 만들고 `uidNumber`·`gidNumber`를 기록한다. 이때 principal이 생긴다 | AD(사용자 정보 DB + KDC) |
-| | DC가 사용자 keytab을 내보내고, config-server가 Kubernetes Secret `krb5-keytab-<user>`에 보관한다 | Kerberos |
-| | 세 DC 모두 이 사용자를 그 UID로 돌려줄 때까지 기다린다 | AD 복제 |
-| Pod 생성 | 노드를 고른 뒤, 그 노드에서 사용자 이름이 같은 UID로 풀리고 NFS 홈 소유자도 그 UID로 보일 때까지 기다린다(`check-identity`) | winbind(Samba), 커널 idmap |
-| | Secret의 keytab을 노드의 root만 읽을 수 있는 경로에 두고, 노드 관리 스크립트(`ailab-krb5-admin`)가 그 keytab으로 첫 TGT를 받아 ccache에 저장한다. ccache 소유자가 사용자 UID인지 확인한 뒤 갱신 타이머를 건다 | Kerberos |
-| | Pod를 만들고 노드의 NFS 홈과 ccache 경로를 연결한다 | Kubernetes |
-| Pod 사용 중 | 타이머가 한 시간마다 TGT를 갱신한다. 파일을 열면 노드가 TGT로 NAS용 서비스 티켓을 받아 요청에 붙인다 | Kerberos, KDC |
-| | NAS는 티켓의 이름을 `uidNumber`로 바꿔 파일 소유자와 비교한다 | AD(RFC2307), winbind(Samba) |
-| 회수 | Pod를 지우면 노드의 keytab·타이머·ccache를 지운다. 계정을 지우면 DC의 사용자와 Secret도 지운다 | Kerberos, AD |
+| 1 | 노드를 고른 뒤, 그 노드에서 사용자 이름이 같은 UID로 풀리고 NFS 홈 소유자도 그 UID로 보일 때까지 기다린다(`check-identity`) | winbind(Samba), 커널 idmap |
+| 2~5 | Secret의 keytab을 노드의 root만 읽을 수 있는 경로에 두고, 노드 관리 스크립트(`ailab-krb5-admin`)가 그 keytab으로 첫 TGT를 받아 ccache에 저장한다. ccache 소유자가 사용자 UID인지 확인한 뒤 갱신 타이머를 건다 | Kerberos |
+| 6 | Pod를 만들고 노드의 NFS 홈과 ccache 경로를 연결한다 | Kubernetes |
+
+#### Pod 사용 중
+
+파일을 여는 과정(3~13)은 4.3절 그림과 같고, GSS 컨텍스트는 [5.5절](#gss-context)에서 자세히 본다.
+
+```mermaid
+sequenceDiagram
+    participant P as 사용자 Pod
+    participant N as FARM 노드
+    participant DC as DC (Samba)
+    participant NAS as NAS
+
+    loop 한 시간마다
+        N->>DC: 1. TGT 갱신 요청
+        DC-->>N: 2. 새 TGT (ccache에 저장)
+    end
+    P->>N: 3. 홈 파일 열기
+    opt 노드에 서비스 티켓이 없을 때
+        N->>DC: 4. TGT로 NAS용 서비스 티켓 요청
+        DC-->>N: 5. 서비스 티켓
+    end
+    opt 그 사용자의 GSS 컨텍스트가 없을 때
+        N->>NAS: 6. 서비스 티켓 제시
+        NAS->>DC: 7. 티켓의 이름으로 UID·그룹 조회 (LDAP)
+        DC-->>NAS: 8. UID·그룹
+        NAS-->>N: 9. GSS 컨텍스트 번호
+    end
+    N->>NAS: 10. 컨텍스트 번호와 서명을 붙여 파일 요청
+    NAS->>NAS: 11. UID와 파일 권한 비교
+    NAS-->>N: 12. 파일 제공
+    N-->>P: 13. 파일 전달
+```
+
+| 그림 | 하는 일 | 쓰이는 구성 요소 |
+| --- | --- | --- |
+| 1~2 | 타이머가 한 시간마다 TGT를 갱신한다 | Kerberos, KDC |
+| 3~6, 9~10 | 파일을 열면 노드가 TGT로 NAS용 서비스 티켓을 받아 NAS와 GSS 컨텍스트를 맺고, 이후 요청에는 컨텍스트 번호와 서명을 붙인다 | Kerberos, KDC |
+| 7~8, 11 | NAS는 GSS 컨텍스트를 맺을 때 티켓의 이름을 `uidNumber`와 그룹으로 바꿔 두고, 요청마다 파일 소유자와 비교한다 | AD(RFC2307), winbind(Samba) |
+
+#### 회수
+
+```mermaid
+sequenceDiagram
+    participant CS as config-server
+    participant DC as DC (Samba)
+    participant N as FARM 노드
+    participant P as 사용자 Pod
+
+    CS->>P: 1. Pod 삭제
+    CS->>N: 2. keytab·타이머·ccache 삭제
+    CS->>DC: 3. 계정을 지울 때는 사용자 삭제
+```
+
+| 그림 | 하는 일 | 쓰이는 구성 요소 |
+| --- | --- | --- |
+| 1~2 | Pod를 지우면 노드의 keytab·타이머·ccache를 지운다 | Kerberos |
+| 3 | 계정을 지우면 DC의 사용자와 Secret도 지운다 | Kerberos, AD |
 
 같은 노드에 같은 사용자의 다른 Pod가 남아 있으면 keytab과 타이머를 남긴다. 지우면 살아 있는 Pod의 티켓이 갱신되지 않아 홈이 `nobody`로 보인다.
 
@@ -432,7 +475,85 @@ keytab과 ccache는 둘 다 사용자의 인증 정보지만, 유출됐을 때�
 
 keytab을 Pod에 넣으면, 컨테이너가 뚫렸을 때 그 사용자의 신원을 계속 쓸 수 있게 넘겨주는 셈이다. 그래서 keytab은 노드에만 두고 Pod에는 ccache만 연결한다. TGT는 노드의 타이머가 한 시간마다 연장하고, 연장 한도가 가까워지면 keytab으로 새로 받는다.
 
-공용 그룹에 사용자를 넣거나 빼는 변경은 티켓으로 전달되지 않는다. NAS는 GSS 연결을 맺을 때 winbind로 그룹 목록을 조회해 연결이 유지되는 동안(최대 24시간) 고정해 두므로, 노드에서 티켓을 다시 받아도 반영되지 않는다. config-server는 NAS가 AD의 새 멤버십을 알게 된 것을 확인한 뒤 NAS의 GSS 캐시를 비워 반영한다. 이 작업은 승인 직후에 하고, 30분마다 재조정 때 다시 확인한다.
+### 5.5 NAS가 티켓을 쓰는 방식: GSS 컨텍스트 { #gss-context }
+
+NAS는 요청마다 Kerberos 티켓을 검사하지 않는다. 사용자가 처음 접근할 때 한 번만 서비스 티켓을 확인하고 그 사용자에게 번호를 정해 준다. 그 뒤 요청에는 티켓 대신 그 번호와 위조할 수 없는 서명만 붙는다. 이렇게 한 번 확인해 맺어 둔 상태가 **GSS 컨텍스트**다. 정식 이름은 RPCSEC_GSS 컨텍스트이고, NFS 마운트 옵션 `sec=krb5`가 이것을 켠다. 아래 그림의 1~12단계에서 맺고, 13단계부터 쓴다.
+
+```mermaid
+sequenceDiagram
+    participant P as Pod 프로세스
+    participant K as 노드 커널 NFS client
+    participant G as rpc.gssd
+    participant KDC as AD DC의 KDC
+    participant DB as AD DC의 사용자 정보 DB
+    participant NAS as NAS
+
+    Note over P,NAS: 처음 접근할 때 한 번: GSS 컨텍스트 맺기
+    P->>K: 1. 홈의 파일을 연다 (사용자 UID로)
+    K->>G: 2. rpc_pipefs로 "이 UID의 GSS 컨텍스트를 맺어 달라"
+    G->>G: 3. /run/user/UID/ 의 ccache에서 TGT를 꺼낸다
+    G->>KDC: 4. TGT 제시, NAS 서비스 티켓 요청
+    KDC-->>G: 5. 서비스 티켓 (세션 키가 들어 있다)
+    G->>NAS: 6. 서비스 티켓 제시
+    NAS->>NAS: 7. svcgssd가 NAS keytab으로 티켓을 열어 사용자 이름 확인
+    NAS->>DB: 8. winbind가 LDAP로 이름의 UID·그룹 조회
+    DB-->>NAS: 9. uidNumber, 그룹 목록
+    NAS->>NAS: 10. 번호를 정하고 GSS 캐시에 기록
+    NAS-->>G: 11. GSS 컨텍스트 번호
+    G-->>K: 12. rpc_pipefs로 번호와 세션 키를 커널에 넘긴다
+
+    Note over P,NAS: 이후 모든 요청
+    K->>NAS: 13. NFS 요청 + 컨텍스트 번호 + 서명
+    NAS->>NAS: 14. 번호로 GSS 캐시에서 사용자를 찾아 권한 판정
+    NAS-->>K: 15. 응답
+    K-->>P: 16. 결과
+```
+
+4~5단계는 ccache에 NAS 서비스 티켓이 없을 때만, 8~9단계는 NAS의 winbind가 그 사용자 정보를 캐시해 두지 않았을 때만 일어난다. KDC와 사용자 정보 DB는 같은 AD DC 안에 있지만 하는 일이 다르다. KDC는 티켓을 발급하고(2장), 사용자 정보 DB는 이름에 대응하는 UID와 그룹을 알려 준다(3.4·3.6절).
+
+| 용어 | 뜻 | 이 시스템에서 |
+| --- | --- | --- |
+| **GSS 컨텍스트 맺기**(수립) | 서비스 티켓으로 사용자를 한 번 확인하고 번호와 세션 키를 정하는 과정 | 노드의 한 사용자와 NAS 사이에서 한 번 |
+| **GSS 컨텍스트 번호**(핸들) | NAS가 정해 준 번호 | 이후 모든 NFS 요청에 붙는다 |
+| **서명(MIC)** | 서비스 티켓에 든 세션 키로 요청마다 새로 계산하는 값 | 남이 번호만 베껴서는 요청을 만들 수 없다 |
+| **GSS 캐시** | NAS 커널이 컨텍스트마다 사용자를 적어 두는 표(`auth.rpcsec.context`) | 번호마다 사용자 이름, UID, 그룹 목록, 세션 키를 적는다 |
+| **`rpc.gssd`** | 노드에서 GSS 컨텍스트를 대신 맺는 사용자 영역 프로그램 | 노드 서비스 `rpc-gssd` |
+| **`svcgssd`** | NAS에서 받은 서비스 티켓을 검증하는 사용자 영역 프로그램. `rpc.gssd`의 서버 쪽 짝이다 | NAS에서 동작 |
+| **`rpc_pipefs`** | 커널과 `rpc.gssd`가 부탁과 결과를 주고받는 가상 파일시스템 | 노드 `/run/rpc_pipefs` |
+
+GSS 컨텍스트는 TCP 연결과 다르다. TCP 연결은 노드와 NAS가 데이터를 주고받는 통신 통로이고, GSS 컨텍스트는 NAS가 "이 번호로 오는 요청은 이 사용자의 것"이라고 기억해 둔 기록이다. 그래서 TCP 연결이 끊겼다 다시 이어져도 GSS 컨텍스트는 그대로 쓰이고, TCP 연결 하나로 여러 사용자의 요청이 각자의 컨텍스트 번호를 달고 오간다.
+
+#### 커널 영역과 사용자 영역
+
+리눅스는 실행되는 코드를 **커널 영역**과 **사용자 영역**으로 나눈다.
+
+| | 커널 영역 | 사용자 영역 |
+| --- | --- | --- |
+| 무엇이 도나 | 운영체제의 핵심. 파일시스템, TCP, NFS client가 여기 있다 | 일반 프로그램. `bash`, `python`, `sshd`, `winbindd`, `rpc.gssd` |
+| 할 수 있는 일 | 디스크·네트워크·모든 메모리를 직접 다룬다 | 자기 메모리만 쓴다. 파일이나 네트워크가 필요하면 커널에 부탁한다(시스템 콜) |
+| 오류가 나면 | 노드 전체가 멈추거나 재부팅된다 | 그 프로그램만 죽는다 |
+
+영역을 나누는 이유는 보호와 안정성이다. 커널 안의 코드는 무엇이든 할 수 있으므로, 버그 하나가 노드 전체를 멈추거나 다른 프로그램의 메모리를 망가뜨릴 수 있다. 그래서 커널에는 꼭 필요하고 검증된 코드만 두고, 나머지는 사용자 영역에서 돌린다. 사용자 영역의 프로그램은 서로 격리돼 있어서 하나가 죽어도 다른 프로그램과 커널은 영향을 받지 않는다.
+
+`rpc.gssd`가 사용자 영역에 있는 것도 같은 이유다. GSS 컨텍스트를 맺으려면 ccache 파일을 찾아 읽고, `/etc/krb5.conf`를 해석하고, 네트워크로 KDC와 대화해야 한다. 이런 복잡한 일을 커널에 넣으면 커널이 커지고 위험해진다. 게다가 이 일은 사용자마다 처음 한 번, 또는 컨텍스트가 만료될 때만 일어난다. 그래서 커널은 요청마다 해야 하는 가벼운 일(번호와 서명 붙이기)만 직접 하고, 드물게 일어나는 복잡한 일(컨텍스트 맺기)은 사용자 영역의 `rpc.gssd`에게 맡긴다. 두 영역은 서로의 함수를 직접 부를 수 없으므로 `rpc_pipefs`를 통로로 쓴다.
+
+#### rpc.gssd가 하는 일
+
+위 그림에서 2~6단계와 11~12단계가 `rpc.gssd`의 일이다. 커널은 `rpc_pipefs`에 부탁을 넣고(2단계), `rpc.gssd`는 ccache의 TGT로 서비스 티켓을 받아 NAS와 GSS 컨텍스트를 맺은 뒤, 결과를 `rpc_pipefs`로 돌려준다(12단계). ccache는 5.4절의 그 파일이다.
+
+`rpc.gssd`는 **GSS 컨텍스트를 맺을 때만** 일하고, 그 뒤의 읽기·쓰기에는 관여하지 않는다. 컨텍스트가 만료되면(서비스 티켓의 유효 시간) 커널이 다시 부른다. 그래서 `rpc.gssd`가 멈춰도 이미 맺은 컨텍스트는 한동안 동작하고, 처음 접근하는 사용자나 만료된 컨텍스트부터 실패한다.
+
+root(uid 0)의 요청에는 사용자 ccache 대신 노드의 머신 keytab(`/etc/krb5.keytab`)으로 GSS 컨텍스트를 맺는다. 노드 커널이 사용자 대신 NAS에 보내는 관리용 요청이 이것을 쓰며, 대표적인 것이 **임대(lease) 갱신**이다. NFSv4에서는 NAS가 클라이언트마다 열린 파일과 잠금을 기억하는데, 클라이언트가 정해진 시간(임대 시간) 안에 "아직 살아 있다"고 알리지 않으면 NAS는 그 기억을 지운다. 노드 커널은 이 알림을 주기적으로 보낸다.
+
+NAS 쪽도 같은 구조다. NAS 커널의 NFS server도 받은 서비스 티켓을 직접 풀지 않고, 사용자 영역의 `svcgssd`에게 맡긴다. `svcgssd`는 NAS의 서비스 keytab(2.1절)으로 티켓을 열어 사용자 이름을 확인하고(7단계), winbind로 UID와 그룹을 얻어(8~9단계) 결과를 커널에 넘긴다(10단계).
+
+#### NAS의 GSS 캐시
+
+NAS는 GSS 컨텍스트를 맺을 때 티켓의 사용자 이름(`user@FARM.DECS.INTERNAL`)을 UID와 그룹 목록으로 바꾼다. NAS의 winbind가 AD DC의 사용자 정보 DB에 LDAP로 묻는 것이다(3.4·3.6절, 그림 8~9단계). 그 결과를 컨텍스트 번호와 함께 GSS 캐시에 적고(10단계), 그 뒤 요청마다 **이 표만 보고** 권한을 판정한다(14단계). AD에 다시 묻지 않으며, Pod 안의 `id` 결과나 노드가 보내는 그룹 정보, 티켓에 함께 실린 그룹 정보(PAC)는 판정에 쓰이지 않는다.
+
+표의 기록은 컨텍스트가 유지되는 동안(최대 24시간) 바뀌지 않는다. 그래서 공용 그룹에 사용자를 넣거나 빼는 변경은 티켓으로 전달되지 않고, 노드에서 티켓을 다시 받아도 반영되지 않는다. config-server는 NAS가 AD의 새 멤버십을 알게 된 것을 확인한 뒤 NAS의 GSS 캐시를 비워 반영한다. 비우면 다음 요청 때 노드가 GSS 컨텍스트를 자동으로 다시 맺고, 그때 그룹을 새로 조회한다. 이 작업은 승인 직후에 하고, 30분마다 재조정 때 다시 확인한다.
+
+GSS 컨텍스트는 노드 커널의 NFS client 하나와 사용자 한 명 사이에 하나씩 생긴다. 지금은 노드가 NAS를 한 번 마운트하고 그 노드의 모든 Pod가 hostPath로 나눠 쓰므로 노드마다 NFS client가 하나다. 그래서 같은 노드에 같은 사용자의 Pod가 여러 개 떠도 GSS 컨텍스트 하나를 함께 쓴다.
 
 ## 정리
 
@@ -441,3 +562,4 @@ keytab을 Pod에 넣으면, 컨테이너가 뚫렸을 때 그 사용자의 신�
 3. Samba는 리눅스 서버를 AD DC로 만들고(`farm2`·`farm6`·`farm7`), NAS와 노드를 그 도메인에 가입시키는(winbind) 데 쓴다. SMB 파일 공유는 쓰지 않는다.
 4. UID는 [계정 파일](#account-file)에서 정하고 AD `uidNumber`에 똑같이 쓴다. NAS는 AD만 본다.
 5. DC 복제와 노드 캐시 때문에 생성 뒤 기다리는 단계가 있고, keytab은 노드에만 두고 Pod에는 ccache만 준다.
+6. NAS는 처음 접근할 때 사용자를 한 번 확인해 GSS 캐시에 적고, 이후 요청은 GSS 컨텍스트 번호와 서명만 쓴다. 이 컨텍스트는 노드의 `rpc.gssd`가 맺는다.

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="912" height="560" viewBox="0 0 912 560">
+  <style>
+    text { font-family: "Noto Sans CJK KR", "Noto Sans KR", "Malgun Gothic", sans-serif; fill: #1e3a6b; }
+    .num { font-size: 24px; text-anchor: middle; dominant-baseline: central; }
+    .label { font-size: 19px; font-weight: 600; }
+    .note { font-size: 16px; }
+    .cell { stroke: #1e3a6b; stroke-width: 1.5; }
+    .got { fill: #e9eff8; }
+    .wait { fill: #ffffff; }
+    .late { fill: #ffffff; stroke-dasharray: 6 4; }
+    .band { fill: #bfe0ff; stroke: #1e3a6b; stroke-width: 1.5; }
+  </style>
+  <rect width="912" height="560" fill="#fff6e9"/>
+  <rect x="60" y="18" width="792" height="44" rx="6" fill="#fff1b8" stroke="#d18f00" stroke-width="2"/>
+  <text x="456.0" y="47" text-anchor="middle" style="font-size:20px;font-weight:700;fill:#8a5a00">※ 실제 window 크기는 128이나, 예시를 위해 8로 그림</text>
+  <g transform="translate(0,64)">
+  <text class="label" x="60" y="48">① 가장 큰 일련번호가 8임 → window는 1~8</text>
+  <rect class="band" x="60" y="66" width="528" height="20"/>
+  <rect class="band" x="60" y="136" width="528" height="20"/>
+  <g>
+    <rect class="cell got" x="60" y="86" width="66" height="50"/><text class="num" x="93.0" y="111.0">1</text>
+    <rect class="cell late" x="126" y="86" width="66" height="50"/><text class="num" x="159.0" y="111.0">2</text>
+    <rect class="cell got" x="192" y="86" width="66" height="50"/><text class="num" x="225.0" y="111.0">3</text>
+    <rect class="cell got" x="258" y="86" width="66" height="50"/><text class="num" x="291.0" y="111.0">4</text>
+    <rect class="cell got" x="324" y="86" width="66" height="50"/><text class="num" x="357.0" y="111.0">5</text>
+    <rect class="cell got" x="390" y="86" width="66" height="50"/><text class="num" x="423.0" y="111.0">6</text>
+    <rect class="cell got" x="456" y="86" width="66" height="50"/><text class="num" x="489.0" y="111.0">7</text>
+    <rect class="cell got" x="522" y="86" width="66" height="50"/><text class="num" x="555.0" y="111.0">8</text>
+    <rect class="cell wait" x="588" y="86" width="66" height="50"/><text class="num" x="621.0" y="111.0">9</text>
+    <rect class="cell wait" x="654" y="86" width="66" height="50"/><text class="num" x="687.0" y="111.0">10</text>
+    <rect class="cell wait" x="720" y="86" width="66" height="50"/><text class="num" x="753.0" y="111.0">11</text>
+    <rect class="cell wait" x="786" y="86" width="66" height="50"/><text class="num" x="819.0" y="111.0">12</text>
+  </g>
+  <text class="note" x="159.0" y="180" text-anchor="middle">2번은 아직 도착하지 않음</text>
+
+  <text class="label" x="60" y="236">② 9, 10번이 먼저 도착 → window가 3~10으로 밀려남 (sliding window)</text>
+  <line x1="66" y1="264" x2="184" y2="264" stroke="#1e3a6b" stroke-width="2"/>
+  <polygon points="184,258 196,264 184,270" fill="#1e3a6b"/>
+  <rect class="band" x="192" y="254" width="528" height="20"/>
+  <rect class="band" x="192" y="324" width="528" height="20"/>
+  <g>
+    <rect class="cell got" x="60" y="274" width="66" height="50"/><text class="num" x="93.0" y="299.0">1</text>
+    <rect class="cell late" x="126" y="274" width="66" height="50"/><text class="num" x="159.0" y="299.0">2</text>
+    <rect class="cell got" x="192" y="274" width="66" height="50"/><text class="num" x="225.0" y="299.0">3</text>
+    <rect class="cell got" x="258" y="274" width="66" height="50"/><text class="num" x="291.0" y="299.0">4</text>
+    <rect class="cell got" x="324" y="274" width="66" height="50"/><text class="num" x="357.0" y="299.0">5</text>
+    <rect class="cell got" x="390" y="274" width="66" height="50"/><text class="num" x="423.0" y="299.0">6</text>
+    <rect class="cell got" x="456" y="274" width="66" height="50"/><text class="num" x="489.0" y="299.0">7</text>
+    <rect class="cell got" x="522" y="274" width="66" height="50"/><text class="num" x="555.0" y="299.0">8</text>
+    <rect class="cell got" x="588" y="274" width="66" height="50"/><text class="num" x="621.0" y="299.0">9</text>
+    <rect class="cell got" x="654" y="274" width="66" height="50"/><text class="num" x="687.0" y="299.0">10</text>
+    <rect class="cell wait" x="720" y="274" width="66" height="50"/><text class="num" x="753.0" y="299.0">11</text>
+    <rect class="cell wait" x="786" y="274" width="66" height="50"/><text class="num" x="819.0" y="299.0">12</text>
+  </g>
+
+  <line x1="159.0" y1="350" x2="159.0" y2="372" stroke="#d32f2f" stroke-width="2"/>
+  <g transform="translate(159.0,392)">
+    <line x1="-12" y1="-12" x2="12" y2="12" stroke="#d32f2f" stroke-width="4"/>
+    <line x1="-12" y1="12" x2="12" y2="-12" stroke="#d32f2f" stroke-width="4"/>
+  </g>
+  <text class="label" x="187.0" y="399" style="fill:#d32f2f">③ 이후에 도착한 2번은 window 밖이라 응답 없이 버림</text>
+
+  <rect class="cell got" x="60" y="440" width="22" height="18"/><text class="note" x="90" y="455">받은 일련번호</text>
+  <rect class="cell late" x="220" y="440" width="22" height="18"/><text class="note" x="250" y="455">늦어지는 일련번호</text>
+  <rect class="cell wait" x="410" y="440" width="22" height="18"/><text class="note" x="440" y="455">아직 안 온 일련번호</text>
+  <rect class="band" x="605" y="440" width="22" height="18"/><text class="note" x="635" y="455">sequence window</text>
+  </g>
+</svg>

@@ -474,7 +474,7 @@ def rewrite_internal_link(source: Path, target: str, registry: dict[Path, tuple[
     """Return an in-PDF anchor for a relative .md link, or None to leave it as-is."""
     if re.match(r"^(?:[a-z]+:)?//", target) or target.startswith(("data:", "#", "mailto:")):
         return None
-    path_part = target.split("#", 1)[0]
+    path_part, _, fragment = target.partition("#")
     if not path_part.endswith(".md"):
         return None
     resolved = (source.parent / path_part).resolve()
@@ -482,6 +482,10 @@ def rewrite_internal_link(source: Path, target: str, registry: dict[Path, tuple[
     if not hit:
         return None
     slug, anchor = hit
+    # `다른-문서.md#앵커`는 그 문서의 제목 앵커로 보낸다. PDF의 제목 id는 같은 문서 안
+    # 링크처럼 매뉴얼 slug가 앞에 붙는다. `{ #id }`로 직접 단 앵커는 MkDocs와 id가 같다.
+    if fragment:
+        return f"#{slug}-{fragment}"
     return f"#{slug}-{anchor}"
 
 

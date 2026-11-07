@@ -76,7 +76,7 @@ RPC(Remote Procedure Call)는 다른 서버(정확히는 다른 주소 공간)�
 
 ```mermaid
 sequenceDiagram
-    participant N as 노드
+    participant N as FARM 노드
     participant NAS as NAS
 
     N->>NAS: UID 21001 프로세스의 파일 열기 요청 (인증 정보: UID 21001)
@@ -91,11 +91,11 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant N as 노드
+    participant N as FARM 노드
     participant NAS as NAS
 
     N->>NAS: 처음 한 번: csuhyeon의 Kerberos 티켓 제시
-    NAS->>NAS: NAS의 keytab으로 티켓을 열어 진짜인지 확인
+    NAS->>NAS: NAS의 비밀키(서비스 keytab)로 티켓을 열어 진짜인지 확인
     alt 유효한 티켓
         NAS->>NAS: 티켓의 사용자 이름 csuhyeon을 UID 21001로 바꾼다
         NAS-->>N: GSS 컨텍스트를 맺는다 (4장)
@@ -145,33 +145,36 @@ nfs: server nas.farm.decs.internal not responding, still trying
 
 ### 4.1 GSS 컨텍스트란
 
-NAS는 요청마다 사용자를 새로 확인하지 않는다. 사용자가 처음 접근할 때 한 번만 Kerberos 티켓으로 확인하고 그 사용자에게 GSS 컨텍스트 번호를 정해 준다. 그 뒤 요청의 인증 정보에는 티켓 대신 그 GSS 컨텍스트 번호와 일련번호, 위조할 수 없는 서명이 붙는다. 이렇게 한 번 확인해 맺어 둔 상태가 **GSS 컨텍스트**다. 정식 이름은 RPCSEC_GSS 컨텍스트이고, `sec=krb5` 옵션으로 마운트하면 사용된다. 아래 그림의 1~8단계에서 GSS 컨텍스트를 맺고, 9단계부터 그 GSS 컨텍스트로 요청을 보낸다.
+NAS는 요청마다 사용자를 새로 확인하지 않는다. 사용자가 처음 접근할 때 한 번만 Kerberos 티켓으로 확인하고 그 사용자에게 GSS 컨텍스트 번호를 정해 준다. 그 뒤 요청의 인증 정보에는 티켓 대신 그 GSS 컨텍스트 번호와 일련번호, 위조할 수 없는 서명이 붙는다. 이렇게 한 번 확인해 맺어 둔 상태가 **GSS 컨텍스트**다. 정식 이름은 RPCSEC_GSS 컨텍스트이고, `sec=krb5` 옵션으로 마운트하면 사용된다. 아래 그림의 1~10단계에서 GSS 컨텍스트를 맺고, 11단계부터 그 GSS 컨텍스트로 요청을 보낸다.
 
 ```mermaid
 sequenceDiagram
     participant P as Pod 프로세스
     participant K as 노드 커널 NFS client
-    participant G as rpc.gssd
-    participant NAS as NAS
+    participant G as 노드의 rpc.gssd
+    participant NK as NAS 커널 NFS server
+    participant S as NAS의 svcgssd
 
-    Note over P,NAS: 처음 접근할 때 한 번: GSS 컨텍스트 맺기
+    Note over P,S: 처음 접근할 때 한 번: GSS 컨텍스트 맺기
     P->>K: 1. 홈의 파일을 연다 (사용자 UID로)
     K->>G: 2. rpc_pipefs로 "이 UID의 GSS 컨텍스트를 맺어 달라"
     G->>G: 3. 그 사용자의 Kerberos 티켓을 준비한다
-    G->>NAS: 4. 티켓 제시
-    NAS->>NAS: 5. 티켓을 확인하고 그 사용자의 UID·그룹을 알아낸다
-    NAS->>NAS: 6. GSS 컨텍스트 번호를 정하고 GSS 캐시에 기록
-    NAS-->>G: 7. GSS 컨텍스트 번호
-    G-->>K: 8. rpc_pipefs로 GSS 컨텍스트 번호와 세션 키를 커널에 넘긴다
+    G->>NK: 4. 티켓 제시
+    NK->>S: 5. 티켓 검증을 맡긴다
+    S->>S: 6. 티켓을 열어 사용자를 확인하고 UID·그룹을 알아낸다
+    S-->>NK: 7. GSS 컨텍스트 번호를 정해 UID·그룹·세션 키와 함께 넘긴다
+    NK->>NK: 8. GSS 캐시에 기록
+    NK-->>G: 9. GSS 컨텍스트 번호
+    G-->>K: 10. rpc_pipefs로 GSS 컨텍스트 번호와 세션 키를 커널에 넘긴다
 
-    Note over P,NAS: 이후 모든 요청
-    K->>NAS: 9. NFS 요청 + GSS 컨텍스트 번호 + 일련번호 + 서명
-    NAS->>NAS: 10. 일련번호 확인, GSS 컨텍스트 번호로 GSS 캐시에서 사용자를 찾아 권한 판정
-    NAS-->>K: 11. 응답
-    K-->>P: 12. 결과
+    Note over P,S: 이후 모든 요청
+    K->>NK: 11. NFS 요청 + GSS 컨텍스트 번호 + 일련번호 + 서명
+    NK->>NK: 12. 일련번호 확인, GSS 컨텍스트 번호로 GSS 캐시에서 사용자를 찾아 권한 판정
+    NK-->>K: 13. 응답
+    K-->>P: 14. 결과
 ```
 
-3단계에서 티켓을 준비하고 5단계에서 NAS가 티켓을 열어 UID·그룹을 알아내는 과정에는 Kerberos와 AD가 쓰인다. 이 문서에서는 "티켓으로 사용자를 확인한다"까지만 보고, 같은 그림을 Kerberos와 AD까지 펼친 것은 [Kerberos, AD, Samba](Kerberos-AD-Samba.md#gss-establish) 5.5절에서 본다.
+3단계에서 티켓을 준비하고 6단계에서 `svcgssd`가 티켓을 열어 UID·그룹을 알아내는 과정에는 Kerberos와 AD가 쓰인다. 이 문서에서는 "티켓으로 사용자를 확인한다"까지만 보고, 같은 그림을 Kerberos와 AD까지 펼친 것은 [Kerberos, AD, Samba](Kerberos-AD-Samba.md#gss-establish) 5.5절에서 본다.
 
 | 용어 | 뜻 | 이 시스템에서 |
 | --- | --- | --- |
@@ -181,7 +184,7 @@ sequenceDiagram
 | **서명(MIC)** | GSS 컨텍스트를 맺을 때 노드와 NAS가 나눠 가진 비밀 값(세션 키)으로 요청마다 새로 계산하는 값 | 남이 GSS 컨텍스트 번호만 베껴서는 요청을 만들 수 없다 |
 | **GSS 캐시** | NAS 커널이 GSS 컨텍스트마다 사용자를 적어 두는 표(`auth.rpcsec.context`) | GSS 컨텍스트 번호마다 사용자 이름, UID, 그룹 목록, 세션 키를 적는다 |
 | **`rpc.gssd`** | 노드에서 GSS 컨텍스트를 대신 맺는 사용자 영역 프로그램(4.2절) | 노드에서 systemd 서비스 `rpc-gssd.service`로 실행된다. 상태는 `systemctl status rpc-gssd`로 확인할 수 있다 |
-| **`svcgssd`** | 받은 티켓을 NAS에서 검증하는 사용자 영역 프로그램. 노드의 `rpc.gssd`가 하는 일을 NAS 쪽에서 맡는다 | NAS에서 동작 |
+| **`svcgssd`** | 받은 티켓을 NAS에서 검증하는 사용자 영역 프로그램. 노드의 `rpc.gssd`가 하는 일을 NAS 쪽에서 맡는다 | NAS에서 실행된다. 원래 systemd 서비스 `rpc-svcgssd.service`가 띄운다. 실행 여부는 NAS에서 `ps -C svcgssd -o pid,lstart,args`로 본다 |
 | **`rpc_pipefs`** | 커널이 `rpc.gssd`에 GSS 컨텍스트를 맺어 달라고 요청하고 그 결과를 돌려받는 통로. 가상 파일시스템이다 | 노드 `/run/rpc_pipefs` |
 
 GSS 컨텍스트는 TCP 연결과 다르다. TCP 연결은 노드와 NAS가 데이터를 주고받는 통신 통로이고, GSS 컨텍스트는 NAS가 "이 GSS 컨텍스트 번호로 오는 요청은 이 사용자의 것"이라고 기억해 둔 기록이다. 그래서 TCP 연결이 끊겼다 다시 이어져도 GSS 컨텍스트는 그대로 사용되고, TCP 연결 하나로 여러 사용자의 요청이 각자의 GSS 컨텍스트 번호를 달고 오간다.
@@ -192,7 +195,7 @@ GSS 컨텍스트는 TCP 연결과 다르다. TCP 연결은 노드와 NAS가 데�
 
 | | 커널 영역 | 사용자 영역 |
 | --- | --- | --- |
-| 무엇이 도나 | 운영체제의 핵심. 파일시스템, TCP, NFS client가 여기 있다 | 일반 프로그램. `bash`, `python`, `sshd`, `winbindd`, `rpc.gssd` |
+| 무엇이 도나 | 운영체제의 핵심. 파일시스템, TCP, NFS client가 여기 있다 | 일반 프로그램. `bash`, `python`, `sshd`, [`winbindd`](Kerberos-AD-Samba.md#samba-roles), `rpc.gssd` |
 | 할 수 있는 일 | 디스크·네트워크·모든 메모리를 직접 다룬다 | 자기 메모리만 쓴다. 파일이나 네트워크가 필요하면 커널에 요청한다(시스템 콜) |
 | 오류가 나면 | 노드 전체가 멈추거나 재부팅된다 | 그 프로그램만 죽는다 |
 
@@ -204,15 +207,15 @@ GSS 컨텍스트는 TCP 연결과 다르다. TCP 연결은 노드와 NAS가 데�
 
 커널과 `rpc.gssd`는 일을 이렇게 나눈다. 커널은 요청마다 해야 하는 가벼운 일만 직접 한다. NAS가 정해 준 GSS 컨텍스트 번호를 적고, 일련번호를 매기고, 세션 키로 서명을 계산하는 일이다. 드물게 일어나는 복잡한 일, 즉 GSS 컨텍스트를 맺는 일은 `rpc.gssd`가 한다. 두 영역은 서로의 함수를 직접 부를 수 없으므로 `rpc_pipefs`를 통로로 쓴다.
 
-위 그림에서 2~4단계와 7~8단계가 `rpc.gssd`의 일이다. 커널이 `rpc_pipefs`로 GSS 컨텍스트를 맺어 달라고 요청하면(2단계), `rpc.gssd`는 그 사용자의 티켓을 준비해 NAS와 GSS 컨텍스트를 맺고, GSS 컨텍스트 번호와 세션 키를 `rpc_pipefs`로 커널에 돌려준다(8단계). 그 뒤의 읽기·쓰기는 커널이 혼자 처리하고 `rpc.gssd`는 관여하지 않는다.
+위 그림에서 2~4단계와 9~10단계가 `rpc.gssd`의 일이다. 커널이 `rpc_pipefs`로 GSS 컨텍스트를 맺어 달라고 요청하면(2단계), `rpc.gssd`는 그 사용자의 티켓을 준비해 NAS와 GSS 컨텍스트를 맺고, GSS 컨텍스트 번호와 세션 키를 `rpc_pipefs`로 커널에 돌려준다(10단계). 그 뒤의 읽기·쓰기는 커널이 혼자 처리하고 `rpc.gssd`는 관여하지 않는다.
 
 GSS 컨텍스트가 만료되면(티켓의 유효 시간) 커널이 `rpc.gssd`를 다시 부른다(4.5절). 그래서 `rpc.gssd`가 멈춰도 이미 맺은 GSS 컨텍스트는 한동안 동작하고, 처음 접근하는 사용자나 만료된 GSS 컨텍스트부터 실패한다.
 
-NAS 쪽도 같은 구조다. NAS 커널의 NFS server도 받은 티켓을 직접 풀지 않고, 사용자 영역의 `svcgssd`에게 맡긴다. `svcgssd`가 티켓을 열고 사용자를 조회하는 과정은 [Kerberos, AD, Samba](Kerberos-AD-Samba.md#gss-establish) 5.5절에서 본다.
+NAS 쪽도 같은 구조다. NAS 커널의 NFS server도 받은 티켓을 직접 풀지 않고, 사용자 영역의 `svcgssd`에게 맡긴다(5~7단계). `svcgssd`가 티켓을 열고 사용자를 조회하는 과정은 [Kerberos, AD, Samba](Kerberos-AD-Samba.md#gss-establish) 5.5절에서 본다.
 
 ### 4.4 NAS의 GSS 캐시
 
-NAS는 GSS 컨텍스트를 맺을 때 알아낸 사용자 이름, UID, 그룹 목록을 GSS 컨텍스트 번호와 함께 GSS 캐시에 적고(그림 6단계), 그 뒤 요청마다 **이 표만 보고** 권한을 판정한다(10단계). 요청마다 사용자 정보를 다시 조회하지 않는다.
+NAS는 GSS 컨텍스트를 맺을 때 알아낸 사용자 이름, UID, 그룹 목록을 GSS 컨텍스트 번호와 함께 GSS 캐시에 적고(그림 7~8단계), 그 뒤 요청마다 **이 표만 보고** 권한을 판정한다(12단계). 요청마다 사용자 정보를 다시 조회하지 않는다.
 
 표의 기록은 GSS 컨텍스트가 유지되는 동안(최대 24시간) 바뀌지 않는다. 그래서 그 사이 사용자의 그룹이 바뀌어도 NAS는 옛 그룹 목록으로 판정한다. 공용 그룹 변경을 반영하는 방법은 [Kerberos, AD, Samba](Kerberos-AD-Samba.md#nas-gss-cache) 5.5절에서 본다.
 

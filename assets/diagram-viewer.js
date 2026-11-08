@@ -13,10 +13,8 @@
 (function () {
   "use strict";
 
-  var MIN_SCALE = 0.05;
   var MAX_SCALE = 10;
-  var MARGIN_X = 24; // 화면에 맞출 때 좌우 여백(px)
-  var MARGIN_Y = 64; // 화면에 맞출 때 위아래 여백(px). 위 버튼과 아래 안내 글이 들어간다.
+  var MARGIN = 24; // 화면에 맞출 때 그림 둘레 여백(px). 위쪽 막대 아래의 그림 영역 기준
   var MOVE_THRESHOLD = 4; // 이만큼 움직이면 클릭이 아니라 끌기로 본다(px)
 
   var sources = new WeakMap(); // div.mermaid → mermaid 소스
@@ -92,8 +90,14 @@
   var busy = false;
   var view = { s: 1, x: 0, y: 0, w: 1, h: 1, maxFit: 1, pageScale: 1 };
 
+  // 가장 작게 줄일 수 있는 배율: 그림 전체가 화면에 들어가는 크기와 원래 크기(100%) 중 작은 쪽.
+  // 이보다 더 줄이면 그림이 점처럼 작아질 뿐이라 막는다.
+  function minScale() {
+    return Math.max(0.05, Math.min(1, containScale()));
+  }
+
   function clamp(s) {
-    return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+    return Math.min(MAX_SCALE, Math.max(minScale(), s));
   }
 
   function apply() {
@@ -109,16 +113,16 @@
     view.s = clamp(s);
     var w = view.w * view.s;
     var h = view.h * view.s;
-    view.x = w <= sw - 2 * MARGIN_X ? (sw - w) / 2 : MARGIN_X;
-    view.y = h <= sh - 2 * MARGIN_Y ? (sh - h) / 2 : MARGIN_Y;
+    view.x = w <= sw - 2 * MARGIN ? (sw - w) / 2 : MARGIN;
+    view.y = h <= sh - 2 * MARGIN ? (sh - h) / 2 : MARGIN;
     apply();
   }
 
   // 그림 전체가 화면에 들어가는 배율
   function containScale() {
     return Math.min(
-      (stage.clientWidth - 2 * MARGIN_X) / view.w,
-      (stage.clientHeight - 2 * MARGIN_Y) / view.h,
+      (stage.clientWidth - 2 * MARGIN) / view.w,
+      (stage.clientHeight - 2 * MARGIN) / view.h,
       view.maxFit
     );
   }
@@ -137,6 +141,11 @@
   function zoomAt(cx, cy, factor) {
     if (!canvas) return;
     var s = clamp(view.s * factor);
+    // 더 줄일 수 없는 크기에 닿으면 그림을 가운데로 모아 전체를 보여 준다.
+    if (factor < 1 && s <= minScale() + 1e-6) {
+      place(s);
+      return;
+    }
     var k = s / view.s;
     view.x = cx - (cx - view.x) * k;
     view.y = cy - (cy - view.y) * k;
@@ -157,21 +166,24 @@
     dialog = document.createElement("dialog");
     dialog.className = "dv-dialog";
     dialog.setAttribute("aria-label", "그림 크게 보기");
+    // 위쪽 막대: 왼쪽에 확대·축소 버튼과 사용법, 오른쪽 끝에 닫기 버튼. 그림 영역은 막대 아래부터다.
     dialog.innerHTML =
-      // 열 때 첫 버튼에 포커스 테두리가 생기지 않게 포커스를 그림 영역에 둔다. 키보드 조작은 그대로 된다.
-      '<div class="dv-stage" tabindex="-1" autofocus></div>' +
-      '<div class="dv-toolbar">' +
+      '<div class="dv-topbar">' +
+      '<div class="dv-controls">' +
       '<button type="button" data-dv="out" title="축소 (-)" aria-label="축소">&minus;</button>' +
       '<button type="button" data-dv="fit" class="dv-zoom" title="화면에 맞춤 (0)" aria-label="화면에 맞춤">100%</button>' +
       '<button type="button" data-dv="in" title="확대 (+)" aria-label="확대">+</button>' +
-      '<button type="button" data-dv="close" title="닫기 (Esc)" aria-label="닫기">&times;</button>' +
       "</div>" +
-      '<div class="dv-hint">휠: 확대·축소 · 드래그: 이동 · 더블클릭: 화면에 맞춤 · Esc: 닫기</div>';
+      '<div class="dv-hint">휠: 확대·축소 · 드래그: 이동 · 더블클릭: 화면에 맞춤 · Esc: 닫기</div>' +
+      '<button type="button" data-dv="close" class="dv-close" title="닫기 (Esc)" aria-label="닫기">&times;</button>' +
+      "</div>" +
+      // 열 때 첫 버튼에 포커스 테두리가 생기지 않게 포커스를 그림 영역에 둔다. 키보드 조작은 그대로 된다.
+      '<div class="dv-stage" tabindex="-1" autofocus></div>';
     document.body.appendChild(dialog);
     stage = dialog.querySelector(".dv-stage");
     zoomLabel = dialog.querySelector(".dv-zoom");
 
-    dialog.querySelector(".dv-toolbar").addEventListener("click", function (e) {
+    dialog.querySelector(".dv-topbar").addEventListener("click", function (e) {
       var button = e.target.closest("button");
       if (!button) return;
       var action = button.getAttribute("data-dv");

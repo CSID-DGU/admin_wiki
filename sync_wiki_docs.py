@@ -61,6 +61,10 @@ def sync(output_dir: Path) -> Path:
     stylesheet_target.mkdir(mode=0o755)
     shutil.copy2(ASSET_DIR / "extra.css", stylesheet_target / "extra.css")
 
+    javascript_target = output_dir / "javascripts"
+    javascript_target.mkdir(mode=0o755)
+    shutil.copy2(ASSET_DIR / "diagram-viewer.js", javascript_target / "diagram-viewer.js")
+
     pdf_target = output_dir / "pdf"
     pdf_target.mkdir(mode=0o755)
     if PDF_DIR.is_dir():

@@ -90,9 +90,10 @@ nav:
       - 개요: infra/개요.md
       - 설계:
           - 시스템 아키텍처: infra/design/시스템-아키텍처.md
-          - 기초 개념: infra/design/기초-개념.md
-          - NFS, RPC, GSS: infra/design/NFS-RPC-GSS.md
-          - Kerberos, AD, Samba: infra/design/Kerberos-AD-Samba.md
+          - 기초 개념:
+              - 기본 용어: infra/design/기초-개념.md
+              - NFS, RPC, GSS: infra/design/NFS-RPC-GSS.md
+              - Kerberos, AD, Samba: infra/design/Kerberos-AD-Samba.md
           - 데이터베이스: infra/design/데이터베이스.md
           - 무결성·정합성 점검: infra/design/무결성-정합성-점검.md
       - 운영:

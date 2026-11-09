@@ -10,11 +10,11 @@
 
 | 필요할 때 | 문서 |
 | --- | --- |
-| Kubernetes 기본 용어를 먼저 본다 | [기초 개념](../design/기초-개념.md) |
+| Kubernetes 기본 용어를 먼저 본다 | [기본 용어](../design/기본-용어.md) |
 | 배포와 장애 대응 순서를 본다 | [운영 매뉴얼](운영-매뉴얼.md) |
 | Kerberos 설정 값의 위치를 본다 | [kdc-setup 설정](../kdc-setup/config.md) |
 
-쿠버네티스 기본 용어(Pod, Service, PVC, namespace 등)는 [기초 개념](../design/기초-개념.md)을 참고한다.
+쿠버네티스 기본 용어(Pod, Service, PVC, namespace 등)는 [기본 용어](../design/기본-용어.md)를 참고한다.
 
 ---
 

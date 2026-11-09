@@ -155,7 +155,7 @@ MANUALS = (
         (
             MD_DIR / "infra" / "개요.md",
             MD_DIR / "infra" / "design" / "시스템-아키텍처.md",
-            MD_DIR / "infra" / "design" / "기초-개념.md",
+            MD_DIR / "infra" / "design" / "기본-용어.md",
             MD_DIR / "infra" / "design" / "NFS-RPC-GSS.md",
             MD_DIR / "infra" / "design" / "Kerberos-AD-Samba.md",
             MD_DIR / "infra" / "design" / "데이터베이스.md",

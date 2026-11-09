@@ -20,7 +20,7 @@
 | 필요할 때 | 문서 |
 | --- | --- |
 | NFS 요청 경로, 마운트 옵션, GSS 컨텍스트를 본다 | [NFS, RPC, GSS](NFS-RPC-GSS.md) |
-| 다른 배경 용어를 찾아본다 | [기초 개념](기초-개념.md) |
+| 다른 배경 용어를 찾아본다 | [기본 용어](기본-용어.md) |
 | config-server가 AD에 하는 작업의 순서를 본다 | [시스템 아키텍처](시스템-아키텍처.md) 3.3절 |
 | keytab, ccache의 위치와 운영 절차를 본다 | [kdc-setup](../kdc-setup/index.md) |
 | 티켓이 NFS 요청으로 바뀌는 12단계, KVNO, SPN을 본다 | [Kerberos/NFS 설계](../../system/kerberos-nfs/design.md) |
@@ -213,7 +213,7 @@ sequenceDiagram
 
 **계정 파일**은 config-server가 사용 신청이 승인될 때 사용자 계정을 적어 두는 파일이다. 리눅스의 `/etc/passwd`, `/etc/group`, `/etc/shadow`와 같은 형식이고, 새 사용자의 UID도 여기서 정한다. 파일은 NAS의 공유 폴더에 있고 config-server가 `/kube_share`로 마운트해 쓴다. 운영 스택이 쓰는 폴더는 NAS의 `/volume1/share/kube_share/exp-operation`이다.
 
-계정 파일은 AD와 별개다. config-server는 여기서 정한 UID를 AD 사용자 정보 DB의 `uidNumber`에도 똑같이 적는다(3.6절). 둘의 역할 차이는 5.2절에서 본다. 계정 파일 자체에 대한 자세한 내용은 [기초 개념](기초-개념.md) 1.1·1.2절에 있다.
+계정 파일은 AD와 별개다. config-server는 여기서 정한 UID를 AD 사용자 정보 DB의 `uidNumber`에도 똑같이 적는다(3.6절). 둘의 역할 차이는 5.2절에서 본다. 계정 파일 자체에 대한 자세한 내용은 [기본 용어](기본-용어.md) 1.1·1.2절에 있다.
 
 ### 3.6 RFC2307: 이름과 UID 연결
 

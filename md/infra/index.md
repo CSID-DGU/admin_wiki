@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | config-server가 시스템에서 무슨 일을 하는지 먼저 이해하고 싶다 | [개요](개요.md) | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | 승인·회수·이동 등 작업이 실제로 어떤 단계를 거치는지 궁금하다 | [시스템 아키텍처](design/시스템-아키텍처.md) | [데이터베이스](design/데이터베이스.md), [API 레퍼런스](operations/API-레퍼런스.md) |
-| Kubernetes, UID/GID, NFS, NodePort 같은 용어가 낯설다 | [기초 개념](design/기초-개념.md) | 다시 [시스템 아키텍처](design/시스템-아키텍처.md) |
+| Kubernetes, UID/GID, NFS, NodePort 같은 용어가 낯설다 | [기본 용어](design/기본-용어.md) | 다시 [시스템 아키텍처](design/시스템-아키텍처.md) |
 | NFS 마운트, D state, GSS 컨텍스트 같은 말이 낯설다 | [NFS, RPC, GSS](design/NFS-RPC-GSS.md) | [Kerberos, AD, Samba](design/Kerberos-AD-Samba.md) |
 | AD, Kerberos, keytab 같은 말이 낯설다 | [NFS, RPC, GSS](design/NFS-RPC-GSS.md)를 먼저, 이어서 [Kerberos, AD, Samba](design/Kerberos-AD-Samba.md) | [kdc-setup](kdc-setup/index.md) |
 | 배포, 점검, 장애 대응 절차를 확인해야 한다 | [운영 매뉴얼](operations/운영-매뉴얼.md) | [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md), [데이터베이스](design/데이터베이스.md) |
@@ -33,7 +33,7 @@
 
 ### 3. 막히는 용어와 기록 구조를 보충한다
 
-- [기초 개념](design/기초-개념.md)은 UID/GID, Kubernetes, NFS, NodePort 같은 용어를 설명한다.
+- [기본 용어](design/기본-용어.md)는 UID/GID, Kubernetes, NFS, NodePort 같은 용어를 설명한다.
 - [NFS, RPC, GSS](design/NFS-RPC-GSS.md)는 홈 파일 요청이 NAS에서 처리되는 과정, 마운트 옵션과 D state, NAS가 사용자를 알아보는 GSS 컨텍스트를 설명한다.
 - [Kerberos, AD, Samba](design/Kerberos-AD-Samba.md)는 홈에 Kerberos가 필요한 이유와 AD, Samba가 쓰이는 방식을 처음부터 순서대로 설명한다. NFS, RPC, GSS를 먼저 읽고 이어서 본다.
 - [데이터베이스](design/데이터베이스.md)는 스택 DB의 포트 배정·작업 이력·작업 소유권 테이블과 백업을 설명한다.
@@ -61,7 +61,7 @@
 | --- | --- | --- | --- |
 | [개요](개요.md) | 출발점 | config-server의 역할, 작업 종류, 관련 저장소, 배포 위치 | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | [시스템 아키텍처](design/시스템-아키텍처.md) | 중심 문서 | 작업 종류별 단계, 실행 방식, 계정·포트 번호 규칙 | [데이터베이스](design/데이터베이스.md), [API 레퍼런스](operations/API-레퍼런스.md) |
-| [기초 개념](design/기초-개념.md) | 배경지식 보충 | UID/GID, 계정 파일, Kubernetes, NFS, NodePort 같은 개념 | 다시 본문 문서 |
+| [기본 용어](design/기본-용어.md) | 배경지식 보충 | UID/GID, 계정 파일, Kubernetes, NFS, NodePort 같은 개념 | 다시 본문 문서 |
 | [NFS, RPC, GSS](design/NFS-RPC-GSS.md) | 배경지식 보충 | NFS 요청 경로, `sec=krb5`, 마운트 옵션과 D state, GSS 컨텍스트, `nconnect=1` 규칙 | [Kerberos, AD, Samba](design/Kerberos-AD-Samba.md) |
 | [Kerberos, AD, Samba](design/Kerberos-AD-Samba.md) | 배경지식 보충 | AD와 DC, Kerberos 티켓, keytab과 ccache, 계정 대장과 AD의 관계 | [kdc-setup](kdc-setup/index.md) |
 | [데이터베이스](design/데이터베이스.md) | 기록 구조 보충 | 스택 DB, 포트 배정·작업 이력 테이블, 잠금, 백업 | [운영 매뉴얼](operations/운영-매뉴얼.md) |

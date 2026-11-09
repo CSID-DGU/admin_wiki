@@ -22,7 +22,7 @@
 
 | 필요할 때 | 문서 |
 | --- | --- |
-| NFS, NAS, root_squash, hostPath 같은 배경 용어를 본다 | [기초 개념](기초-개념.md) 2장·3.5절 |
+| NFS, NAS, root_squash, hostPath 같은 배경 용어를 본다 | [기본 용어](기본-용어.md) 2장·3.5절 |
 | Kerberos 티켓, keytab, ccache, AD를 본다 | [Kerberos, AD, Samba](Kerberos-AD-Samba.md) |
 | FARM과 LAB의 마운트 설정값과 NAS 쪽 설정을 본다 | [Kerberos/NFS 설계](../../system/kerberos-nfs/design.md) 4장 |
 
@@ -43,7 +43,7 @@ Pod 프로세스가 파일을 열고 쓴다
  → NAS의 NFS server가 요청을 처리하고, 같은 TCP 연결로 응답을 돌려준다
 ```
 
-Pod 안에는 NFS 프로그램이 없다. Pod는 hostPath로 받은 디렉터리([기초 개념](기초-개념.md) 3.5절)에 파일을 쓸 뿐이고, NAS와 통신하는 것은 노드 커널이다.
+Pod 안에는 NFS 프로그램이 없다. Pod는 hostPath로 받은 디렉터리([기본 용어](기본-용어.md) 3.5절)에 파일을 쓸 뿐이고, NAS와 통신하는 것은 노드 커널이다.
 
 ### 1.3 NFS client는 몇 개 생기나
 

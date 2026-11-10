@@ -61,6 +61,12 @@
   }
 }
 
+/* 왼쪽 메뉴가 길어져 스크롤 막대가 생겨도, 마우스를 올리거나 메뉴를 누른 뒤 강조색(파랑) 대신 옅은 회색으로 둔다. */
+.md-sidebar__scrollwrap:hover,
+.md-sidebar__scrollwrap:focus-within {
+  scrollbar-color: var(--md-default-fg-color--lighter) transparent;
+}
+
 /* 그림 크게 보기(assets/diagram-viewer.js): 본문 그림을 누르면 페이지 위에 크게 띄운다. */
 .md-typeset div.mermaid,
 .md-typeset img {

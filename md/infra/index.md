@@ -16,7 +16,6 @@
 | 배포, 점검, 장애 대응 절차를 확인해야 한다 | [운영 매뉴얼](operations/운영-매뉴얼.md) | [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md), [데이터베이스](design/데이터베이스.md) |
 | 자원이 남거나 상태가 어긋나는 지점(무결성·정합성)을 확인해야 한다 | [무결성·정합성 점검](design/무결성-정합성-점검.md) | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | API 입력과 응답을 바로 확인해야 한다 | [API 레퍼런스](operations/API-레퍼런스.md) | [시스템 아키텍처](design/시스템-아키텍처.md) |
-| 예전에 비슷한 장애나 작업이 있었는지 찾아야 한다 | [로그](operations/logs/index.md) | [운영 매뉴얼](operations/운영-매뉴얼.md) |
 | Kerberos와 AD, keytab 흐름을 따로 봐야 한다 | [kdc-setup](kdc-setup/index.md) | [설계](kdc-setup/design.md), [운영](kdc-setup/operations.md) |
 
 ## 문서는 이런 순서로 이어진다
@@ -45,7 +44,6 @@
 - [운영 매뉴얼](operations/운영-매뉴얼.md)은 operation 스택의 배포, 점검, 장애 대응, 복구 순서를 설명한다.
 - [API 레퍼런스](operations/API-레퍼런스.md)는 config-server 엔드포인트의 입력과 응답을 설명한다.
 - [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md)는 배포할 때 어떤 값을 바꾸고, 그 값이 어느 리소스에 들어가는지 설명한다.
-- [로그](operations/logs/index.md)는 운영 중에 생긴 장애·복구·배포를 날짜별로 남긴 기록이다.
 
 운영자는 보통 `개요 -> 시스템 아키텍처 -> 운영 매뉴얼` 순서로 읽고, API나 배포값이 필요할 때 옆 문서를 같이 본다.
 
@@ -70,7 +68,6 @@
 | [운영 매뉴얼](operations/운영-매뉴얼.md) | 운영 지침 | 점검, 배포, 오류 대응, 복구 순서 | [데이터베이스](design/데이터베이스.md), [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md) |
 | [API 레퍼런스](operations/API-레퍼런스.md) | API 참고 | 작업 등록·결과·단계 기록 API의 입력, 응답, 호출 주체 | [시스템 아키텍처](design/시스템-아키텍처.md) |
 | [Helm 차트 레퍼런스](operations/Helm-차트-레퍼런스.md) | 배포 구조 참고 | Helm values, 템플릿, Secret, 스택 설치가 덮어쓰는 값 | [운영 매뉴얼](operations/운영-매뉴얼.md) |
-| [로그](operations/logs/index.md) | 운영 기록 | 날짜별 장애·복구·배포 기록과 그때 내린 결론 | [운영 매뉴얼](operations/운영-매뉴얼.md) |
 | [kdc-setup](kdc-setup/index.md) | Kerberos 전용 목차 | AD, Secret, 노드, Pod 사이의 Kerberos 흐름 전체 | [설계](kdc-setup/design.md), [운영](kdc-setup/operations.md) |
 
 ## 이 문서가 다루는 범위

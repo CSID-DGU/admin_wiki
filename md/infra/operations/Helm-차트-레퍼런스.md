@@ -65,7 +65,7 @@ kubectl -n "$ns" rollout status deploy/"$release"-controller
 | 리소스 | 이름 | 왜 필요한가 |
 |--------|------|------------|
 | Deployment | `<release>` | API 서버(gunicorn 워커 4개) 1개. 시작할 때 2초마다 `/health`를 확인해 준비되는 즉시 넘어가고(최대 2분), 뜬 뒤에는 10초마다 확인한다. 종료 유예 630초 |
-| Deployment | `<release>-controller` | 제어기. 같은 이미지로 `controller.py`를 실행해 등록된 작업을 처리한다. `controller.enabled`가 참일 때만 만든다(replicas 1, Recreate) |
+| Deployment | `<release>-controller` | 컨트롤러. 같은 이미지로 `controller.py`를 실행해 등록된 작업을 처리한다. `controller.enabled`가 참일 때만 만든다(replicas 1, Recreate) |
 | Service (NodePort) | `containerssh-config-service` | API의 고정 주소. 내부 80 → 컨테이너 8000 |
 | ServiceAccount | `config-server` | config-server가 Kubernetes API를 부를 때 쓰는 신원 |
 | Role + RoleBinding | `config-server-role` | 네임스페이스 안에서 Pod(`exec`·`log` 포함)·Service·PVC·Secret을 만들고 지우고, 이벤트를 읽는다. 사용자 Pod 생성·삭제, Pod 안 명령 실행(비밀번호·그룹 반영), 이미지 다운로드 이벤트 판정에 쓴다 |
@@ -81,9 +81,9 @@ kubectl -n "$ns" rollout status deploy/"$release"-controller
 |------|------|
 | `Chart.yaml` | 차트 이름(`containerssh-config-server`)·버전 |
 | `values.yaml` | 기본값(1.3절) |
-| `templates/_helpers.tpl` | 리소스 이름(릴리스 이름 그대로)과, API 서버·제어기가 함께 쓰는 환경 변수·마운트를 한 곳에서 정의한다 |
+| `templates/_helpers.tpl` | 리소스 이름(릴리스 이름 그대로)과, API 서버·컨트롤러가 함께 쓰는 환경 변수·마운트를 한 곳에서 정의한다 |
 | `templates/deployment.yaml` | API 서버 Deployment |
-| `templates/controller.yaml` | 제어기 Deployment |
+| `templates/controller.yaml` | 컨트롤러 Deployment |
 | `templates/service.yaml` | NodePort Service |
 | `templates/rbac.yaml` | Role/RoleBinding + ClusterRole/ClusterRoleBinding |
 | `templates/serviceaccount.yaml` | ServiceAccount |
@@ -91,7 +91,7 @@ kubectl -n "$ns" rollout status deploy/"$release"-controller
 | `templates/cronjob-gpu-check.yaml` | GPU 유실 점검 CronJob |
 | `templates/cronjob-krb5-reconcile.yaml` | Kerberos 재조정 CronJob |
 
-values의 값은 `_helpers.tpl`의 `env` 정의를 거쳐 컨테이너 환경 변수로 들어간다. API 서버와 제어기는 같은 정의를 쓰므로 둘의 설정이 어긋나지 않는다. 예를 들어 `nas.ssh.host`는 `NAS_SSH_HOST`, `verifyMode`는 `RUN_MODE`가 된다.
+values의 값은 `_helpers.tpl`의 `env` 정의를 거쳐 컨테이너 환경 변수로 들어간다. API 서버와 컨트롤러는 같은 정의를 쓰므로 둘의 설정이 어긋나지 않는다. 예를 들어 `nas.ssh.host`는 `NAS_SSH_HOST`, `verifyMode`는 `RUN_MODE`가 된다.
 
 ### 1.3 values.yaml에 넣는 값
 
@@ -134,7 +134,7 @@ values의 값은 `_helpers.tpl`의 `env` 정의를 거쳐 컨테이너 환경 �
 | `krb5.realm` | Kerberos realm. 비어 있으면 Kerberos·AD 단계를 모두 건너뛴다 | `""` |
 | `infra.adminBeInternalUrl` | admin_be 내부 주소. 사용자 설정 조회와 GPU 점검 알림이 여기로 간다. 스택마다 `http://admin-prod.<네임스페이스>`로 덮어쓴다 | `http://admin-prod.default` |
 
-#### 대역 · 실행 방식 · 제어기
+#### 대역 · 실행 방식 · 컨트롤러
 
 | 키 | 의미 | 기본값 |
 |----|------|--------|
@@ -144,9 +144,18 @@ values의 값은 `_helpers.tpl`의 `env` 정의를 거쳐 컨테이너 환경 �
 | `nodeport.min` / `max` | 사용자 Pod NodePort 대역 | `30000` / `32767` |
 | `verifyMode` | 실행 방식 `baseline` / `noprobe` / `full` (`RUN_MODE`로 주입). 허용 밖의 값이면 기동하지 않는다 | `noprobe` |
 | `faultInjection` | 장애 주입 훅. 실험 스택 셋에서만 켠다. **운영은 항상 끈다** | `false` |
-| `controller.enabled` / `pollSec` / `workers` | 제어기 사용 여부, 작업 조회 주기(초), 동시 실행 수 | `false` / `2` / `4` |
+| `controller.enabled` / `pollSec` / `workers` | 컨트롤러 사용 여부, 작업 조회 주기(초), 동시 실행 수 | `false` / `2` / `4` |
 
-스택별 실제 대역은 [시스템 아키텍처](../design/시스템-아키텍처.md) 7.3절에 있다.
+<a id="stack-ranges"></a>**스택별 실제 대역.** UID·GID·NodePort 대역은 `ops/proposed-stack/uid-ranges.yaml` 한 곳에 선언하고, 설치 스크립트가 배포 전에 다른 스택과 겹치는지 검사한다. AD·NAS·FARM 노드를 스택끼리 공유하므로 대역이 겹치면 다른 스택의 계정을 덮어쓴다.
+
+| 스택 | UID | 공용 GID | 사용자 NodePort | 계정 접두어 |
+| --- | --- | --- | --- | --- |
+| operation | 21000~49999 | 70000~79999 | 30000~30079 | 없음 |
+| noprobe | 50000~54999 | 80000~84999 | 32000~32249 | `exp-np-` |
+| full | 55000~59999 | 85000~89999 | 32250~32499 | `exp-fu-` |
+| baseline | 60000~64999 | 90000~94999 | 32500~32749 | `exp-bl-` |
+
+접두어가 있는 스택은 그 접두어로 시작하지 않는 계정 요청을 403으로 거절해, 운영 계정을 덮어쓰거나 지우지 못하게 한다. 운영 NodePort 대역이 방화벽과 맞아야 하는 이유는 [시스템 아키텍처 2.3절](../design/시스템-아키텍처.md#external-access)에 있다.
 
 #### db / logDb / redis — 상태 저장소
 
@@ -185,7 +194,7 @@ values의 값은 `_helpers.tpl`의 `env` 정의를 거쳐 컨테이너 환경 �
 | `log-mysql-secret` | `operation_state_db` 비밀번호 (key: `MYSQL_PASSWORD`) → `LOG_DB_PASSWORD` | Pod가 뜨지 않는다 |
 | `config-server-infra-slack-secret` | GPU 점검 알림 대상 (key: `webhookUrl`) | 알림을 건너뛰고 로그만 남긴다 |
 
-토큰·호스트 키 Secret 값을 바꾼 뒤에는 API 서버와 제어기를 재시작해야 새 값을 읽는다. Pod 템플릿에 값이 드러나지 않아 helm 업그레이드만으로는 재시작되지 않는다.
+토큰·호스트 키 Secret 값을 바꾼 뒤에는 API 서버와 컨트롤러를 재시작해야 새 값을 읽는다. Pod 템플릿에 값이 드러나지 않아 helm 업그레이드만으로는 재시작되지 않는다.
 
 이 외에 config-server는 사용자별 `krb5-keytab-<user>` Secret과 Pod별 로그인 비밀번호 Secret(`<pod>-account`, Pod 소유)을 만든다. Role의 Secret 권한은 이 작업에 필요하다.
 
@@ -216,7 +225,7 @@ values의 값은 `_helpers.tpl`의 `env` 정의를 거쳐 컨테이너 환경 �
 
 ## 2. pvc-image-chart/ — 이미지 저장소
 
-사용자 컨테이너 이미지를 tar로 보관하는 공용 PVC `pvc-image-store`를 배포하는 작은 차트다. 마운트하는 것은 config-server뿐이다(`/image-store`). **지금 스택들은 이 PVC를 쓰지 않는다**(`imageStore.claimName` 비움). 재시작 때 변경분을 유지하는 기능은 노드에 이미지를 굽는 방식으로 바뀌었다([시스템 아키텍처](../design/시스템-아키텍처.md) 5절).
+사용자 컨테이너 이미지를 tar로 보관하는 공용 PVC `pvc-image-store`를 배포하는 작은 차트다. 마운트하는 것은 config-server뿐이다(`/image-store`). **지금 스택들은 이 PVC를 쓰지 않는다**(`imageStore.claimName` 비움). 재시작 때 변경분을 유지하는 기능은 노드에 이미지를 굽는 방식으로 바뀌었다([작업별 동작](../design/작업별-동작.md#migrate) 4절).
 
 | 키/장치 | 값 | 의미 |
 |---------|-----|------|

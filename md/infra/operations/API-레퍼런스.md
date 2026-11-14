@@ -10,7 +10,7 @@
 
 | 필요할 때 | 문서 |
 | --- | --- |
-| 승인 뒤 내부 처리 순서를 먼저 본다 | [시스템 아키텍처](../design/시스템-아키텍처.md) |
+| 승인 뒤 내부 처리 순서를 먼저 본다 | [작업별 동작](../design/작업별-동작.md) |
 | 운영 중 오류 응답을 해석한다 | [운영 매뉴얼](운영-매뉴얼.md) |
 | Kerberos 준비 실패를 본다 | [kdc-setup 운영](../kdc-setup/operations.md) |
 
@@ -82,7 +82,7 @@ config-server가 admin_be를 부르는 경로도 같은 토큰을 쓴다: `GET /
 
 **성공 응답.** `202` — `{"request_id": "4821", "job_id": 812, "status": "accepted"}`
 
-등록만 하고 실행은 제어기가 한다. 끝났는지는 `GET /operations/{kind}/{request_id}`(9절)의 `phase`로 확인한다.
+등록만 하고 실행은 [컨트롤러](../design/시스템-아키텍처.md#controller)가 한다. 끝났는지는 `GET /operations/{kind}/{request_id}`(9절)의 `phase`로 확인한다.
 
 | 상태 | 의미 |
 |:---:|------|
@@ -127,7 +127,7 @@ config-server가 admin_be를 부르는 경로도 같은 토큰을 쓴다: `GET /
 
 새 계정 이름이 예약 이름(이미지 그룹·시스템 계정·운영용 계정)이거나 공용 그룹 이름과 겹치면 등록하지 않고 **400** `USERNAME_CONFLICTS_GROUP`. 409는 admin_be가 "같은 신청의 작업이 진행 중"으로 읽으므로 400으로 답한다.
 
-**실행 단계(제어기).** 계정 → 홈 → Kerberos principal → AD 복제 대기 → AD 그룹 반영 → 사용자 설정 조회 → Pod 준비 → 노드 선택 → Pod 스펙(포트 배정, keytab 배포) → Pod 생성(로그인 비밀번호 Secret `<pod>-account`) → Ready 대기(최대 500초) → NodePort Service 생성. 기존 계정이면 계정·AD 단계 대신 홈 확인(없으면 다시 만듦)부터 한다. `full` 방식은 이어서 접근 시험을 한다. 자세한 규칙은 [시스템 아키텍처](../design/시스템-아키텍처.md) 3절.
+**실행 단계(컨트롤러).** 계정 → 홈 → Kerberos principal → AD 복제 대기 → AD 그룹 반영 → 사용자 설정 조회 → Pod 준비 → 노드 선택 → Pod 스펙(포트 배정, keytab 배포) → Pod 생성(로그인 비밀번호 Secret `<pod>-account`) → Ready 대기(최대 500초) → NodePort Service 생성. 기존 계정이면 계정·AD 단계 대신 홈 확인(없으면 다시 만듦)부터 한다. `full` 방식은 이어서 접근 시험을 한다. 자세한 규칙은 [작업별 동작](../design/작업별-동작.md#provision) 2절.
 
 **대표 실패 코드.** `USER_ALREADY_EXISTS`, `UID_RANGE_EXHAUSTED`, `EXPECTED_UID_CONFLICT`, `HOME_OWNER_MISMATCH`, `NAS_SSH_FAILED`, `KDC_FAILED`, `AD_REPLICATION_TIMEOUT`, `NODE_SELECTION_FAILED`, `LOGIN_PASSWORD_MISSING`, `POD_READY_TIMEOUT`.
 
@@ -155,7 +155,7 @@ config-server가 admin_be를 부르는 경로도 같은 토큰을 쓴다: `GET /
 
 `pod_name`도 없고 `username`+`delete_account`도 아니면 400이다.
 
-**실행 단계(제어기).** 접속 포트 해제 → 포트 배정 반환 → Pod 삭제 → 구운 노드 이미지 삭제 → 그 노드 keytab 정리 → (`delete_account`면) 회수 가능 확인 → 계정 삭제 → Kerberos 정리. **홈 디렉터리는 보존한다.** 이미 없는 Pod는 성공으로 끝난다. 같은 사용자의 컨테이너가 남아 있으면 계정 회수를 보류한다(`ACCOUNT_IN_USE`).
+**실행 단계(컨트롤러).** 접속 포트 해제 → 포트 배정 반환 → Pod 삭제 → 구운 노드 이미지 삭제 → 그 노드 keytab 정리 → (`delete_account`면) 회수 가능 확인 → 계정 삭제 → Kerberos 정리. **홈 디렉터리는 보존한다.** 이미 없는 Pod는 성공으로 끝난다. 같은 사용자의 컨테이너가 남아 있으면 계정 회수를 보류한다(`ACCOUNT_IN_USE`).
 
 ---
 
@@ -182,7 +182,7 @@ config-server가 admin_be를 부르는 경로도 같은 토큰을 쓴다: `GET /
 | `keep_changes` | `recreate`일 때 컨테이너 변경분을 그 노드의 이미지로 구워 이어 준다. 기본 참 |
 | `access_blocked` | 참이면 새로 만드는 접속 포트를 막힌 채로 만든다(이용 정지된 계정) |
 
-**실행 단계(제어기).** 옮길 노드 선택 → 사용자 설정 조회 → 기존 Pod 로그인 비밀번호 Secret 이어받기 → Pod 준비 → (재시작이면) 변경분 굽기 → Pod 스펙 → Pod 생성 → Ready 대기 → 접속 포트 연결 → (`full`이면) 접근 시험 → 기존 Pod·Service·포트 배정·Secret·기존 노드 keytab 정리.
+**실행 단계(컨트롤러).** 옮길 노드 선택 → 사용자 설정 조회 → 기존 Pod 로그인 비밀번호 Secret 이어받기 → Pod 준비 → (재시작이면) 변경분 굽기 → Pod 스펙 → Pod 생성 → Ready 대기 → 접속 포트 연결 → (`full`이면) 접근 시험 → 기존 Pod·Service·포트 배정·Secret·기존 노드 keytab 정리.
 
 - 옮길 이유가 없으면(`no_candidate_node`, `no_significant_improvement`) 남은 단계를 돌리지 않고 **성공**이며 결과 `status`가 `skipped`다.
 - 새 Pod가 실패하면 새 Pod와 새 포트만 정리하고 기존 Pod는 그대로 둔다.
@@ -284,7 +284,7 @@ config-server가 admin_be를 부르는 경로도 같은 토큰을 쓴다: `GET /
 | `none` | 등록 이력 없음 |
 | `START` | 대기·실행 중 |
 | `SUCCESS` | 완료. 만든 자원을 `result`로 준다(하루 뒤 `result`는 사라지고 phase만 남음) |
-| `FAIL` | 실패. `error_code`에 원인. 재시도를 다 쓰고 자원을 남긴 실패는 `DEGRADED`, baseline에서 제어기 재시작으로 끊긴 작업은 `INTERRUPTED` |
+| `FAIL` | 실패. `error_code`에 원인. 재시도를 다 쓰고 자원을 남긴 실패는 `DEGRADED`, baseline에서 컨트롤러 재시작으로 끊긴 작업은 `INTERRUPTED` |
 | `UNKNOWN` | 요청은 나갔으나 실행 여부를 알 수 없음 |
 
 ---

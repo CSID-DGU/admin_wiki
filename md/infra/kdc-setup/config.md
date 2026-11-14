@@ -22,7 +22,7 @@ config-server의 FARM AD 설정은 Helm values, GitHub Secret, Kubernetes Secret
 admin_infra GitHub Secret / 관리자 전용 시크릿 문서
   -> Sync Config Server Secrets 워크플로 -> 구 운영(ailab-infra) 릴리스 값
   -> 스택 설치(stack-up.sh)가 그 값을 읽어 스택 릴리스에 주입
-  -> config-server API·제어기 환경 변수·Secret mount
+  -> config-server API·컨트롤러 환경 변수·Secret mount
   -> 제한된 AD/노드 관리 채널
   -> 노드 root-only keytab과 사용자 ccache
 ```

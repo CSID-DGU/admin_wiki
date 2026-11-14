@@ -35,7 +35,7 @@ kubectl -n "$ns" get job | grep krb5-reconcile          # 최근 재조정 실�
 kubectl -n "$ns" logs job/<최근_krb5-reconcile_job_이름>
 ```
 
-config-server 제어기가 Ready인지, AD 계정 생성·복제 대기와 FARM 노드 배포가 반복해서 실패하지 않는지, 30분 재조정이 고아 후보를 남기지 않았는지 확인한다.
+config-server [컨트롤러](../design/시스템-아키텍처.md#controller)가 Ready인지, AD 계정 생성·복제 대기와 FARM 노드 배포가 반복해서 실패하지 않는지, 30분 재조정이 고아 후보를 남기지 않았는지 확인한다.
 사용자 keytab Secret은 값이 아니라 메타데이터만 확인한다.
 
 ```bash
